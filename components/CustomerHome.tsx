@@ -15,8 +15,6 @@ interface CustomerHomeProps {
 const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, bookings, onBook, onAuthClick, onAddToWaitlist, currentUser }) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
   
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
     if (element) element.scrollIntoView({ behavior: 'smooth' });
@@ -32,44 +30,42 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     <div className="animate-fade-in bg-white text-gray-900">
       <section className="relative min-h-screen flex flex-col items-center justify-center bg-tea-900 overflow-hidden px-4 rounded-b-[5rem]">
         {/* Background Decorative Glow */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vw] bg-tea-400/10 rounded-full blur-[120px] pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90vw] h-[90vw] bg-tea-400/5 rounded-full blur-[140px] pointer-events-none"></div>
         
-        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center pt-10">
-          <div className="mb-12 relative">
-            {/* Logo com escala aumentada e sombra luxuosa */}
+        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center pt-5">
+          <div className="mb-10 relative">
+            {/* Logo Gigante conforme solicitado */}
             <img 
               src={settings.logo} 
-              className="h-72 sm:h-96 md:h-[30rem] lg:h-[34rem] w-auto drop-shadow-[0_35px_60px_rgba(0,0,0,0.5)] animate-float object-contain" 
+              className="h-[35rem] sm:h-[45rem] md:h-[55rem] lg:h-[65rem] w-auto drop-shadow-[0_45px_70px_rgba(0,0,0,0.6)] animate-float object-contain" 
               alt="Logo Studio Moriá" 
             />
-            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-48 h-6 bg-black/20 blur-xl rounded-full"></div>
+            <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-72 h-8 bg-black/30 blur-[60px] rounded-full"></div>
           </div>
           
-          <div className="text-center space-y-10">
-            <div className="space-y-3">
-              <h2 className="text-2xl md:text-4xl font-serif text-white/90 italic tracking-wide font-light">
-                {settings.name}
-              </h2>
-              <div className="h-px w-16 bg-white/20 mx-auto"></div>
-              <p className="text-sm md:text-lg text-white/60 font-light tracking-[0.2em] uppercase">
-                Cuidando do seu bem estar
-              </p>
-            </div>
-
+          <div className="text-center space-y-10 -mt-10">
+            {/* Remoção do Slogan de Texto solicitado */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-5">
               <button 
                 onClick={() => scrollToId('procedimentos')} 
-                className="w-full sm:w-auto bg-white text-tea-900 px-12 py-5 rounded-full font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 hover:scale-105 active:scale-95 transition-all"
+                className="w-full sm:w-auto bg-white text-tea-900 px-14 py-6 rounded-full font-bold shadow-2xl uppercase tracking-[0.2em] text-[11px] hover:bg-tea-50 hover:scale-105 active:scale-95 transition-all"
               >
-                Ver Serviços
+                Ver serviços
               </button>
               <button 
                 onClick={onAuthClick} 
-                className="w-full sm:w-auto bg-tea-800 text-white border-2 border-white/10 px-12 py-5 rounded-full font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 hover:border-white/30 transition-all shadow-xl"
+                className="w-full sm:w-auto bg-tea-800 text-white border-2 border-white/10 px-14 py-6 rounded-full font-bold uppercase tracking-[0.2em] text-[11px] hover:bg-tea-950 hover:border-white/30 transition-all shadow-xl"
               >
-                Agendar Agora
+                Agendar agora
               </button>
             </div>
+            
+            <button 
+              onClick={() => scrollToId('contato')}
+              className="text-white/40 font-bold uppercase tracking-[0.3em] text-[10px] hover:text-white transition-colors"
+            >
+              Fale conosco
+            </button>
           </div>
         </div>
         
@@ -81,8 +77,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
 
       <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-32">
         <div className="text-center mb-20">
-          <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.4em] mb-4">Experiência Única</p>
-          <h2 className="text-5xl font-serif text-gray-900 italic">Procedimentos</h2>
+          <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.4em] mb-4">Experiência Moriá</p>
+          <h2 className="text-5xl font-serif text-gray-900 italic">Nossos Procedimentos</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           {services.filter(s => s.isVisible).map(service => (
@@ -92,13 +88,13 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               <p className="text-gray-400 text-sm font-light mb-10 leading-relaxed line-clamp-3">{service.description}</p>
               <div className="mb-10">
                 <p className="text-tea-800 font-bold text-2xl">R$ {service.price.toFixed(2)}</p>
-                <p className="text-[9px] text-gray-400 font-bold uppercase mt-2 tracking-widest">Tempo estimado: {service.duration} min</p>
+                <p className="text-[9px] text-gray-400 font-bold uppercase mt-2 tracking-widest">Duração: {service.duration} min</p>
               </div>
               <button 
                 onClick={onAuthClick} 
                 className="w-full py-5 rounded-3xl bg-tea-50 text-tea-800 font-bold uppercase tracking-widest text-[10px] hover:bg-tea-900 hover:text-white transition-all shadow-sm"
               >
-                Ver Disponibilidade
+                Agendar agora
               </button>
             </div>
           ))}
@@ -109,8 +105,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-20 items-center">
           <div className="flex-1 space-y-10">
             <div className="space-y-4">
-              <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.4em]">Localização</p>
-              <h2 className="text-5xl font-serif text-tea-950 italic">Onde estamos</h2>
+              <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.4em]">Venha nos visitar</p>
+              <h2 className="text-5xl font-serif text-tea-950 italic">Localização</h2>
               <p className="text-gray-500 text-xl font-light leading-relaxed">
                 {settings.address}
               </p>
@@ -121,7 +117,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               rel="noreferrer"
               className="inline-flex items-center gap-4 bg-tea-900 text-white px-12 py-6 rounded-full font-bold uppercase tracking-widest text-[11px] hover:bg-black transition-all shadow-2xl"
             >
-              <span>Abrir no Google Maps</span>
+              <span>Traçar rota agora</span>
               <span className="text-xl">📍</span>
             </a>
           </div>
@@ -141,14 +137,14 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
       <section id="contato" className="py-32 px-6">
         <div className="max-w-4xl mx-auto bg-tea-900 rounded-[5rem] p-12 md:p-24 text-center shadow-3xl relative overflow-hidden">
            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-           <h2 className="text-4xl font-serif text-white mb-12 italic">Fale com Moriá</h2>
+           <h2 className="text-4xl font-serif text-white mb-12 italic">Fale conosco</h2>
            <form onSubmit={handleContactSubmit} className="space-y-6 text-left relative z-10">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <input required placeholder="Nome Completo" className="w-full px-8 py-5 rounded-3xl bg-white/10 border border-white/20 text-white placeholder-white/40 outline-none focus:bg-white/20 focus:border-white/40 transition-all" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
                 <input required placeholder="WhatsApp" className="w-full px-8 py-5 rounded-3xl bg-white/10 border border-white/20 text-white placeholder-white/40 outline-none focus:bg-white/20 focus:border-white/40 transition-all" value={formData.whatsapp} onChange={(e) => setFormData({...formData, whatsapp: e.target.value})} />
               </div>
-              <textarea required rows={4} placeholder="Sua dúvida ou mensagem especial..." className="w-full px-8 py-5 rounded-3xl bg-white/10 border border-white/20 text-white placeholder-white/40 outline-none focus:bg-white/20 focus:border-white/40 transition-all resize-none" value={formData.message} onChange={(e) => setFormData({...formData, message: e.target.value})}></textarea>
-              <button type="submit" className="w-full bg-white text-tea-900 py-6 rounded-[2rem] font-bold uppercase tracking-[0.2em] text-xs hover:bg-tea-50 transition-all shadow-2xl">Enviar Mensagem via WhatsApp</button>
+              <textarea required rows={4} placeholder="Como podemos te ajudar?" className="w-full px-8 py-5 rounded-3xl bg-white/10 border border-white/20 text-white placeholder-white/40 outline-none focus:bg-white/20 focus:border-white/40 transition-all resize-none" value={formData.message} onChange={(e) => setFormData({...formData, message: e.target.value})}></textarea>
+              <button type="submit" className="w-full bg-white text-tea-900 py-6 rounded-[2rem] font-bold uppercase tracking-[0.2em] text-xs hover:bg-tea-50 transition-all shadow-2xl">Enviar mensagem agora</button>
            </form>
         </div>
       </section>

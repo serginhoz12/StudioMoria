@@ -54,8 +54,9 @@ const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-4 cursor-pointer group" 
             onClick={() => setView(isAdmin ? View.ADMIN_DASHBOARD : View.CUSTOMER_HOME)}
           >
-            <div className="h-20 w-auto overflow-hidden flex items-center justify-center p-2 group-hover:scale-110 transition-transform">
-               <img src={logo} alt={salonName} className="h-full w-auto object-contain" />
+            {/* Volta da Letra M no Topo conforme solicitado */}
+            <div className="h-14 w-14 bg-tea-900 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+               <span className="text-white font-serif font-bold text-3xl">M</span>
             </div>
             <div className="flex flex-col">
               <span className="text-lg font-serif font-bold text-tea-900 hidden sm:block tracking-wide leading-tight">
