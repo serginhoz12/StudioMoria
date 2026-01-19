@@ -128,95 +128,122 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in">
-      {/* Header Estilo Mobile */}
-      <header className="bg-tea-900 pt-10 pb-20 px-6 rounded-b-[3.5rem] shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-        <div className="max-w-md mx-auto flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-tea-800 border-2 border-white/20 overflow-hidden flex items-center justify-center shadow-inner relative group">
-              {customer.profilePhoto ? (
-                <img src={customer.profilePhoto} className="w-full h-full object-cover" alt="Perfil" />
-              ) : (
-                <span className="text-3xl font-serif text-white">{customer.name.charAt(0)}</span>
-              )}
-              <label className="absolute inset-0 cursor-pointer opacity-0 group-hover:opacity-100 bg-black/40 flex items-center justify-center transition-opacity">
-                <span className="text-[8px] text-white font-bold uppercase">Mudar</span>
+      {/* Header Estilo Mobile com Logo Dominante */}
+      <header className="bg-tea-900 pt-12 pb-24 px-8 rounded-b-[4.5rem] shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-32 -mt-32 blur-[80px]"></div>
+        <div className="max-w-md mx-auto flex flex-col items-center gap-6 relative z-10">
+          <div className="w-full flex justify-between items-start mb-2">
+            <button onClick={onLogout} className="p-4 bg-white/10 rounded-2xl text-white">🚪</button>
+            <div className="text-right">
+              <p className="text-[9px] font-bold text-tea-300 uppercase tracking-[0.3em] mb-1">Área da Cliente</p>
+              <h2 className="text-xl font-serif font-bold text-white italic">Studio Moriá</h2>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-6 w-full mt-4">
+            <div className="w-24 h-24 rounded-[2.5rem] bg-white p-1.5 shadow-2xl relative group overflow-hidden flex-shrink-0">
+              <div className="w-full h-full rounded-[2rem] overflow-hidden bg-tea-50 flex items-center justify-center">
+                {customer.profilePhoto ? (
+                  <img src={customer.profilePhoto} className="w-full h-full object-cover" alt="Perfil" />
+                ) : (
+                  <img src={settings.logo} className="w-12 h-12 object-contain opacity-80" alt="Logo" />
+                )}
+              </div>
+              <label className="absolute inset-0 cursor-pointer opacity-0 group-hover:opacity-100 bg-black/60 flex flex-col items-center justify-center transition-opacity">
+                <span className="text-[7px] text-white font-bold uppercase tracking-widest">Trocar Foto</span>
                 <input type="file" className="hidden" onChange={handlePhotoUpload} />
               </label>
             </div>
-            <div>
-              <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-0.5">Olá, querida</p>
-              <h1 className="text-xl font-serif font-bold text-white italic">{customer.name.split(' ')[0]}</h1>
+            <div className="flex-1">
+              <p className="text-[10px] font-bold text-tea-200 uppercase tracking-widest mb-1">Olá, querida</p>
+              <h1 className="text-2xl font-serif font-bold text-white italic tracking-wide">
+                {customer.name.split(' ')[0]}
+              </h1>
+              <div className="h-px w-10 bg-tea-400/30 mt-2"></div>
             </div>
           </div>
-          <button onClick={onLogout} className="p-3 bg-white/10 rounded-2xl text-white">🚪</button>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 -mt-10 relative z-20">
+      <main className="max-w-md mx-auto px-6 -mt-12 relative z-20">
         
         {/* Aba HOME */}
         {activeTab === 'home' && (
           <div className="space-y-6 animate-slide-up">
             {nextBooking ? (
-              <div className="bg-white rounded-[2.5rem] shadow-xl border border-tea-50 overflow-hidden">
-                <div className="bg-tea-50/50 px-6 py-3 border-b border-tea-100 flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-tea-700 uppercase tracking-widest">Sua Próxima Sessão</span>
-                  <div className="w-1.5 h-1.5 bg-tea-500 rounded-full animate-pulse"></div>
+              <div className="bg-white rounded-[3rem] shadow-2xl border border-tea-50 overflow-hidden">
+                <div className="bg-tea-50/50 px-8 py-4 border-b border-tea-100 flex justify-between items-center">
+                  <span className="text-[9px] font-bold text-tea-700 uppercase tracking-widest">Seu Próximo Cuidado</span>
+                  <div className="flex gap-1">
+                    <div className="w-1.5 h-1.5 bg-tea-500 rounded-full animate-pulse"></div>
+                    <div className="w-1.5 h-1.5 bg-tea-500 rounded-full animate-pulse delay-75"></div>
+                  </div>
                 </div>
-                <div className="p-8 text-center">
-                  <h3 className="text-2xl font-serif font-bold text-tea-950 mb-1">{nextBooking.serviceName}</h3>
-                  <p className="text-xs text-tea-400 font-bold uppercase tracking-tight mb-8">Com {nextBooking.teamMemberName || 'nossa equipe'}</p>
+                <div className="p-10 text-center">
+                  <h3 className="text-3xl font-serif font-bold text-tea-950 mb-2">{nextBooking.serviceName}</h3>
+                  <p className="text-xs text-tea-500 font-bold uppercase tracking-widest mb-10 italic">Com {nextBooking.teamMemberName || 'nossa equipe'}</p>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-8">
-                    <div className="bg-gray-50 p-4 rounded-2xl">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Dia</p>
-                      <p className="font-bold text-tea-900">{new Date(nextBooking.dateTime).toLocaleDateString()}</p>
+                  <div className="grid grid-cols-2 gap-4 mb-10">
+                    <div className="bg-gray-50/80 p-5 rounded-[2rem] border border-gray-100">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Data</p>
+                      <p className="font-bold text-tea-900 text-lg">{new Date(nextBooking.dateTime).toLocaleDateString('pt-BR', {day:'2-digit', month:'short'})}</p>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-2xl">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Hora</p>
-                      <p className="font-bold text-tea-900">{new Date(nextBooking.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                    <div className="bg-gray-50/80 p-5 rounded-[2rem] border border-gray-100">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Hora</p>
+                      <p className="font-bold text-tea-900 text-lg">{new Date(nextBooking.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
                     </div>
                   </div>
                   
-                  <button onClick={() => setActiveTab('agenda')} className="w-full py-5 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-xl">Ver Detalhes</button>
+                  <button onClick={() => setActiveTab('agenda')} className="w-full py-6 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-tea-900/10 active:scale-95 transition-all">Gerenciar Agendamento</button>
                 </div>
               </div>
             ) : (
-              <div className="bg-white p-12 rounded-[3.5rem] shadow-sm border border-gray-100 text-center space-y-6">
-                <div className="w-20 h-20 bg-tea-50 rounded-full flex items-center justify-center text-4xl mx-auto">💆‍♀️</div>
-                <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Pausa para Você</h3>
-                <p className="text-xs text-gray-400 font-light">Nenhum agendamento ativo. Que tal reservar um momento especial agora?</p>
-                <button onClick={() => setActiveTab('agendar')} className="bg-tea-800 text-white px-10 py-5 rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-lg">Agendar Agora</button>
+              <div className="bg-white p-14 rounded-[4rem] shadow-xl border border-gray-50 text-center space-y-8">
+                <div className="w-24 h-24 bg-tea-50 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner border-2 border-white">✨</div>
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Momento Studio Moriá</h3>
+                  <p className="text-[11px] text-gray-400 font-light leading-relaxed max-w-[200px] mx-auto">Você merece esse tempo. Que tal escolher seu próximo procedimento?</p>
+                </div>
+                <button onClick={() => setActiveTab('agendar')} className="bg-tea-800 text-white px-12 py-5 rounded-full font-bold text-[10px] uppercase tracking-widest shadow-2xl active:scale-95 transition-all">Escolher Serviço</button>
               </div>
             )}
 
-            <a 
-              href={settings.googleMapsLink} 
-              target="_blank" 
-              rel="noreferrer"
-              className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-tea-50 flex items-center justify-between group active:bg-tea-50 transition-colors"
-            >
-               <div className="flex items-center gap-4">
-                  <div className="text-3xl">📍</div>
-                  <div className="text-left">
-                     <p className="text-[9px] font-bold text-tea-600 uppercase tracking-widest mb-1">Onde Estamos</p>
-                     <p className="text-xs text-tea-950 font-bold max-w-[180px] leading-tight">{settings.address?.split(' - ')[0]}</p>
-                  </div>
-               </div>
-               <span className="text-tea-400 group-hover:translate-x-1 transition-transform">→</span>
-            </a>
+            <div className="grid grid-cols-2 gap-4">
+              <a 
+                href={settings.googleMapsLink} 
+                target="_blank" 
+                rel="noreferrer"
+                className="bg-white p-8 rounded-[3rem] shadow-sm border border-tea-50 flex flex-col items-center gap-4 active:scale-95 transition-all"
+              >
+                 <div className="text-3xl">📍</div>
+                 <div className="text-center">
+                    <p className="text-[9px] font-bold text-tea-600 uppercase tracking-widest mb-1">Localização</p>
+                    <p className="text-[10px] text-tea-950 font-bold uppercase tracking-tight">Ver no Mapa</p>
+                 </div>
+              </a>
+              <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-tea-50 flex flex-col items-center gap-4">
+                 <div className="text-3xl">🎁</div>
+                 <div className="text-center">
+                    <p className="text-[9px] font-bold text-tea-600 uppercase tracking-widest mb-1">Fidelidade</p>
+                    <p className="text-[10px] text-tea-950 font-bold uppercase tracking-tight">Ver Meus Pontos</p>
+                 </div>
+              </div>
+            </div>
 
-            <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-tea-50 relative overflow-hidden">
-               <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 bg-tea-50 rounded-xl flex items-center justify-center text-xl shadow-sm">✨</div>
-                  <h4 className="font-bold text-tea-900 text-sm">Dicas de Beleza</h4>
+            <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-tea-50 relative overflow-hidden group">
+               <div className="absolute top-0 left-0 w-1.5 h-full bg-tea-600"></div>
+               <div className="flex items-center gap-4 mb-6">
+                  <div className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-2xl shadow-sm">🌿</div>
+                  <h4 className="font-bold text-tea-900 text-sm tracking-widest uppercase">Segredo de Beleza</h4>
                </div>
                {isLoadingTips ? (
-                 <div className="h-4 bg-gray-100 rounded animate-pulse w-full"></div>
+                 <div className="space-y-3 animate-pulse">
+                    <div className="h-3 bg-gray-100 rounded-full w-full"></div>
+                    <div className="h-3 bg-gray-100 rounded-full w-4/5"></div>
+                 </div>
                ) : (
                  <div className="text-xs text-gray-500 leading-relaxed italic font-light">
-                   {careTips || "Reserve um horário para receber dicas personalizadas da nossa IA."}
+                   {careTips || "Escolha um procedimento para receber dicas exclusivas de cuidados pós-tratamento."}
                  </div>
                )}
             </div>
@@ -228,22 +255,28 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <div className="space-y-6 animate-slide-up">
             {bookingStep === 1 && (
               <>
-                <h3 className="text-2xl font-serif font-bold text-tea-950 italic px-2 mb-2">Qual seu desejo hoje?</h3>
+                <div className="flex items-center justify-between px-2 mb-4">
+                   <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Nossos Serviços</h3>
+                   <span className="text-[10px] text-tea-400 font-bold uppercase tracking-widest">Moriá Estética</span>
+                </div>
                 <div className="space-y-4">
                   {services.filter(s => s.isVisible).map(service => (
                     <button 
                       key={service.id}
                       onClick={() => { setSelectedService(service); setBookingStep(2); }}
-                      className="w-full bg-white p-8 rounded-[2.5rem] border border-gray-50 shadow-sm flex items-center justify-between group active:bg-tea-50 transition-all text-left"
+                      className="w-full bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all text-left"
                     >
                       <div className="flex-1">
-                        <h4 className="font-bold text-tea-900 text-lg mb-1">{service.name}</h4>
-                        <div className="flex items-center gap-4">
-                          <span className="text-[10px] font-bold text-tea-600 bg-tea-50 px-2.5 py-1 rounded-lg uppercase tracking-widest">R$ {service.price.toFixed(2)}</span>
-                          <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">🕒 {service.duration} min</span>
+                        <h4 className="font-bold text-tea-950 text-xl mb-2">{service.name}</h4>
+                        <div className="flex items-center gap-5">
+                          <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">R$ {service.price.toFixed(2)}</span>
+                          <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-1.5">
+                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                             {service.duration} min
+                          </span>
                         </div>
                       </div>
-                      <div className="w-10 h-10 bg-tea-900 text-white rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">✨</div>
+                      <div className="w-12 h-12 bg-tea-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl group-hover:bg-tea-800 transition-colors">✨</div>
                     </button>
                   ))}
                 </div>
@@ -251,30 +284,30 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             )}
 
             {bookingStep === 2 && selectedService && (
-              <div className="bg-white rounded-[3rem] p-10 shadow-2xl border border-tea-50 space-y-8 animate-fade-in">
-                <div className="flex items-center gap-4">
-                   <button onClick={() => setBookingStep(1)} className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">←</button>
+              <div className="bg-white rounded-[3.5rem] p-10 shadow-2xl border border-tea-50 space-y-10 animate-fade-in mb-10">
+                <div className="flex items-center gap-5 border-b border-gray-50 pb-8">
+                   <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-tea-800">←</button>
                    <div>
-                     <h3 className="font-bold text-tea-950">{selectedService.name}</h3>
-                     <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Personalize seu momento</p>
+                     <h3 className="font-bold text-tea-950 text-lg">{selectedService.name}</h3>
+                     <p className="text-[9px] text-gray-400 uppercase font-bold tracking-[0.3em]">Configure seu momento</p>
                    </div>
                 </div>
 
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Selecione o Dia</label>
+                <div className="space-y-8">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-2">Data do Atendimento</label>
                     <input 
                       type="date" 
                       value={selectedDate}
                       min={new Date().toISOString().split('T')[0]}
                       max={settings.agendaOpenUntil || undefined}
                       onChange={(e) => { setSelectedDate(e.target.value); setSelectedTime(''); }}
-                      className="w-full p-5 bg-gray-50 rounded-3xl border-none font-bold text-tea-900 outline-none focus:ring-4 focus:ring-tea-100"
+                      className="w-full p-6 bg-gray-50/80 rounded-[2rem] border-none font-bold text-tea-900 outline-none focus:ring-4 focus:ring-tea-50 transition-all"
                     />
                   </div>
 
-                  <div className="space-y-3">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Escolha o Horário</label>
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-2">Melhor Horário</label>
                     <div className="grid grid-cols-3 gap-3">
                       {allPossibleSlots.map(slot => {
                         const available = !!currentSlotsAvailability[slot];
@@ -283,9 +316,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                             key={slot}
                             disabled={!available}
                             onClick={() => setSelectedTime(slot)}
-                            className={`p-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${
-                              selectedTime === slot ? 'bg-tea-800 border-tea-800 text-white shadow-xl shadow-tea-900/20' :
-                              available ? 'bg-white border-tea-50 text-tea-900 hover:border-tea-200' :
+                            className={`p-5 rounded-2xl text-[10px] font-bold border-2 transition-all ${
+                              selectedTime === slot ? 'bg-tea-800 border-tea-800 text-white shadow-2xl shadow-tea-900/20' :
+                              available ? 'bg-white border-tea-50 text-tea-900 hover:border-tea-200 shadow-sm' :
                               'bg-gray-50 border-transparent text-gray-200 opacity-50 cursor-not-allowed'
                             }`}
                           >
@@ -297,20 +330,22 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   </div>
 
                   {selectedTime && (
-                    <div className="space-y-3 animate-fade-in">
-                       <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Com quem deseja?</label>
+                    <div className="space-y-4 animate-fade-in pt-4">
+                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-2">Quem irá te atender?</label>
                        <div className="space-y-3">
                           {currentSlotsAvailability[selectedTime]?.map(pro => (
                             <button 
                               key={pro.id}
                               onClick={() => setSelectedProId(pro.id)}
-                              className={`w-full p-5 rounded-[2rem] border-2 flex items-center justify-between transition-all ${selectedProId === pro.id ? 'border-tea-600 bg-tea-50' : 'bg-white border-gray-50'}`}
+                              className={`w-full p-6 rounded-[2.5rem] border-2 flex items-center justify-between transition-all ${selectedProId === pro.id ? 'border-tea-600 bg-tea-50 shadow-md' : 'bg-white border-gray-50 hover:border-tea-100'}`}
                             >
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-tea-800 text-white rounded-2xl flex items-center justify-center font-bold text-sm shadow-lg">{pro.name.charAt(0)}</div>
-                                <span className="font-bold text-sm text-tea-900">{pro.name}</span>
+                              <div className="flex items-center gap-5">
+                                <div className="w-12 h-12 bg-tea-900 text-white rounded-2xl flex items-center justify-center font-bold text-base shadow-lg">{pro.name.charAt(0)}</div>
+                                <span className="font-bold text-base text-tea-900">{pro.name}</span>
                               </div>
-                              {selectedProId === pro.id && <span className="text-tea-600 text-xs font-bold">✓</span>}
+                              {selectedProId === pro.id && (
+                                <div className="w-8 h-8 bg-tea-600 text-white rounded-full flex items-center justify-center text-sm">✓</div>
+                              )}
                             </button>
                           ))}
                        </div>
@@ -321,30 +356,30 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 <button 
                   disabled={!selectedTime || !selectedProId}
                   onClick={handleBookSubmit}
-                  className="w-full py-6 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-2xl disabled:bg-gray-100 disabled:text-gray-300 disabled:shadow-none transition-all"
+                  className="w-full py-7 bg-tea-800 text-white rounded-[2.5rem] font-bold text-[11px] uppercase tracking-[0.2em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-300 disabled:shadow-none transition-all active:scale-95"
                 >
-                  Confirmar Agendamento
+                  Finalizar Agendamento
                 </button>
               </div>
             )}
 
             {bookingStep === 3 && (
-              <div className="text-center py-16 space-y-8 animate-slide-up bg-white rounded-[4rem] border border-tea-50 shadow-xl px-8">
-                <div className="w-28 h-28 bg-tea-50 rounded-full flex items-center justify-center text-6xl mx-auto shadow-inner animate-bounce">⏳</div>
-                <div className="space-y-2">
-                  <h3 className="text-3xl font-serif font-bold text-tea-950 italic">Solicitado!</h3>
-                  <p className="text-gray-400 text-xs leading-relaxed max-w-[240px] mx-auto font-light">Para garantir sua vaga, envie agora o comprovante do sinal via WhatsApp.</p>
+              <div className="text-center py-20 space-y-10 animate-slide-up bg-white rounded-[4rem] border border-tea-50 shadow-2xl px-10">
+                <div className="w-32 h-32 bg-tea-50 rounded-full flex items-center justify-center text-7xl mx-auto shadow-inner border-4 border-white animate-bounce">⏳</div>
+                <div className="space-y-3">
+                  <h3 className="text-4xl font-serif font-bold text-tea-950 italic">Solicitado!</h3>
+                  <p className="text-gray-400 text-[11px] leading-relaxed max-w-[220px] mx-auto font-light">Quase tudo pronto. Envie agora o comprovante do sinal pelo WhatsApp para garantir sua vaga.</p>
                 </div>
                 <button 
                   onClick={() => {
-                    const msg = `Olá Studio Moriá! Solicitei ${selectedService?.name} para ${selectedDate} às ${selectedTime}. Segue comprovante do sinal.`;
+                    const msg = `Olá Studio Moriá! Solicitei ${selectedService?.name} para o dia ${selectedDate} às ${selectedTime}. Segue o comprovante do sinal.`;
                     window.open(`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
                     setActiveTab('agenda');
                     setBookingStep(1);
                   }}
-                  className="w-full py-6 bg-tea-900 text-white rounded-[2.5rem] font-bold text-[10px] uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3"
+                  className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold text-[10px] uppercase tracking-[0.2em] shadow-3xl flex items-center justify-center gap-4 hover:bg-black transition-colors"
                 >
-                   📱 Enviar Comprovante
+                   📱 Confirmar via WhatsApp
                 </button>
               </div>
             )}
@@ -354,20 +389,25 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {/* Aba AGENDA */}
         {activeTab === 'agenda' && (
           <div className="space-y-6 animate-slide-up">
-             <h3 className="text-2xl font-serif font-bold text-tea-950 italic px-4">Minhas Visitas</h3>
+             <div className="flex items-center justify-between px-4">
+                <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Minhas Visitas</h3>
+                <span className="text-[9px] font-bold text-tea-400 uppercase tracking-widest">{myBookings.length} Registros</span>
+             </div>
              <div className="space-y-4">
                 {myBookings.length > 0 ? myBookings.map(b => (
-                  <div key={b.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-5">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl ${b.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-tea-50 text-tea-700 shadow-inner'}`}>
+                  <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-6">
+                      <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl ${b.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-tea-50 text-tea-700 shadow-inner'}`}>
                          {b.status === 'completed' ? '✨' : '📅'}
                       </div>
                       <div>
-                        <h4 className="font-bold text-tea-950 text-base">{b.serviceName}</h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{new Date(b.dateTime).toLocaleDateString()} às {new Date(b.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                        <h4 className="font-bold text-tea-950 text-lg mb-1">{b.serviceName}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                           {new Date(b.dateTime).toLocaleDateString()} • {new Date(b.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                        </p>
                       </div>
                     </div>
-                    <div className={`px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest border ${
+                    <div className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
                       b.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' :
                       b.status === 'pending' ? 'bg-orange-50 text-orange-700 border-orange-100 animate-pulse' :
                       'bg-blue-50 text-blue-700 border-blue-100'
@@ -376,7 +416,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     </div>
                   </div>
                 )) : (
-                  <div className="py-24 text-center opacity-30 italic font-serif text-lg">Seu histórico está vazio.</div>
+                  <div className="py-24 text-center opacity-30 italic font-serif text-xl px-10 leading-relaxed">Sua jornada de beleza no Studio Moriá começa aqui.</div>
                 )}
              </div>
           </div>
@@ -384,52 +424,55 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
         {/* Aba PERFIL */}
         {activeTab === 'perfil' && (
-          <div className="space-y-6 animate-slide-up">
-             <div className="bg-white p-10 rounded-[3rem] shadow-sm border border-gray-100 space-y-8">
-                <div className="space-y-4">
-                  <div className="space-y-1">
-                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sua Identificação</label>
-                     <div className="p-5 bg-gray-50 rounded-2xl font-bold text-tea-950 text-sm shadow-inner">{customer.name}</div>
+          <div className="space-y-8 animate-slide-up">
+             <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-50 space-y-10">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-3">Nome</label>
+                     <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.name}</div>
                   </div>
-                  <div className="space-y-1">
-                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">WhatsApp de Contato</label>
-                     <div className="p-5 bg-gray-50 rounded-2xl font-bold text-tea-950 text-sm shadow-inner">{customer.whatsapp}</div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-3">WhatsApp</label>
+                     <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.whatsapp}</div>
                   </div>
-                  <div className="space-y-1">
-                     <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Documento (CPF)</label>
-                     <div className="p-5 bg-gray-50 rounded-2xl font-bold text-gray-400 text-sm shadow-inner italic">***.***.{customer.cpf.slice(-5)}</div>
+                  <div className="space-y-2">
+                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-3">Documento</label>
+                     <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-gray-300 text-sm shadow-inner italic">CPF: ***.***.{customer.cpf.slice(-5)}</div>
                   </div>
                 </div>
                 
-                <div className="pt-6 grid grid-cols-1 gap-4">
-                   <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-500 rounded-2xl font-bold text-[10px] uppercase tracking-widest border border-red-100 active:scale-95 transition-all">Sair da Conta</button>
+                <div className="pt-4 grid grid-cols-1 gap-4">
+                   <button onClick={onLogout} className="w-full py-6 bg-red-50 text-red-500 rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.2em] border border-red-100 active:scale-95 transition-all">Sair da Conta</button>
                 </div>
              </div>
              
-             <div className="text-center py-8 opacity-20 flex flex-col items-center gap-3">
-                <img src={settings.logo} className="h-10 w-auto grayscale" alt="Logo" />
-                <p className="text-[9px] font-bold uppercase tracking-[0.5em]">Studio Moriá Estética</p>
+             <div className="text-center py-12 opacity-30 flex flex-col items-center gap-6">
+                <img src={settings.logo} className="h-24 w-auto grayscale object-contain" alt="Logo" />
+                <div className="space-y-1">
+                   <p className="text-[10px] font-bold uppercase tracking-[0.8em]">Studio Moriá</p>
+                   <p className="text-[8px] font-medium tracking-[0.2em]">São Vicente • Estética de Resultados</p>
+                </div>
              </div>
           </div>
         )}
       </main>
 
-      {/* Navegação Inferior Fixa */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-gray-100 px-8 py-6 flex justify-between items-center z-[100] shadow-[0_-15px_50px_rgba(0,0,0,0.06)] rounded-t-[3.5rem]">
+      {/* Navegação Inferior Fixa Style App */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-3xl border-t border-gray-100 px-10 py-8 flex justify-between items-center z-[100] shadow-[0_-20px_60px_rgba(0,0,0,0.08)] rounded-t-[4rem]">
          {[
            { id: 'home', icon: '🏠', label: 'Início' },
-           { id: 'agendar', icon: '✨', label: 'Agendar' },
+           { id: 'agendar', icon: '✨', label: 'Cuidar' },
            { id: 'agenda', icon: '🗓️', label: 'Agenda' },
-           { id: 'perfil', icon: '👤', label: 'Conta' }
+           { id: 'perfil', icon: '👤', label: 'Eu' }
          ].map(tab => (
            <button 
              key={tab.id}
              onClick={() => { setActiveTab(tab.id as any); if(tab.id === 'agendar') setBookingStep(1); }}
-             className={`flex flex-col items-center gap-1.5 transition-all duration-300 ${activeTab === tab.id ? 'text-tea-900 scale-110 -translate-y-2' : 'text-gray-300'}`}
+             className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === tab.id ? 'text-tea-900 scale-110 -translate-y-2' : 'text-gray-300'}`}
            >
-              <span className={`text-2xl ${activeTab === tab.id ? 'drop-shadow-[0_0_8px_rgba(41,91,53,0.3)]' : ''}`}>{tab.icon}</span>
-              <span className={`text-[8px] font-bold uppercase tracking-widest ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`}>{tab.label}</span>
-              {activeTab === tab.id && <div className="w-1.5 h-1.5 bg-tea-900 rounded-full mt-0.5"></div>}
+              <span className={`text-2xl ${activeTab === tab.id ? 'drop-shadow-[0_0_12px_rgba(41,91,53,0.4)]' : ''}`}>{tab.icon}</span>
+              <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeTab === tab.id ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>{tab.label}</span>
+              {activeTab === tab.id && <div className="w-1.5 h-1.5 bg-tea-900 rounded-full mt-1 animate-pulse"></div>}
            </button>
          ))}
       </nav>
