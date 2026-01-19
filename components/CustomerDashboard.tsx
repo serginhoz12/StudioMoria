@@ -281,7 +281,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       <div className="flex-1 pr-4">
                         <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
                         {service.description && (
-                          <p className="text-gray-400 text-xs font-light mb-4 line-clamp-2 leading-relaxed">
+                          <p className="text-gray-400 text-xs font-light mb-4 line-clamp-3 leading-relaxed">
                             {service.description}
                           </p>
                         )}

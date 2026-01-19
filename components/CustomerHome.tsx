@@ -87,7 +87,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
           {services.filter(s => s.isVisible).map(service => (
             <div key={service.id} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all group shadow-sm">
               <h3 className="text-xl md:text-2xl font-serif font-bold text-tea-950 mb-3">{service.name}</h3>
-              <p className="text-gray-400 text-xs md:text-sm font-light mb-8 leading-relaxed line-clamp-2">{service.description}</p>
+              <p className="text-gray-400 text-xs md:text-sm font-light mb-8 leading-relaxed line-clamp-3">{service.description}</p>
               <div className="mb-8">
                 {currentUser ? (
                   <div className="flex flex-col">
