@@ -124,29 +124,28 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     <div className="space-y-12 pb-32 animate-fade-in">
       <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl">
         <h2 className="text-3xl font-serif font-bold mb-2">Configurações Gerais</h2>
-        <p className="text-tea-100 font-light text-sm italic">Defina as bases do seu salão e personalize a agenda individual de cada profissional.</p>
+        <p className="text-tea-100 font-light text-sm italic">Defina as bases do seu salão. Estas configurações servem como padrões para a agenda.</p>
       </div>
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-          <span className="text-3xl">🏢</span> Horário do Salão (Geral)
+          <span className="text-3xl">🏢</span> Turno Padrão do Salão
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <div className="space-y-2">
-             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Abertura Máxima</label>
+             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Abertura Padrão</label>
              <input type="time" className="w-full p-5 bg-gray-50 rounded-2xl border-none font-bold" value={settings.businessHours.start} onChange={e => updateGlobalSettings({...settings, businessHours: {...settings.businessHours, start: e.target.value}})} />
           </div>
           <div className="space-y-2">
-             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Fechamento Máximo</label>
+             <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Fechamento Padrão</label>
              <input type="time" className="w-full p-5 bg-gray-50 rounded-2xl border-none font-bold" value={settings.businessHours.end} onChange={e => updateGlobalSettings({...settings, businessHours: {...settings.businessHours, end: e.target.value}})} />
           </div>
         </div>
-        <p className="mt-6 text-[11px] text-gray-400 italic">* Este horário define o limite máximo de exibição da agenda no site.</p>
       </section>
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-           <span className="text-3xl">👥</span> Gestão da Equipe & Agendas
+           <span className="text-3xl">👥</span> Profissionais & Disponibilidade Base
         </h3>
         <div className="flex gap-4 mb-10">
           <input placeholder="Nome da nova profissional..." className="flex-grow p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
@@ -159,16 +158,15 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               <div className="flex justify-between items-center border-b border-gray-50 pb-6">
                 <div>
                   <span className="font-serif font-bold text-2xl text-tea-950">{member.name}</span>
-                  <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest mt-1">Configurações de Disponibilidade</p>
+                  <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest mt-1">Definições Semanais Padrão</p>
                 </div>
                 <button onClick={() => removeTeamMember(member.id)} className="text-red-400 text-xs font-bold uppercase tracking-widest hover:text-red-600 p-3 bg-red-50 rounded-xl">Remover do Time</button>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                {/* Horários e Folgas */}
                 <div className="space-y-6">
                   <div>
-                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">⏰ Horário de Trabalho Individual</h4>
+                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">⏰ Turno de Trabalho Semanal</h4>
                     <div className="flex items-center gap-4">
                       <input 
                         type="time" 
@@ -187,7 +185,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
 
                   <div>
-                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">📅 Dias de Folga (Bloqueados)</h4>
+                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">📅 Folgas Semanais Fixas</h4>
                     <div className="flex flex-wrap gap-2">
                       {weekDays.map(day => (
                         <button 
@@ -202,9 +200,8 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Serviços Autorizados */}
                 <div className="space-y-6">
-                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">💅 Serviços que realiza</h4>
+                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">💅 Serviços Autorizados</h4>
                   <div className="flex flex-wrap gap-2">
                     {services.map(s => (
                       <button 
@@ -218,6 +215,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
                 </div>
               </div>
+              <p className="text-[9px] text-gray-400 italic">Dica: Use a aba 'Agenda' para abrir ou fechar horários específicos em dias específicos.</p>
             </div>
           ))}
         </div>
@@ -228,7 +226,6 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
            <span className="text-3xl">📋</span> Catálogo de Serviços
         </h3>
         
-        {/* Formulário de Novo Serviço */}
         <div className="bg-tea-50/50 p-8 rounded-3xl mb-10 border border-tea-100">
            <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-6 ml-1">Criar Novo Procedimento</h4>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -239,13 +236,12 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
            <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar Novo Procedimento</button>
         </div>
 
-        {/* Listagem de Serviços */}
         <div className="space-y-4">
           {services.map(s => (
             <div key={s.id} className={`p-6 border-2 rounded-3xl flex justify-between items-center transition-all ${s.isVisible ? 'border-gray-50 hover:bg-gray-50/30' : 'bg-red-50/10 opacity-60 border-transparent'}`}>
               <div>
                 <p className="font-bold text-lg text-tea-950">{s.name}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase">R$ {s.price.toFixed(2)} • {s.duration} min</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">A partir de R$ {s.price.toFixed(2)} • {s.duration} min</p>
               </div>
               <div className="flex gap-2 items-center">
                 <button 
