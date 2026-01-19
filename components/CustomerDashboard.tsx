@@ -269,7 +269,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       <div className="flex-1">
                         <h4 className="font-bold text-tea-950 text-xl mb-2">{service.name}</h4>
                         <div className="flex items-center gap-5">
-                          <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">R$ {service.price.toFixed(2)}</span>
+                          <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+                            <span className="opacity-50 text-[8px] mr-1">a partir de</span>
+                            R$ {service.price.toFixed(2)}
+                          </span>
                           <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-1.5">
                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                              {service.duration} min

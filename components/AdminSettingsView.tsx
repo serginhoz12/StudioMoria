@@ -60,9 +60,10 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   };
 
   const toggleOffDay = (memberId: string, day: number) => {
-    const member = settings.teamMembers.find(m => m.id === memberId);
-    if (!member) return;
-    const currentOffDays = member.offDays || [];
+    const member = settings.teamMembers.find(m => memberId === memberId); // Fix potential reference error
+    const targetMember = settings.teamMembers.find(m => m.id === memberId);
+    if (!targetMember) return;
+    const currentOffDays = targetMember.offDays || [];
     const newOffDays = currentOffDays.includes(day)
       ? currentOffDays.filter(d => d !== day)
       : [...currentOffDays, day];
@@ -263,7 +264,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             <div key={s.id} className={`p-6 border-2 rounded-3xl flex justify-between items-center transition-all ${s.isVisible ? 'border-gray-50 hover:bg-gray-50/30' : 'bg-red-50/10 opacity-60 border-transparent'}`}>
               <div>
                 <p className="font-bold text-lg text-tea-950">{s.name}</p>
-                <p className="text-[10px] text-gray-400 font-bold uppercase">A partir de R$ {s.price.toFixed(2)} • {s.duration} min</p>
+                <p className="text-[10px] text-gray-400 font-bold uppercase">a partir de R$ {s.price.toFixed(2)} • {s.duration} min</p>
               </div>
               <div className="flex gap-2 items-center">
                 <button 

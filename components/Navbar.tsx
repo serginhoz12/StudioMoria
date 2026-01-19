@@ -100,10 +100,20 @@ const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
             
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 md:gap-2">
+              {/* Botão Área do Cliente AO LADO do botão Área da Equipe */}
+              {!isAdmin && (
+                <button 
+                  onClick={() => setView(currentUser ? View.CUSTOMER_DASHBOARD : View.CUSTOMER_LOGIN)}
+                  className="px-3 md:px-5 py-2 md:py-3 rounded-full text-[8px] md:text-[9px] font-bold transition-all border-2 border-tea-100 text-tea-900 bg-white uppercase tracking-widest hover:bg-tea-50 shadow-sm"
+                >
+                  Cliente
+                </button>
+              )}
+              
               <button 
                 onClick={onToggleAdmin}
-                className={`px-4 md:px-6 py-2 md:py-3 rounded-full text-[8px] md:text-[9px] font-bold transition-all border-2 uppercase tracking-widest ${isAdmin ? 'bg-tea-800 text-white border-tea-800' : 'bg-tea-950 text-white border-tea-950'}`}
+                className={`px-3 md:px-5 py-2 md:py-3 rounded-full text-[8px] md:text-[9px] font-bold transition-all border-2 uppercase tracking-widest ${isAdmin ? 'bg-tea-800 text-white border-tea-800 shadow-lg' : 'bg-tea-950 text-white border-tea-950 shadow-sm'}`}
               >
                 {isAdmin ? 'Site' : 'Equipe'}
               </button>

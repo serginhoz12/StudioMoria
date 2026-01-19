@@ -15,8 +15,8 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   name: "Studio Moriá Estética",
   primaryColor: "tea", 
   logo: "https://lh3.googleusercontent.com/d/15KFidcKVQniucz9tEtmgKWLLKttnrGgd",
-  address: "R. Frei Gaspar, 3033 - Sala 02 - Cidade Náutica, São Vicente - SP",
-  googleMapsLink: "https://maps.app.goo.gl/3EQATjGQGyVRR1ea6",
+  address: "Vila Nova, Cubatão - SP (Localização via GPS)",
+  googleMapsLink: "https://www.google.com/maps/search/?api=1&query=-23.9004600,-46.4425140",
   lastUpdated: Date.now(),
   teamMembers: [
     { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
