@@ -4,12 +4,14 @@ import { Transaction, Customer, Service } from '../types';
 
 interface AdminFinanceProps {
   transactions: Transaction[];
-  setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
+  onAdd: (data: any) => Promise<void>;
+  onUpdate: (id: string, data: any) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   customers: Customer[];
   services: Service[];
 }
 
-const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactions, customers, services }) => {
+const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, onAdd, onUpdate, onDelete, customers, services }) => {
   const [filter, setFilter] = useState<'all' | 'payable' | 'receivable'>('all');
   const [period, setPeriod] = useState<'current' | 'next' | 'custom'>('current');
   const [dateRange, setDateRange] = useState({
@@ -18,6 +20,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
   });
 
   const [showAdd, setShowAdd] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newTransaction, setNewTransaction] = useState({ 
     description: '', 
     amount: 0, 
@@ -57,53 +60,52 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
     }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (newTransaction.description && newTransaction.amount > 0) {
-      const selectedCustomer = customers.find(c => c.id === newTransaction.customerId);
-      const selectedService = services.find(s => s.id === newTransaction.serviceId);
-      
-      const transaction: Transaction = {
-        id: Math.random().toString(36).substr(2, 9),
-        description: newTransaction.description,
-        amount: newTransaction.amount,
-        type: newTransaction.type,
-        date: new Date().toISOString(),
-        dueDate: newTransaction.dueDate,
-        paidAt: newTransaction.status === 'paid' ? new Date().toISOString() : undefined,
-        status: newTransaction.status,
-        customerId: newTransaction.customerId || undefined,
-        customerName: selectedCustomer?.name,
-        serviceId: newTransaction.serviceId || undefined,
-        serviceName: selectedService?.name,
-        observation: newTransaction.observation || undefined
-      };
-      setTransactions(prev => [...prev, transaction]);
-      setShowAdd(false);
-      setNewTransaction({ 
-        description: '', 
-        amount: 0, 
-        type: 'receivable', 
-        customerId: '', 
-        serviceId: '',
-        dueDate: new Date().toISOString().split('T')[0],
-        status: 'pending',
-        observation: ''
-      });
+      setIsSaving(true);
+      try {
+        const selectedCustomer = customers.find(c => c.id === newTransaction.customerId);
+        const selectedService = services.find(s => s.id === newTransaction.serviceId);
+        
+        const transactionData = {
+          description: newTransaction.description,
+          amount: newTransaction.amount,
+          type: newTransaction.type,
+          date: new Date().toISOString(),
+          dueDate: newTransaction.dueDate,
+          paidAt: newTransaction.status === 'paid' ? new Date().toISOString() : null,
+          status: newTransaction.status,
+          customerId: newTransaction.customerId || null,
+          customerName: selectedCustomer?.name || null,
+          serviceId: newTransaction.serviceId || null,
+          serviceName: selectedService?.name || null,
+          observation: newTransaction.observation || null
+        };
+        
+        await onAdd(transactionData);
+        setShowAdd(false);
+        setNewTransaction({ 
+          description: '', 
+          amount: 0, 
+          type: 'receivable', 
+          customerId: '', 
+          serviceId: '',
+          dueDate: new Date().toISOString().split('T')[0],
+          status: 'pending',
+          observation: ''
+        });
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
-  const toggleStatus = (id: string) => {
-    setTransactions(prev => prev.map(t => {
-      if (t.id === id) {
-        const newStatus = t.status === 'paid' ? 'pending' : 'paid';
-        return { 
-          ...t, 
-          status: newStatus,
-          paidAt: newStatus === 'paid' ? new Date().toISOString() : undefined
-        };
-      }
-      return t;
-    }));
+  const toggleStatus = async (t: Transaction) => {
+    const newStatus = t.status === 'paid' ? 'pending' : 'paid';
+    await onUpdate(t.id, { 
+      status: newStatus,
+      paidAt: newStatus === 'paid' ? new Date().toISOString() : null
+    });
   };
 
   const sendReminder = (t: Transaction) => {
@@ -119,7 +121,9 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
     const end = new Date(dateRange.end + 'T23:59:59').getTime();
 
     return transactions.filter(t => {
-      const d = new Date(t.date).getTime();
+      // Filtrando pela data de VENCIMENTO para permitir previsibilidade
+      const dateToCompare = t.dueDate || t.date;
+      const d = new Date(dateToCompare).getTime();
       const inPeriod = d >= start && d <= end;
       const matchType = filter === 'all' || t.type === filter;
       return inPeriod && matchType;
@@ -132,12 +136,14 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
     return { rec, pay, balance: rec - pay };
   }, [filtered]);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm">
         <div>
           <h2 className="text-2xl font-bold text-tea-950">Contas Financeiras</h2>
-          <p className="text-gray-500 text-sm">Controle seu fluxo de caixa por período.</p>
+          <p className="text-gray-500 text-sm">Controle seu fluxo de caixa por data de vencimento.</p>
         </div>
         
         <div className="flex flex-wrap items-center gap-4">
@@ -149,22 +155,22 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
           
           {period === 'custom' && (
             <div className="flex items-center gap-2 animate-fade-in">
-              <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold border-none" />
-              <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold border-none" />
+              <input type="date" value={dateRange.start} onChange={e => setDateRange({...dateRange, start: e.target.value})} className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold border-none outline-none focus:ring-2 focus:ring-tea-100" />
+              <input type="date" value={dateRange.end} onChange={e => setDateRange({...dateRange, end: e.target.value})} className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold border-none outline-none focus:ring-2 focus:ring-tea-100" />
             </div>
           )}
 
-          <button onClick={() => setShowAdd(true)} className="bg-tea-900 text-white px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg">+ Novo</button>
+          <button onClick={() => setShowAdd(true)} className="bg-tea-900 text-white px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg">+ Novo Registro</button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-green-50 p-6 rounded-[2rem] border border-green-100">
-          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">Receitas do Período</p>
+          <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">Receitas Previstas</p>
           <p className="text-2xl font-bold text-green-900">R$ {summary.rec.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
         <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100">
-          <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">Despesas do Período</p>
+          <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">Despesas Previstas</p>
           <p className="text-2xl font-bold text-red-900">R$ {summary.pay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
         </div>
         <div className={`${summary.balance >= 0 ? 'bg-tea-50 border-tea-100' : 'bg-orange-50 border-orange-100'} p-6 rounded-[2rem] border`}>
@@ -226,7 +232,13 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
           </div>
           <div className="flex justify-end gap-4">
             <button onClick={() => setShowAdd(false)} className="px-8 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
-            <button onClick={handleAdd} className="bg-tea-900 text-white px-12 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl">Salvar Registro</button>
+            <button 
+              disabled={isSaving}
+              onClick={handleAdd} 
+              className="bg-tea-900 text-white px-12 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl disabled:bg-gray-200 transition-colors"
+            >
+              {isSaving ? 'Salvando...' : 'Salvar Registro'}
+            </button>
           </div>
         </div>
       )}
@@ -236,7 +248,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-8 py-5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">Data / Vencimento</th>
+                <th className="px-8 py-5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">Data de Vencimento</th>
                 <th className="px-8 py-5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">Descrição</th>
                 <th className="px-8 py-5 text-[9px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
                 <th className="px-8 py-5 text-[9px] font-bold text-gray-400 uppercase tracking-widest text-right">Valor</th>
@@ -245,10 +257,13 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(t => (
-                <tr key={t.id} className="hover:bg-tea-50/20 transition-all group">
+                <tr key={t.id} className={`hover:bg-tea-50/20 transition-all group ${t.dueDate === todayStr ? 'bg-orange-50/20' : ''}`}>
                   <td className="px-8 py-6">
-                    <p className="font-bold text-tea-950 text-xs">{new Date(t.dueDate || t.date).toLocaleDateString()}</p>
-                    <p className="text-[8px] text-gray-300 uppercase font-bold">Lançado: {new Date(t.date).toLocaleDateString()}</p>
+                    <p className={`font-bold text-xs ${t.dueDate === todayStr ? 'text-orange-600' : 'text-tea-950'}`}>
+                      {t.dueDate ? new Date(t.dueDate + 'T12:00:00').toLocaleDateString() : '-'}
+                      {t.dueDate === todayStr && <span className="ml-2 text-[8px] bg-orange-100 px-1.5 py-0.5 rounded text-orange-700">HOJE</span>}
+                    </p>
+                    <p className="text-[8px] text-gray-300 uppercase font-bold">Lançado em: {new Date(t.date).toLocaleDateString()}</p>
                   </td>
                   <td className="px-8 py-6">
                     <p className="font-bold text-gray-800 text-sm">{t.description}</p>
@@ -259,7 +274,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
                   </td>
                   <td className="px-8 py-6">
                     <button 
-                      onClick={() => toggleStatus(t.id)}
+                      onClick={() => toggleStatus(t)}
                       className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${t.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700 shadow-sm'}`}
                     >
                       {t.status === 'paid' ? 'Pago' : 'Pendente'}
@@ -273,14 +288,14 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, setTransactio
                       {t.customerId && t.status === 'pending' && (
                         <button onClick={() => sendReminder(t)} className="p-3 bg-white border border-tea-50 rounded-xl text-lg shadow-sm hover:scale-110 transition-transform">📱</button>
                       )}
-                      <button onClick={() => setTransactions(prev => prev.filter(x => x.id !== t.id))} className="p-3 text-red-200 hover:text-red-500 transition-colors">🗑️</button>
+                      <button onClick={() => onDelete(t.id)} className="p-3 text-red-200 hover:text-red-500 transition-colors">🗑️</button>
                     </div>
                   </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-8 py-24 text-center text-gray-300 italic font-serif">Nenhum registro encontrado para este período e filtro.</td>
+                  <td colSpan={5} className="px-8 py-24 text-center text-gray-300 italic font-serif">Nenhum registro de vencimento encontrado para este período.</td>
                 </tr>
               )}
             </tbody>

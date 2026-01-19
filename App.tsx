@@ -186,6 +186,20 @@ const App: React.FC = () => {
     });
   };
 
+  const handleAddTransaction = async (data: any) => {
+    await addDoc(collection(db, "transactions"), data);
+  };
+
+  const handleUpdateTransaction = async (id: string, data: any) => {
+    await updateDoc(doc(db, "transactions", id), data);
+  };
+
+  const handleDeleteTransaction = async (id: string) => {
+    if (confirm("Deseja excluir permanentemente este registro financeiro?")) {
+      await deleteDoc(doc(db, "transactions", id));
+    }
+  };
+
   const renderView = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
@@ -194,7 +208,7 @@ const App: React.FC = () => {
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} setTransactions={() => {}} customers={customers} services={services} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={handleDeleteTransaction} customers={customers} services={services} />;
         case View.ADMIN_VEO: return <AdminVeo />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} />;
       }
