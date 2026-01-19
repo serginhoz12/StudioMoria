@@ -12,6 +12,7 @@ interface CustomerDashboardProps {
   onUpdateProfile: (updated: Partial<Customer>) => void;
   onLogout: () => void;
   onCancelBooking: (id: string) => void;
+  onAddToWaitlist?: (serviceId: string, date: string) => void;
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -22,7 +23,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onBook,
   onUpdateProfile, 
   onLogout,
-  onCancelBooking
+  onCancelBooking,
+  onAddToWaitlist
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [careTips, setCareTips] = useState<string>('');
@@ -103,6 +105,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     if (confirm("ATENÇÃO: O cancelamento deste agendamento implica na PERDA INTEGRAL do valor pago como sinal/reserva. Deseja prosseguir com o cancelamento?")) {
       onCancelBooking(bookingId);
       alert("Agendamento cancelado. Conforme nossa política, o sinal não será reembolsado.");
+    }
+  };
+
+  const handleWaitlist = (service: Service) => {
+    if (onAddToWaitlist) {
+      onAddToWaitlist(service.id, new Date().toISOString().split('T')[0]);
+      alert("Excelente! Você entrou na lista de espera para " + service.name + ". Avisaremos você assim que abrirmos a agenda!");
     }
   };
 
@@ -273,31 +282,43 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 </div>
                 <div className="space-y-4">
                   {services.filter(s => s.isVisible).map(service => (
-                    <button 
-                      key={service.id}
-                      onClick={() => { setSelectedService(service); setBookingStep(2); }}
-                      className="w-full bg-white p-8 md:p-10 rounded-[3rem] border border-gray-100 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all text-left"
-                    >
-                      <div className="flex-1 pr-4">
-                        <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
-                        {service.description && (
-                          <p className="text-gray-400 text-xs font-light mb-4 line-clamp-3 leading-relaxed">
-                            {service.description}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-5">
-                          <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">
-                            <span className="opacity-50 text-[8px] mr-1">a partir de</span>
-                            R$ {service.price.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-1.5">
-                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                             {service.duration} min
-                          </span>
+                    <div key={service.id} className="bg-white p-8 md:p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 pr-4">
+                          <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
+                          {service.description && (
+                            <p className="text-gray-400 text-xs font-light mb-4 line-clamp-3 leading-relaxed">
+                              {service.description}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-5">
+                            <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">
+                              <span className="opacity-50 text-[8px] mr-1">a partir de</span>
+                              R$ {service.price.toFixed(2)}
+                            </span>
+                            <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-1.5">
+                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                               {service.duration} min
+                            </span>
+                          </div>
                         </div>
+                        <div className="w-12 h-12 bg-tea-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl flex-shrink-0">✨</div>
                       </div>
-                      <div className="w-12 h-12 bg-tea-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl group-hover:bg-tea-800 transition-colors flex-shrink-0">✨</div>
-                    </button>
+                      <div className="grid grid-cols-2 gap-3 mt-4">
+                        <button 
+                          onClick={() => { setSelectedService(service); setBookingStep(2); }}
+                          className="py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 transition-all"
+                        >
+                          Agendar
+                        </button>
+                        <button 
+                          onClick={() => handleWaitlist(service)}
+                          className="py-4 bg-white text-tea-700 border border-tea-100 rounded-2xl font-bold uppercase tracking-widest text-[8px] active:scale-95 transition-all"
+                        >
+                          Lista de Espera
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
               </>

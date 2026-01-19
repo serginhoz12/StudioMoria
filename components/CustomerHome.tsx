@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { SalonSettings, Service, Customer, Booking, TeamMember } from '../types.ts';
+import React, { useState } from 'react';
+import { SalonSettings, Service, Customer, Booking } from '../types.ts';
 
 interface CustomerHomeProps {
   settings: SalonSettings;
@@ -12,8 +12,9 @@ interface CustomerHomeProps {
   currentUser: Customer | null;
 }
 
-const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, bookings, onBook, onAuthClick, onAddToWaitlist, currentUser }) => {
+const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthClick, onAddToWaitlist, currentUser }) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
+  const [waitlistModal, setWaitlistModal] = useState<{ open: boolean, service: Service | null }>({ open: false, service: null });
   
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
@@ -26,14 +27,27 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     window.open(`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
+  const handleWaitlistClick = (service: Service) => {
+    if (!currentUser) {
+      onAuthClick();
+      return;
+    }
+    setWaitlistModal({ open: true, service });
+  };
+
+  const confirmWaitlist = () => {
+    if (waitlistModal.service) {
+      onAddToWaitlist(waitlistModal.service.id, new Date().toISOString().split('T')[0]);
+      setWaitlistModal({ open: false, service: null });
+    }
+  };
+
   return (
     <div className="animate-fade-in bg-white text-gray-900">
       <section className="relative min-h-[90vh] flex flex-col items-center justify-start bg-tea-900 overflow-hidden px-4 rounded-b-[3rem] md:rounded-b-[6rem]">
-        {/* Decorative Glow */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-tea-400/5 rounded-full blur-[120px] pointer-events-none"></div>
         
         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center pt-2 md:pt-6">
-          {/* Logotipo Estático e Maximizada */}
           <div className="mb-4 md:mb-8 flex justify-center w-full">
             <img 
               src={settings.logo} 
@@ -43,7 +57,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
           </div>
           
           <div className="text-center w-full max-w-md mx-auto space-y-3">
-            {/* Botões Principais no Topo (Zero Scroll) */}
             <div className="flex flex-col gap-3 px-4">
               <button 
                 onClick={() => scrollToId('procedimentos')} 
@@ -65,12 +78,11 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               </button>
             </div>
 
-            {/* Endereço em destaque logo abaixo dos botões principais */}
             <div className="mt-8 px-6 animate-slide-up">
               <div className="inline-flex items-center gap-2 text-white/90 font-medium leading-relaxed max-w-[360px] mx-auto">
                 <span className="text-lg">📍</span>
                 <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em]">
-                  {settings.address || "Rua Santa Monica, Sítio Novo - Cubatão SP, próximo ao material de construção do Fabio"}
+                  {settings.address || "Rua Santa Monica, Sítio Novo - Cubatão SP"}
                 </p>
               </div>
             </div>
@@ -85,30 +97,69 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
           {services.filter(s => s.isVisible).map(service => (
-            <div key={service.id} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all group shadow-sm">
+            <div key={service.id} className="bg-white p-8 md:p-10 rounded-[2.5rem] md:rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all group shadow-sm flex flex-col h-full">
               <h3 className="text-xl md:text-2xl font-serif font-bold text-tea-950 mb-3">{service.name}</h3>
-              <p className="text-gray-400 text-xs md:text-sm font-light mb-8 leading-relaxed line-clamp-3">{service.description}</p>
-              <div className="mb-8">
-                {currentUser ? (
-                  <div className="flex flex-col">
-                    <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">a partir de</span>
-                    <p className="text-tea-800 font-bold text-xl md:text-2xl">R$ {service.price.toFixed(2)}</p>
-                  </div>
-                ) : (
-                  <p className="text-tea-800/40 font-bold text-xs uppercase tracking-tight italic">Consulte após login</p>
-                )}
-                <p className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-widest">{service.duration} min</p>
+              <p className="text-gray-400 text-xs md:text-sm font-light mb-8 leading-relaxed line-clamp-3 min-h-[4.5rem]">
+                {service.description}
+              </p>
+              <div className="mt-auto">
+                <div className="mb-6">
+                  {currentUser ? (
+                    <div className="flex flex-col">
+                      <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">a partir de</span>
+                      <p className="text-tea-800 font-bold text-xl md:text-2xl">R$ {service.price.toFixed(2)}</p>
+                    </div>
+                  ) : (
+                    <p className="text-tea-800/40 font-bold text-xs uppercase tracking-tight italic">Consulte após login</p>
+                  )}
+                  <p className="text-[9px] text-gray-400 font-bold uppercase mt-1 tracking-widest">{service.duration} min</p>
+                </div>
+                <div className="space-y-2">
+                  <button 
+                    onClick={onAuthClick} 
+                    className="w-full py-4 rounded-2xl bg-tea-900 text-white font-bold uppercase tracking-widest text-[9px] hover:bg-black transition-all shadow-md"
+                  >
+                    Agendar
+                  </button>
+                  <button 
+                    onClick={() => handleWaitlistClick(service)} 
+                    className="w-full py-4 rounded-2xl bg-white text-tea-700 border border-tea-100 font-bold uppercase tracking-widest text-[8px] hover:bg-tea-50 transition-all"
+                  >
+                    Lista de Espera ✨
+                  </button>
+                </div>
               </div>
-              <button 
-                onClick={onAuthClick} 
-                className="w-full py-4 rounded-2xl bg-tea-50 text-tea-800 font-bold uppercase tracking-widest text-[9px] hover:bg-tea-900 hover:text-white transition-all"
-              >
-                Agendar agora
-              </button>
             </div>
           ))}
         </div>
       </section>
+
+      {/* Modal Lista de Espera */}
+      {waitlistModal.open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-slide-up text-center">
+            <div className="w-20 h-20 bg-tea-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">📝</div>
+            <h3 className="text-2xl font-serif text-tea-950 font-bold italic mb-2">Lista de Interesse</h3>
+            <p className="text-gray-500 text-xs font-light mb-8 leading-relaxed">
+              Nossa agenda para <strong>{waitlistModal.service?.name}</strong> está temporariamente fechada. <br/>Deseja que entremos em contato assim que liberarmos novos horários?
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={confirmWaitlist}
+                className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
+              >
+                Sim, me avise!
+              </button>
+              <button 
+                onClick={() => setWaitlistModal({ open: false, service: null })}
+                className="w-full py-4 text-gray-400 font-bold uppercase tracking-widest text-[9px] hover:text-gray-600 transition-all"
+              >
+                Agora não
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section id="localizacao" className="bg-gray-50 py-16 md:py-32 px-6 rounded-[3rem] md:rounded-[5rem]">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-10 md:gap-20 items-center">
