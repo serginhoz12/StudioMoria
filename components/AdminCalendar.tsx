@@ -38,7 +38,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
   const getSlotStatus = (hour: string) => {
     const slotStartMin = timeToMinutes(hour);
     
-    // Procura por qualquer agendamento que cubra este horário
     const activeBooking = bookings.find(b => {
       if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || !b.dateTime.startsWith(selectedDate)) return false;
       
@@ -46,13 +45,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
       const bDuration = (b as any).duration || 30;
       const bEndMin = bStartMin + bDuration;
 
-      // O slot atual de 30min está contido no intervalo do serviço?
       return slotStartMin >= bStartMin && slotStartMin < bEndMin;
     });
 
     if (!activeBooking) return { type: 'free' };
     
-    // Verifica se este é exatamente o slot de início do agendamento
     const isStart = activeBooking.dateTime.split(' ')[1] === hour;
     
     return { 
@@ -83,7 +80,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
         teamMemberId: selectedProId,
         teamMemberName: selectedPro.name,
         dateTime: dateTime,
-        duration: 30, // Bloqueios manuais por padrão ocupam 30min
+        duration: 30,
         status: 'blocked',
         depositStatus: 'paid'
       };
@@ -119,6 +116,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
     }
   };
 
+  const isAgendaOpenToPublic = settings?.agendaOpenUntil ? selectedDate <= settings.agendaOpenUntil : true;
+
   return (
     <div className="space-y-8 animate-fade-in pb-20 px-2 md:px-0">
       <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
@@ -130,8 +129,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
                 type="date" 
                 value={selectedDate} 
                 onChange={(e) => setSelectedDate(e.target.value)} 
-                className="w-full p-4 bg-gray-50 border-2 border-transparent focus:border-tea-200 rounded-2xl outline-none font-bold text-tea-900" 
+                className={`w-full p-4 border-2 rounded-2xl outline-none font-bold transition-all ${isAgendaOpenToPublic ? 'bg-tea-50/30 border-tea-100 text-tea-900 focus:border-tea-400' : 'bg-gray-50 border-gray-200 text-gray-500 focus:border-gray-400'}`} 
               />
+              {!isAgendaOpenToPublic && (
+                <p className="text-[8px] text-red-400 font-bold uppercase mt-1 ml-2 tracking-widest">⚠️ Fechado para o Público</p>
+              )}
             </div>
             <div className="flex-1 md:flex-none">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest block mb-1">Profissional</label>
@@ -163,9 +165,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
       </div>
 
       <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-tea-900 text-white px-8 py-5">
-            <h3 className="font-serif font-bold italic text-lg">Controle de Intervalos</h3>
-            <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">Serviços agora ocupam múltiplos slots baseados na duração</p>
+        <div className="bg-tea-900 text-white px-8 py-5 flex justify-between items-center">
+            <div>
+              <h3 className="font-serif font-bold italic text-lg">Controle de Intervalos</h3>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">
+                {isAgendaOpenToPublic ? '✓ Visível para Clientes' : 'Ø Restrito: Apenas Equipe'}
+              </p>
+            </div>
+            {settings?.agendaOpenUntil && (
+              <span className="text-[9px] font-bold uppercase tracking-widest bg-white/10 px-3 py-1 rounded-full border border-white/20">
+                Abertura até: {new Date(settings.agendaOpenUntil).toLocaleDateString()}
+              </span>
+            )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-8">

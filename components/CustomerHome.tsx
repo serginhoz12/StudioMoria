@@ -43,7 +43,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     return settings.teamMembers.filter(m => m.assignedServiceIds.includes(bookingModal.service!.id));
   }, [bookingModal.service, settings.teamMembers]);
 
-  // Função auxiliar para converter "HH:mm" em minutos totais desde 00:00
   const timeToMinutes = (time: string) => {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
@@ -57,15 +56,18 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     const dayOfWeek = dateObj.getDay();
     const serviceDuration = bookingModal.service.duration; // em minutos
     
+    // Verifica se a data selecionada está além da janela aberta
+    if (settings.agendaOpenUntil && selectedDate > settings.agendaOpenUntil) {
+      return {};
+    }
+
     allPossibleSlots.forEach(slot => {
       const slotStartMin = timeToMinutes(slot);
       const slotEndMin = slotStartMin + serviceDuration;
       
       const freePros = professionalsForService.filter(pro => {
-        // 1. Folga
         if (pro.offDays?.includes(dayOfWeek)) return false;
 
-        // 2. Horário de trabalho individual (deve caber o serviço INTEIRO)
         const proStart = pro.businessHours?.start || settings.businessHours.start;
         const proEnd = pro.businessHours?.end || settings.businessHours.end;
         const proStartMin = timeToMinutes(proStart);
@@ -73,15 +75,13 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
 
         if (slotStartMin < proStartMin || slotEndMin > proEndMin) return false;
 
-        // 3. Conflito com outros agendamentos (Overlap)
         const hasConflict = bookings.some(b => {
           if (b.teamMemberId !== pro.id || b.status === 'cancelled' || !b.dateTime.startsWith(selectedDate)) return false;
           
           const bStartMin = timeToMinutes(b.dateTime.split(' ')[1]);
-          const bDuration = (b as any).duration || 30; // Fallback para 30min se não houver
+          const bDuration = (b as any).duration || 30;
           const bEndMin = bStartMin + bDuration;
 
-          // Se novo agendamento começa antes de b acabar e termina depois de b começar
           return slotStartMin < bEndMin && slotEndMin > bStartMin;
         });
 
@@ -94,7 +94,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     });
 
     return availability;
-  }, [allPossibleSlots, selectedDate, professionalsForService, bookings, bookingModal.service, settings.businessHours]);
+  }, [allPossibleSlots, selectedDate, professionalsForService, bookings, bookingModal.service, settings.businessHours, settings.agendaOpenUntil]);
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
@@ -192,13 +192,19 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Selecione o Dia</label>
+                  <div className="flex justify-between items-end mb-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Selecione o Dia</label>
+                    {settings.agendaOpenUntil && (
+                      <span className="text-[8px] bg-tea-50 text-tea-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter">Agenda aberta até {new Date(settings.agendaOpenUntil).toLocaleDateString()}</span>
+                    )}
+                  </div>
                   <input 
                     type="date" 
                     value={selectedDate} 
                     onChange={(e) => { setSelectedDate(e.target.value); setSelectedTime(''); }} 
                     className="w-full p-4 border-2 border-tea-50 rounded-2xl outline-none focus:border-tea-200 transition-all font-bold text-tea-900" 
                     min={new Date().toISOString().split('T')[0]} 
+                    max={settings.agendaOpenUntil || undefined}
                   />
                 </div>
 
@@ -228,9 +234,13 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                    </div>
                 </div>
 
-                {Object.keys(slotsAvailability).length === 0 && (
+                {(Object.keys(slotsAvailability).length === 0 || (settings.agendaOpenUntil && selectedDate > settings.agendaOpenUntil)) && (
                   <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100 text-center space-y-3">
-                    <p className="text-orange-800 font-bold text-sm">Poxa, sem horários para este dia!</p>
+                    <p className="text-orange-800 font-bold text-sm">
+                      {settings.agendaOpenUntil && selectedDate > settings.agendaOpenUntil 
+                        ? "A agenda para esta data ainda não foi liberada!" 
+                        : "Poxa, sem horários para este dia!"}
+                    </p>
                     <button 
                       onClick={() => onAddToWaitlist(bookingModal.service!.id, selectedDate)}
                       className="text-[10px] bg-orange-600 text-white px-4 py-2 rounded-full font-bold uppercase tracking-widest"

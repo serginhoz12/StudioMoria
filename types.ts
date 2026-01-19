@@ -58,8 +58,9 @@ export interface Booking {
   teamMemberId?: string;
   teamMemberName?: string;
   dateTime: string;
+  duration: number;
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
-  depositStatus: 'pending' | 'paid'; // NOVO: Controle de sinal
+  depositStatus: 'pending' | 'paid'; 
   rescheduledCount?: number; 
 }
 
@@ -97,6 +98,7 @@ export interface SalonSettings {
   lastUpdated: number;
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
+  agendaOpenUntil?: string; // NOVO: Data limite para agendamento (YYYY-MM-DD)
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
   socialLinks: {

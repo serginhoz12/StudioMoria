@@ -124,8 +124,31 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     <div className="space-y-12 pb-32 animate-fade-in">
       <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl">
         <h2 className="text-3xl font-serif font-bold mb-2">Configurações Gerais</h2>
-        <p className="text-tea-100 font-light text-sm italic">Defina as bases do seu salão. Estas configurações servem como padrões para a agenda.</p>
+        <p className="text-tea-100 font-light text-sm italic">Defina as bases do seu salão e controle o período de agendamento aberto.</p>
       </div>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+          <span className="text-3xl">📅</span> Janela de Agendamento
+        </h3>
+        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
+           <div className="max-w-md">
+             <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 mb-2 block">Agenda Aberta para Clientes Até:</label>
+             <input 
+              type="date" 
+              className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
+              value={settings.agendaOpenUntil || ''}
+              onChange={e => updateGlobalSettings({...settings, agendaOpenUntil: e.target.value})}
+             />
+           </div>
+           <div className="flex items-center gap-3">
+              <span className="text-xl">💡</span>
+              <p className="text-[11px] text-tea-800 leading-relaxed font-medium uppercase tracking-tight">
+                Clientes não conseguirão visualizar horários após esta data. Use este controle para abrir sua agenda mensal ou quinzenal conforme sua conveniência.
+              </p>
+           </div>
+        </div>
+      </section>
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
@@ -215,7 +238,6 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   </div>
                 </div>
               </div>
-              <p className="text-[9px] text-gray-400 italic">Dica: Use a aba 'Agenda' para abrir ou fechar horários específicos em dias específicos.</p>
             </div>
           ))}
         </div>
@@ -264,7 +286,6 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         </div>
       </section>
 
-      {/* Modal de Edição de Serviço */}
       {editingService && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-slide-up">

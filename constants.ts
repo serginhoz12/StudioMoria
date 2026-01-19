@@ -8,11 +8,14 @@ export const INITIAL_SERVICES: Service[] = [
   { id: '4', name: 'Drenagem Linfática', price: 150, duration: 60, description: 'Massagem manual suave para redução de edema e desintoxicação corporal.', isVisible: true },
 ];
 
+const defaultAgendaDate = new Date();
+defaultAgendaDate.setDate(defaultAgendaDate.getDate() + 15);
+
 export const DEFAULT_SETTINGS: SalonSettings = {
   name: "Studio Moriá Estética",
   primaryColor: "tea", 
   logo: "https://lh3.googleusercontent.com/d/15KFidcKVQniucz9tEtmgKWLLKttnrGgd",
-  lastUpdated: Date.now(), // Marca o momento da criação do código
+  lastUpdated: Date.now(),
   teamMembers: [
     { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
   ],
@@ -20,6 +23,7 @@ export const DEFAULT_SETTINGS: SalonSettings = {
     start: "08:00",
     end: "19:00"
   },
+  agendaOpenUntil: defaultAgendaDate.toISOString().split('T')[0],
   servicesSectionTitle: "Especialidades",
   servicesSectionSubtitle: "Nossos Procedimentos",
   socialLinks: {
