@@ -36,10 +36,17 @@ export interface Service {
   isVisible: boolean;
 }
 
+export interface BusinessHours {
+  start: string; // HH:mm
+  end: string;   // HH:mm
+}
+
 export interface TeamMember {
   id: string;
   name: string;
   assignedServiceIds: string[];
+  businessHours?: BusinessHours; // Horário individual opcional
+  offDays?: number[]; // Dias de folga (0-6, onde 0 é domingo)
 }
 
 export interface Booking {
@@ -81,11 +88,6 @@ export interface Transaction {
   serviceId?: string;
   serviceName?: string;
   observation?: string;
-}
-
-export interface BusinessHours {
-  start: string; // HH:mm
-  end: string;   // HH:mm
 }
 
 export interface SalonSettings {

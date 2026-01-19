@@ -26,7 +26,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     }
   }, [currentUser]);
 
-  // Gera todos os horários possíveis baseados no funcionamento do salão
+  // Gera todos os horários possíveis baseados no funcionamento GLOBAL do salão
   const allPossibleSlots = useMemo(() => {
     const slots: string[] = [];
     const start = parseInt((settings.businessHours?.start || "08:00").split(':')[0]);
@@ -45,17 +45,28 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     return settings.teamMembers.filter(m => m.assignedServiceIds.includes(bookingModal.service!.id));
   }, [bookingModal.service, settings.teamMembers]);
 
-  // Verifica quais horários têm pelo menos uma profissional livre
+  // Verifica disponibilidade considerando horário individual e folgas
   const slotsAvailability = useMemo(() => {
     if (!bookingModal.service) return {};
     
     const availability: Record<string, TeamMember[]> = {};
+    const dateObj = new Date(selectedDate + 'T12:00:00'); // Evita problemas de fuso
+    const dayOfWeek = dateObj.getDay(); // 0=Domingo, 1=Segunda...
     
     allPossibleSlots.forEach(slot => {
       const fullDateTime = `${selectedDate} ${slot}`;
       
-      // Encontra profissionais que NÃO têm agendamento nesse horário
+      // Encontra profissionais livres, dentro de seus horários e fora de suas folgas
       const freePros = professionalsForService.filter(pro => {
+        // 1. Verifica se é dia de folga da profissional
+        if (pro.offDays?.includes(dayOfWeek)) return false;
+
+        // 2. Verifica se o horário está dentro do horário de trabalho individual dela
+        const proStart = pro.businessHours?.start || settings.businessHours.start;
+        const proEnd = pro.businessHours?.end || settings.businessHours.end;
+        if (slot < proStart || slot >= proEnd) return false;
+
+        // 3. Verifica se ela já tem compromisso ou bloqueio
         const isOccupied = bookings.some(b => 
           b.teamMemberId === pro.id && 
           b.dateTime === fullDateTime && 
@@ -70,18 +81,11 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     });
 
     return availability;
-  }, [allPossibleSlots, selectedDate, professionalsForService, bookings, bookingModal.service]);
+  }, [allPossibleSlots, selectedDate, professionalsForService, bookings, bookingModal.service, settings.businessHours]);
 
   const handleTimeSelect = (time: string) => {
     setSelectedTime(time);
-    const availablePros = slotsAvailability[time];
-    
-    if (availablePros.length === 1) {
-      setSelectedProfessional(availablePros[0].id);
-      setBookingModal(prev => ({ ...prev, step: 2 }));
-    } else {
-      setBookingModal(prev => ({ ...prev, step: 2 }));
-    }
+    setBookingModal(prev => ({ ...prev, step: 2 }));
   };
 
   const confirmBooking = () => {
@@ -128,14 +132,20 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         <div className="text-center mb-16">
           <h2 className="text-4xl font-serif text-gray-900 mb-4">Procedimentos</h2>
           <div className="h-1 w-20 bg-tea-600 mx-auto rounded-full"></div>
+          <p className="mt-4 text-xs text-gray-400 font-medium italic">*Valores podem variar sob consulta profissional</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {services.filter(s => s.isVisible).map(service => (
             <div key={service.id} className="bg-gray-50 p-8 rounded-[2.5rem] flex flex-col justify-between border-2 border-transparent hover:border-tea-100 hover:bg-white transition-all group shadow-sm">
               <div>
                 <h3 className="text-xl font-serif font-bold text-tea-950 mb-4">{service.name}</h3>
-                <p className="text-gray-500 text-sm font-light mb-8 line-clamp-3">{service.description}</p>
-                {currentUser && <p className="text-tea-800 font-bold text-xl mb-6">R$ {service.price.toFixed(2)}</p>}
+                <p className="text-gray-500 text-sm font-light mb-8 line-clamp-3 leading-relaxed">{service.description}</p>
+                {currentUser && (
+                  <div className="mb-6">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">A partir de</p>
+                    <p className="text-tea-800 font-bold text-2xl">R$ {service.price.toFixed(2)}</p>
+                  </div>
+                )}
               </div>
               <button onClick={() => { if(!currentUser) onAuthClick(); else setBookingModal({open: true, service, step: 1}); }} className="w-full py-4 rounded-xl border border-tea-100 text-tea-700 font-bold uppercase tracking-widest text-xs hover:bg-tea-800 hover:text-white transition-all">Ver Horários</button>
             </div>
@@ -221,7 +231,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               </div>
             )}
 
-            {/* Passo 2: Seleção de Profissional (Se houver mais de uma livre) */}
+            {/* Passo 2: Seleção de Profissional */}
             {bookingModal.step === 2 && (
               <div className="space-y-8">
                 <div className="text-center">
@@ -243,7 +253,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                         <div className="w-12 h-12 bg-tea-800 text-white rounded-2xl flex items-center justify-center font-bold text-xl">{pro.name.charAt(0)}</div>
                         <div className="text-left">
                           <p className="font-bold text-tea-950">{pro.name}</p>
-                          <p className="text-[10px] text-tea-600 uppercase font-bold tracking-tighter">Disponível agora</p>
+                          <p className="text-[10px] text-tea-600 uppercase font-bold tracking-tighter">Disponível</p>
                         </div>
                      </button>
                    ))}

@@ -7,15 +7,19 @@ interface AdminCalendarProps {
   setBookings: React.Dispatch<React.SetStateAction<Booking[]>>;
   services: Service[];
   teamMembers: TeamMember[];
-  settings?: SalonSettings; // Tornando opcional para evitar quebra mas usando se houver
+  settings?: SalonSettings; 
 }
 
 const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, services, teamMembers, settings }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedPro, setSelectedPro] = useState(teamMembers[0]?.id || '');
+  const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
 
+  const selectedPro = teamMembers.find(m => m.id === selectedProId);
   const startHour = settings?.businessHours?.start || "08:00";
   const endHour = settings?.businessHours?.end || "19:00";
+
+  const dateObj = new Date(selectedDate + 'T12:00:00');
+  const dayOfWeek = dateObj.getDay();
 
   const hours = Array.from({ length: 30 }, (_, i) => {
     const totalMinutes = 7 * 60 + i * 30; // Começa as 07:00
@@ -26,21 +30,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
 
   const blockSlot = (hour: string) => {
     const dateTime = `${selectedDate} ${hour}`;
-    const pro = teamMembers.find(m => m.id === selectedPro);
-    if (!pro) return;
+    if (!selectedPro) return;
 
-    // Verifica se já existe algo
-    if (bookings.some(b => b.teamMemberId === selectedPro && b.dateTime === dateTime && b.status !== 'cancelled')) return;
+    if (bookings.some(b => b.teamMemberId === selectedProId && b.dateTime === dateTime && b.status !== 'cancelled')) return;
 
-    // FIX: Added missing depositStatus property
     const newBlocked: Booking = {
       id: Math.random().toString(36).substr(2, 9),
       customerId: 'admin-block',
       customerName: 'HORÁRIO BLOQUEADO',
       serviceId: 'block',
       serviceName: 'Indisponível (Folga/Pausa)',
-      teamMemberId: selectedPro,
-      teamMemberName: pro.name,
+      teamMemberId: selectedProId,
+      teamMemberName: selectedPro.name,
       dateTime: dateTime,
       status: 'blocked',
       depositStatus: 'paid'
@@ -49,32 +50,30 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
   };
 
   const massBlock = (type: 'day' | 'morning' | 'afternoon') => {
-    const pro = teamMembers.find(m => m.id === selectedPro);
-    if (!pro) return;
+    if (!selectedPro) return;
 
     let targetHours: string[] = [];
     if (type === 'day') targetHours = hours;
     if (type === 'morning') targetHours = hours.filter(h => h < "12:00");
     if (type === 'afternoon') targetHours = hours.filter(h => h >= "12:00");
 
-    // FIX: Added missing depositStatus property
     const newBlocks: Booking[] = targetHours
-      .filter(hour => !bookings.some(b => b.teamMemberId === selectedPro && b.dateTime === `${selectedDate} ${hour}` && b.status !== 'cancelled'))
+      .filter(hour => !bookings.some(b => b.teamMemberId === selectedProId && b.dateTime === `${selectedDate} ${hour}` && b.status !== 'cancelled'))
       .map(hour => ({
         id: Math.random().toString(36).substr(2, 9),
         customerId: 'admin-block',
         customerName: 'HORÁRIO BLOQUEADO',
         serviceId: 'block',
         serviceName: 'Bloqueio em Massa',
-        teamMemberId: selectedPro,
-        teamMemberName: pro.name,
+        teamMemberId: selectedProId,
+        teamMemberName: selectedPro.name,
         dateTime: `${selectedDate} ${hour}`,
         status: 'blocked',
         depositStatus: 'paid'
       }));
 
     setBookings(prev => [...prev, ...newBlocks]);
-    alert(`Bloqueio de ${type === 'day' ? 'dia inteiro' : type === 'morning' ? 'manhã' : 'tarde'} realizado!`);
+    alert(`Bloqueio realizado com sucesso!`);
   };
 
   const removeBlock = (id: string) => {
@@ -91,7 +90,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Profissional</label>
-            <select value={selectedPro} onChange={(e) => setSelectedPro(e.target.value)} className="p-3 bg-gray-50 border-2 border-transparent focus:border-tea-200 rounded-xl outline-none text-sm font-bold">
+            <select value={selectedProId} onChange={(e) => setSelectedProId(e.target.value)} className="p-3 bg-gray-50 border-2 border-transparent focus:border-tea-200 rounded-xl outline-none text-sm font-bold">
               {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
@@ -100,25 +99,38 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
         <div className="flex flex-wrap gap-2">
           <button onClick={() => massBlock('morning')} className="px-4 py-2 bg-tea-50 text-tea-700 text-[10px] font-bold rounded-lg hover:bg-tea-100 transition-all uppercase tracking-widest border border-tea-100">Bloquear Manhã</button>
           <button onClick={() => massBlock('afternoon')} className="px-4 py-2 bg-tea-50 text-tea-700 text-[10px] font-bold rounded-lg hover:bg-tea-100 transition-all uppercase tracking-widest border border-tea-100">Bloquear Tarde</button>
-          <button onClick={() => massBlock('day')} className="px-4 py-2 bg-tea-800 text-white text-[10px] font-bold rounded-lg hover:bg-tea-950 transition-all uppercase tracking-widest shadow-lg shadow-tea-100">Bloquear Dia Inteiro</button>
+          <button onClick={() => massBlock('day')} className="px-4 py-2 bg-tea-800 text-white text-[10px] font-bold rounded-lg hover:bg-tea-950 transition-all uppercase tracking-widest shadow-lg">Bloquear Dia</button>
         </div>
       </div>
 
+      {selectedPro?.offDays?.includes(dayOfWeek) && (
+        <div className="bg-red-50 p-6 rounded-3xl border border-red-100 text-center animate-pulse">
+           <p className="text-red-800 font-bold text-sm">🗓️ HOJE É FOLGA DE {selectedPro.name.toUpperCase()}!</p>
+           <p className="text-red-600 text-[10px] font-medium uppercase mt-1 tracking-widest">A agenda está bloqueada para clientes neste dia.</p>
+        </div>
+      )}
+
       <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden divide-y divide-gray-50">
-        <div className="bg-gray-50 px-8 py-3 flex justify-between items-center">
-           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Grade de Horários</span>
-           <span className="text-[10px] font-bold text-tea-600 uppercase tracking-widest">Funcionamento: {startHour} - {endHour}</span>
+        <div className="bg-gray-50 px-8 py-4 flex justify-between items-center">
+           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Agenda Individual</span>
+           <div className="flex gap-4">
+              <span className="text-[10px] font-bold text-tea-600 uppercase tracking-widest">Turno: {selectedPro?.businessHours?.start || startHour} - {selectedPro?.businessHours?.end || endHour}</span>
+           </div>
         </div>
         
         {hours.map(hour => {
-          const booking = bookings.find(b => b.teamMemberId === selectedPro && b.dateTime === `${selectedDate} ${hour}` && b.status !== 'cancelled');
-          const isOutsideHours = hour < startHour || hour >= endHour;
+          const booking = bookings.find(b => b.teamMemberId === selectedProId && b.dateTime === `${selectedDate} ${hour}` && b.status !== 'cancelled');
+          
+          const proStart = selectedPro?.businessHours?.start || startHour;
+          const proEnd = selectedPro?.businessHours?.end || endHour;
+          const isOutsideProHours = hour < proStart || hour >= proEnd;
+          const isFolga = selectedPro?.offDays?.includes(dayOfWeek);
           
           return (
-            <div key={hour} className={`flex items-center p-6 transition-all ${isOutsideHours ? 'bg-gray-50/40 opacity-60' : 'hover:bg-gray-50/30'}`}>
+            <div key={hour} className={`flex items-center p-6 transition-all ${(isOutsideProHours || isFolga) ? 'bg-gray-50/40 opacity-60' : 'hover:bg-gray-50/30'}`}>
               <div className="w-24 font-serif font-bold text-tea-900 text-lg border-r border-gray-100 pr-6 relative">
                  {hour}
-                 {isOutsideHours && <span className="absolute -bottom-4 left-0 text-[8px] text-gray-400 font-bold uppercase tracking-tighter">Extra-Expediente</span>}
+                 {(isOutsideProHours || isFolga) && <span className="absolute -bottom-4 left-0 text-[8px] text-red-400 font-bold uppercase tracking-tighter">{isFolga ? 'FOLGA' : 'FORA TURNO'}</span>}
               </div>
               <div className="flex-grow pl-8">
                 {booking ? (
@@ -132,11 +144,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
                     </div>
                     <div className="flex gap-2">
                        {booking.status === 'blocked' ? (
-                         <button onClick={() => removeBlock(booking.id)} className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-[9px] font-bold text-tea-600 hover:border-tea-300 transition-all uppercase tracking-widest shadow-sm">Liberar Vaga</button>
+                         <button onClick={() => removeBlock(booking.id)} className="px-4 py-2 bg-white border border-gray-200 rounded-xl text-[9px] font-bold text-tea-600 hover:border-tea-300 transition-all uppercase tracking-widest shadow-sm">Liberar</button>
                        ) : (
                          <div className="text-right">
-                           <p className="text-[9px] font-bold text-tea-500 uppercase tracking-widest">Agendamento Ativo</p>
-                           <p className="text-[8px] text-gray-400">Status: {booking.status}</p>
+                           <p className="text-[9px] font-bold text-tea-500 uppercase tracking-widest">Agendado</p>
+                           <p className="text-[8px] text-gray-400">{booking.status}</p>
                          </div>
                        )}
                     </div>
@@ -144,9 +156,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
                 ) : (
                   <button 
                     onClick={() => blockSlot(hour)} 
-                    className={`w-full text-left py-5 px-8 border-2 border-dashed rounded-[1.5rem] text-[10px] font-medium uppercase tracking-widest transition-all ${isOutsideHours ? 'border-gray-200 text-gray-300' : 'border-gray-50 text-gray-400 hover:border-tea-100 hover:text-tea-600 hover:bg-white'}`}
+                    className={`w-full text-left py-5 px-8 border-2 border-dashed rounded-[1.5rem] text-[10px] font-medium uppercase tracking-widest transition-all ${isOutsideProHours || isFolga ? 'border-red-100 text-red-300' : 'border-gray-50 text-gray-400 hover:border-tea-100 hover:text-tea-600 hover:bg-white'}`}
                   >
-                    {isOutsideHours ? '🚫 Horário Fora de Funcionamento • Clique para Bloquear' : '➕ Horário Livre • Clique para Bloquear'}
+                    {isFolga ? '🚫 Profissional de Folga • Clique para forçar bloqueio' : isOutsideProHours ? '🚫 Horário Individual Indisponível • Bloquear' : '➕ Horário Livre • Clique para Bloquear'}
                   </button>
                 )}
               </div>
