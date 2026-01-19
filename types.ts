@@ -95,10 +95,12 @@ export interface SalonSettings {
   name: string;
   primaryColor: string;
   logo: string;
+  address?: string;
+  googleMapsLink?: string;
   lastUpdated: number;
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
-  agendaOpenUntil?: string; // NOVO: Data limite para agendamento (YYYY-MM-DD)
+  agendaOpenUntil?: string;
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
   socialLinks: {

@@ -18,6 +18,7 @@ import CustomerHome from './components/CustomerHome.tsx';
 import CustomerRegister from './components/CustomerRegister.tsx';
 import CustomerLoginView from './components/CustomerLoginView.tsx';
 import CustomerProfile from './components/CustomerProfile.tsx';
+import CustomerDashboard from './components/CustomerDashboard.tsx';
 import AdminDashboard from './components/AdminDashboard.tsx';
 import AdminCalendar from './components/AdminCalendar.tsx';
 import AdminFinance from './components/AdminFinance.tsx';
@@ -42,13 +43,18 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (doc) => {
-      if (doc.exists()) setSettings(doc.data() as SalonSettings);
-      else setDoc(doc.ref, DEFAULT_SETTINGS);
+      if (doc.exists()) {
+        setSettings(doc.data() as SalonSettings);
+      } else {
+        setDoc(doc.ref, DEFAULT_SETTINGS);
+      }
     });
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
-      if (data.length === 0) INITIAL_SERVICES.forEach(s => setDoc(doc(db, "services", s.id), s));
+      if (data.length === 0) {
+        INITIAL_SERVICES.forEach(s => setDoc(doc(db, "services", s.id), s));
+      }
       setServices(data);
     });
 
@@ -76,27 +82,47 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('moria_user_session');
-    if (savedUser) setCurrentUser(JSON.parse(savedUser));
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && typeof parsed === 'object') setCurrentUser(parsed);
+      } catch (e) { console.error("Error loading session"); }
+    }
     if (localStorage.getItem('moria_admin_session') === 'true') setIsAdminAuthenticated(true);
   }, []);
 
   useEffect(() => {
-    if (currentUser) localStorage.setItem('moria_user_session', JSON.stringify(currentUser));
-    else localStorage.removeItem('moria_user_session');
+    if (currentUser) {
+      // Garantimos que apenas dados simples sejam salvos
+      const cleanUser = {
+        id: currentUser.id,
+        name: currentUser.name,
+        whatsapp: currentUser.whatsapp,
+        cpf: currentUser.cpf,
+        profilePhoto: currentUser.profilePhoto,
+        receivesNotifications: !!currentUser.receivesNotifications
+      };
+      localStorage.setItem('moria_user_session', JSON.stringify(cleanUser));
+      if (currentView === View.CUSTOMER_HOME || currentView === View.CUSTOMER_LOGIN) {
+        setCurrentView(View.CUSTOMER_DASHBOARD);
+      }
+    } else {
+      localStorage.removeItem('moria_user_session');
+    }
     localStorage.setItem('moria_admin_session', isAdminAuthenticated.toString());
-  }, [currentUser, isAdminAuthenticated]);
+  }, [currentUser, isAdminAuthenticated, currentView]);
 
   const handleRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
     const id = Math.random().toString(36).substr(2, 9);
     const newCustomer: Customer = { id, name, whatsapp, cpf, password, receivesNotifications, agreedToTerms: true, history: [] };
     await setDoc(doc(db, "customers", id), newCustomer);
     setCurrentUser(newCustomer);
-    setCurrentView(View.CUSTOMER_HOME);
+    setCurrentView(View.CUSTOMER_DASHBOARD);
   };
 
   const handleLogin = (cpf: string, pass: string) => {
     const user = customers.find(c => c.cpf === cpf && c.password === pass);
-    if (user) { setCurrentUser(user); setCurrentView(View.CUSTOMER_HOME); }
+    if (user) { setCurrentUser(user); setCurrentView(View.CUSTOMER_DASHBOARD); }
     else alert("Dados incorretos.");
   };
 
@@ -109,7 +135,7 @@ const App: React.FC = () => {
       serviceId: sid,
       serviceName: srv?.name || '',
       dateTime: dt,
-      duration: srv?.duration || 30, // Salva a duração atual para cálculo de ocupação
+      duration: srv?.duration || 30,
       status: 'pending',
       depositStatus: 'pending',
       teamMemberId: mid,
@@ -130,7 +156,7 @@ const App: React.FC = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
-        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={(s) => setDoc(doc(db, "settings", "main"), s)} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
+        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={() => {}} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} teamMembers={settings.teamMembers} settings={settings} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} waitlist={waitlist} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
@@ -140,10 +166,23 @@ const App: React.FC = () => {
       }
     }
 
+    if (currentUser && currentView === View.CUSTOMER_DASHBOARD) {
+       return (
+         <CustomerDashboard 
+            customer={currentUser} 
+            bookings={bookings} 
+            services={services}
+            settings={settings}
+            onBook={handleBook}
+            onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
+            onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
+         />
+       );
+    }
+
     switch (currentView) {
       case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleRegister} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_PROFILE: return currentUser ? <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(val) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: val })} onBack={() => setCurrentView(View.CUSTOMER_HOME)} /> : <CustomerLoginView onLogin={handleLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 
           settings={settings} services={services} bookings={bookings} 
@@ -166,8 +205,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar view={currentView} setView={setCurrentView} isAdmin={isAdmin} onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setCurrentView(View.ADMIN_LOGIN); else setCurrentView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} salonName={settings.name} logo={settings.logo} currentUser={currentUser} onLogout={() => setCurrentUser(null)} onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} isAdminAuthenticated={isAdminAuthenticated} pendingBookingsCount={bookings.filter(b => b.status === 'pending').length} />
-      <main className="max-w-7xl mx-auto px-4 py-8">{renderView()}</main>
+      {currentView !== View.CUSTOMER_DASHBOARD && (
+        <Navbar view={currentView} setView={setCurrentView} isAdmin={isAdmin} onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setCurrentView(View.ADMIN_LOGIN); else setCurrentView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} salonName={settings.name} logo={settings.logo} currentUser={currentUser} onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }} onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} isAdminAuthenticated={isAdminAuthenticated} pendingBookingsCount={bookings.filter(b => b.status === 'pending').length} />
+      )}
+      <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
+        {renderView()}
+      </main>
     </div>
   );
 };
