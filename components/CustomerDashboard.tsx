@@ -276,10 +276,15 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     <button 
                       key={service.id}
                       onClick={() => { setSelectedService(service); setBookingStep(2); }}
-                      className="w-full bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all text-left"
+                      className="w-full bg-white p-8 md:p-10 rounded-[3rem] border border-gray-100 shadow-sm flex items-center justify-between group active:scale-[0.98] transition-all text-left"
                     >
-                      <div className="flex-1">
-                        <h4 className="font-bold text-tea-950 text-xl mb-2">{service.name}</h4>
+                      <div className="flex-1 pr-4">
+                        <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
+                        {service.description && (
+                          <p className="text-gray-400 text-xs font-light mb-4 line-clamp-2 leading-relaxed">
+                            {service.description}
+                          </p>
+                        )}
                         <div className="flex items-center gap-5">
                           <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">
                             <span className="opacity-50 text-[8px] mr-1">a partir de</span>
@@ -291,7 +296,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                           </span>
                         </div>
                       </div>
-                      <div className="w-12 h-12 bg-tea-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl group-hover:bg-tea-800 transition-colors">✨</div>
+                      <div className="w-12 h-12 bg-tea-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl group-hover:bg-tea-800 transition-colors flex-shrink-0">✨</div>
                     </button>
                   ))}
                 </div>
