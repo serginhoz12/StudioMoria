@@ -52,8 +52,19 @@ export interface Booking {
   teamMemberId?: string;
   teamMemberName?: string;
   dateTime: string;
-  status: 'pending' | 'scheduled' | 'completed' | 'cancelled';
-  rescheduledCount?: number; // Contador de remarcações
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
+  rescheduledCount?: number; 
+}
+
+export interface WaitlistEntry {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerWhatsapp: string;
+  serviceId: string;
+  serviceName: string;
+  preferredDate: string;
+  createdAt: string;
 }
 
 export interface Transaction {
@@ -63,7 +74,7 @@ export interface Transaction {
   amount: number;
   date: string;
   dueDate?: string;
-  paidAt?: string; // Data real do pagamento
+  paidAt?: string; 
   status: 'pending' | 'paid';
   customerId?: string;
   customerName?: string;
@@ -72,11 +83,17 @@ export interface Transaction {
   observation?: string;
 }
 
+export interface BusinessHours {
+  start: string; // HH:mm
+  end: string;   // HH:mm
+}
+
 export interface SalonSettings {
   name: string;
   primaryColor: string;
   logo: string;
   teamMembers: TeamMember[];
+  businessHours: BusinessHours;
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
   socialLinks: {

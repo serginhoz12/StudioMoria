@@ -15,7 +15,6 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
   const [receivesNotifications, setReceivesNotifications] = useState(true);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   
-  // Modal State
   const [modalConfig, setModalConfig] = useState<{ open: boolean; title: string; type: 'terms' | 'privacy' }>({
     open: false,
     title: '',
@@ -26,8 +25,12 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
     e.preventDefault();
     if (name && whatsapp && cpf && password && agreedToTerms) {
       onRegister(name, whatsapp, cpf, password, receivesNotifications);
-    } else if (!agreedToTerms) {
-      alert("Para sua segurança, é necessário aceitar os termos de uso e política de privacidade.");
+    } else {
+      if (!agreedToTerms) {
+        alert("Para sua segurança, é necessário aceitar os termos de uso e política de privacidade.");
+      } else {
+        alert("Por favor, preencha todos os campos do formulário.");
+      }
     }
   };
 
@@ -41,7 +44,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-20 bg-[#F9FBFA]">
-      <div className="max-w-xl w-full bg-white rounded-[3rem] shadow-[0_40px_100px_rgba(0,0,0,0.05)] overflow-hidden p-12 border border-white">
+      <div className="max-w-xl w-full bg-white rounded-[3.5rem] shadow-[0_40px_100px_rgba(0,0,0,0.05)] overflow-hidden p-12 border border-white">
         <button onClick={onBack} className="text-tea-600 text-sm font-bold flex items-center gap-3 mb-12 hover:-translate-x-1 transition-transform group">
           <svg className="w-5 h-5 group-hover:scale-125 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
           Voltar para Início
@@ -49,7 +52,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
         
         <div className="mb-12">
           <h2 className="text-4xl font-serif text-tea-900 mb-4">Sua Conta Moriá</h2>
-          <p className="text-gray-500 font-light text-lg">Cadastre-se para acessar seu extrato completo e realizar agendamentos.</p>
+          <p className="text-gray-500 font-light text-lg italic">Cadastre-se para acessar seu extrato completo e realizar agendamentos rápidos.</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -104,20 +107,20 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
             </div>
           </div>
 
-          <div className="p-8 bg-tea-50/50 rounded-[2rem] border border-tea-100 space-y-6">
+          <div className="p-8 bg-tea-50/50 rounded-[2.5rem] border border-tea-100 space-y-6">
             <label className="flex items-start gap-5 cursor-pointer group">
               <div className="relative mt-1">
                 <input 
                   type="checkbox"
                   checked={receivesNotifications}
                   onChange={(e) => setReceivesNotifications(e.target.checked)}
-                  className="peer appearance-none w-6 h-6 rounded-lg border-2 border-tea-200 checked:bg-tea-500 checked:border-tea-500 transition-all cursor-pointer"
+                  className="peer appearance-none w-6 h-6 rounded-lg border-2 border-tea-200 checked:bg-tea-500 checked:border-tea-500 transition-all cursor-pointer shadow-sm"
                 />
                 <svg className="absolute top-1 left-1 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
               </div>
               <div className="flex-1">
                 <span className="text-sm font-bold text-tea-900 block mb-1">Receber notificações via WhatsApp</span>
-                <span className="text-xs text-tea-700/70 font-medium">Avisos de vencimento e horários.</span>
+                <span className="text-xs text-tea-700/70 font-medium">Avisos de vencimento e horários por mensagem.</span>
               </div>
             </label>
 
@@ -128,7 +131,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
                   required
                   checked={agreedToTerms}
                   onChange={(e) => setAgreedToTerms(e.target.checked)}
-                  className="peer appearance-none w-6 h-6 rounded-lg border-2 border-tea-200 checked:bg-tea-500 checked:border-tea-500 transition-all cursor-pointer"
+                  className="peer appearance-none w-6 h-6 rounded-lg border-2 border-tea-200 checked:bg-tea-500 checked:border-tea-500 transition-all cursor-pointer shadow-sm"
                 />
                 <svg className="absolute top-1 left-1 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
               </div>
@@ -142,7 +145,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
           
           <button 
             type="submit"
-            className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${agreedToTerms ? 'bg-[#23492d] text-white hover:bg-tea-900 shadow-tea-200' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${agreedToTerms ? 'bg-tea-800 text-white hover:bg-tea-900 shadow-tea-200 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
           >
             Concluir Cadastro
           </button>

@@ -15,6 +15,10 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   teamMembers: [
     { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
   ],
+  businessHours: {
+    start: "08:00",
+    end: "19:00"
+  },
   servicesSectionTitle: "Especialidades",
   servicesSectionSubtitle: "Nossos Procedimentos",
   socialLinks: {
