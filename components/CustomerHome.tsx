@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { SalonSettings, Service, Customer, Booking } from '../types';
+import { SalonSettings, Service, Customer, Booking } from '../types.ts';
 
 interface CustomerHomeProps {
   settings: SalonSettings;
@@ -86,29 +86,29 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     <div className="animate-fade-in bg-white text-gray-900">
       {/* Hero - Fundo Verde Folha (tea-900) e Conteúdo Elevado */}
       <section className="relative min-h-[95vh] flex flex-col items-center justify-center force-brand-bg bg-tea-900 overflow-hidden px-4">
-        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center -mt-20 md:-mt-32">
+        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center -mt-24 md:-mt-36">
           
           {/* Logotipo Centralizado */}
-          <div className="mb-4 md:mb-8">
+          <div className="mb-6 md:mb-10">
             <img 
               src={settings.logo} 
-              className="h-[12rem] md:h-[20rem] lg:h-[28rem] w-auto drop-shadow-[0_35px_80px_rgba(0,0,0,0.5)] object-contain animate-float" 
+              className="h-[12rem] md:h-[22rem] lg:h-[32rem] w-auto drop-shadow-[0_45px_100px_rgba(0,0,0,0.6)] object-contain animate-float" 
               alt="Logo Studio Moriá" 
             />
           </div>
 
           {/* Slogan Elevado */}
           <div className="text-center">
-            <h2 className="text-3xl md:text-5xl lg:text-6xl font-serif text-white mb-8 italic tracking-tight leading-tight max-w-4xl mx-auto">
+            <h2 className="text-3xl md:text-5xl lg:text-7xl font-serif text-white mb-10 italic tracking-tight leading-tight max-w-4xl mx-auto px-4">
               Cuidando do seu bem estar
             </h2>
 
-            {/* Tríade de Botões - Sempre um abaixo do outro */}
+            {/* Tríade de Botões - Sempre um abaixo do outro (Stack Vertical) */}
             <div className="flex flex-col items-center gap-4 w-full max-w-xs mx-auto">
               {/* Botão 1: Ver Serviços */}
               <button 
                 onClick={() => scrollToId('procedimentos')} 
-                className="w-full bg-white text-tea-900 px-8 py-4 rounded-full font-bold shadow-2xl uppercase tracking-widest hover:scale-105 hover:bg-tea-50 transition-all text-[11px]"
+                className="w-full bg-white text-tea-900 px-8 py-5 rounded-full font-bold shadow-2xl uppercase tracking-widest hover:scale-105 hover:bg-tea-50 transition-all text-[11px]"
               >
                 Ver Serviços
               </button>
@@ -116,7 +116,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               {/* Botão 2: Agendar Agora */}
               <button 
                 onClick={() => currentUser ? scrollToId('procedimentos') : onAuthClick()} 
-                className="w-full bg-tea-800 text-white border-2 border-tea-700 px-8 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-tea-950 transition-all text-[11px] shadow-xl"
+                className="w-full bg-tea-800 text-white border-2 border-tea-700 px-8 py-5 rounded-full font-bold uppercase tracking-widest hover:bg-tea-950 transition-all text-[11px] shadow-xl"
               >
                 Agendar Agora
               </button>
@@ -124,7 +124,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               {/* Botão 3: Fale Conosco */}
               <button 
                 onClick={() => scrollToId('contato')} 
-                className="w-full border-2 border-white/30 text-white px-8 py-4 rounded-full font-bold uppercase tracking-widest hover:bg-white/10 transition-all text-[11px]"
+                className="w-full border-2 border-white/30 text-white px-8 py-5 rounded-full font-bold uppercase tracking-widest hover:bg-white/10 transition-all text-[11px]"
               >
                 Fale Conosco
               </button>

@@ -1,20 +1,20 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Customer, Service, Booking, Transaction, SalonSettings, TeamMember, WaitlistEntry } from './types';
-import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants';
-import Navbar from './components/Navbar';
-import CustomerHome from './components/CustomerHome';
-import CustomerRegister from './components/CustomerRegister';
-import CustomerLoginView from './components/CustomerLoginView';
-import CustomerProfile from './components/CustomerProfile';
-import AdminDashboard from './components/AdminDashboard';
-import AdminCalendar from './components/AdminCalendar';
-import AdminFinance from './components/AdminFinance';
-import AdminClients from './components/AdminClients';
-import AdminConfirmations from './components/AdminConfirmations';
-import AdminSettingsView from './components/AdminSettingsView';
-import AdminVeo from './components/AdminVeo';
-import AdminLogin from './components/AdminLogin';
+import { View, Customer, Service, Booking, Transaction, SalonSettings, TeamMember, WaitlistEntry } from './types.ts';
+import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
+import Navbar from './components/Navbar.tsx';
+import CustomerHome from './components/CustomerHome.tsx';
+import CustomerRegister from './components/CustomerRegister.tsx';
+import CustomerLoginView from './components/CustomerLoginView.tsx';
+import CustomerProfile from './components/CustomerProfile.tsx';
+import AdminDashboard from './components/AdminDashboard.tsx';
+import AdminCalendar from './components/AdminCalendar.tsx';
+import AdminFinance from './components/AdminFinance.tsx';
+import AdminClients from './components/AdminClients.tsx';
+import AdminConfirmations from './components/AdminConfirmations.tsx';
+import AdminSettingsView from './components/AdminSettingsView.tsx';
+import AdminVeo from './components/AdminVeo.tsx';
+import AdminLogin from './components/AdminLogin.tsx';
 
 const STORAGE_KEY = 'moria_db_v6';
 
