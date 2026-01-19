@@ -201,6 +201,8 @@ const App: React.FC = () => {
               await updateDoc(doc(db, "bookings", id), { status: 'cancelled' });
             }}
             onAddToWaitlist={handleAddToWaitlist}
+            waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
+            onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
          />
        );
     }

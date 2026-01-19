@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, TeamMember } from '../types';
+import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry } from '../types';
 import { GoogleGenAI } from '@google/genai';
 
 interface CustomerDashboardProps {
@@ -13,6 +13,8 @@ interface CustomerDashboardProps {
   onLogout: () => void;
   onCancelBooking: (id: string) => void;
   onAddToWaitlist?: (serviceId: string, date: string) => void;
+  waitlist?: WaitlistEntry[];
+  onRemoveWaitlist?: (id: string) => void;
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -24,7 +26,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onUpdateProfile, 
   onLogout,
   onCancelBooking,
-  onAddToWaitlist
+  onAddToWaitlist,
+  waitlist = [],
+  onRemoveWaitlist
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [careTips, setCareTips] = useState<string>('');
@@ -372,7 +376,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
                   {selectedTime && (
                     <div className="space-y-4 animate-fade-in pt-4">
-                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-2">Profissional</label>
+                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Profissional</label>
                        <div className="space-y-3">
                           {currentSlotsAvailability[selectedTime]?.map(pro => (
                             <button 
@@ -450,11 +454,41 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
         {/* Aba AGENDAMENTOS */}
         {activeTab === 'agenda' && (
-          <div className="space-y-6 animate-slide-up">
+          <div className="space-y-8 animate-slide-up">
              <div className="flex items-center justify-between px-4">
                 <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Minha Agenda</h3>
              </div>
+             
+             {/* Lista de Espera */}
+             {waitlist && waitlist.length > 0 && (
+               <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest ml-4">Na Lista de Espera</h4>
+                  {waitlist.map(entry => (
+                    <div key={entry.id} className="bg-orange-50/30 p-8 rounded-[3rem] border border-orange-100 flex flex-col gap-4 shadow-sm relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-3 text-orange-400 opacity-20 text-4xl">✨</div>
+                      <div className="flex items-center gap-6">
+                        <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 text-orange-600 flex items-center justify-center text-3xl shadow-inner">📝</div>
+                        <div>
+                          <h4 className="font-bold text-tea-950 text-lg mb-1">{entry.serviceName}</h4>
+                          <div className="flex items-center gap-2">
+                             <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-[8px] font-bold uppercase tracking-widest">Aguardando Vaga</span>
+                             <span className="text-[9px] text-orange-400 font-medium italic">Criado em {new Date(entry.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => { if(confirm("Deseja sair da lista de espera para este serviço?")) onRemoveWaitlist?.(entry.id); }}
+                        className="w-full py-4 text-orange-700 bg-white border border-orange-100 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-orange-50 transition-colors"
+                      >
+                        Não quero mais aguardar
+                      </button>
+                    </div>
+                  ))}
+               </div>
+             )}
+
              <div className="space-y-4">
+                {myBookings.length > 0 && <h4 className="text-[10px] font-bold text-tea-400 uppercase tracking-widest ml-4">Meus Procedimentos</h4>}
                 {myBookings.length > 0 ? myBookings.map(b => (
                   <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex flex-col gap-6 shadow-sm">
                     <div className="flex items-center justify-between">
@@ -489,9 +523,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       </div>
                     )}
                   </div>
-                )) : (
-                  <div className="py-24 text-center opacity-30 italic font-serif text-xl px-10 leading-relaxed">Você ainda não possui atendimentos registrados.</div>
-                )}
+                )) : (waitlist.length === 0 && (
+                  <div className="py-24 text-center opacity-30 italic font-serif text-xl px-10 leading-relaxed">Você ainda não possui atendimentos ou registros de espera.</div>
+                ))}
              </div>
           </div>
         )}
@@ -502,11 +536,11 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
              <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-100 space-y-10">
                 <div className="space-y-6">
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-3">Nome</label>
+                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-3">Nome</label>
                      <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.name}</div>
                   </div>
                   <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.3em] ml-3">WhatsApp</label>
+                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-3">WhatsApp</label>
                      <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.whatsapp}</div>
                   </div>
                 </div>
