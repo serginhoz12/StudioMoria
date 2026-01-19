@@ -109,8 +109,9 @@ const App: React.FC = () => {
       serviceId: sid,
       serviceName: srv?.name || '',
       dateTime: dt,
+      duration: srv?.duration || 30, // Salva a duração atual para cálculo de ocupação
       status: 'pending',
-      depositStatus: 'pending', // Inicia sempre pendente
+      depositStatus: 'pending',
       teamMemberId: mid,
       teamMemberName: settings.teamMembers.find(m => m.id === mid)?.name
     };
@@ -130,7 +131,7 @@ const App: React.FC = () => {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={(s) => setDoc(doc(db, "settings", "main"), s)} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
-        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} setBookings={() => {}} services={services} teamMembers={settings.teamMembers} settings={settings} />;
+        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} teamMembers={settings.teamMembers} settings={settings} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} waitlist={waitlist} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} setTransactions={() => {}} customers={customers} services={services} />;

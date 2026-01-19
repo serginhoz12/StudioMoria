@@ -26,7 +26,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     }
   }, [currentUser]);
 
-  // Gera todos os horários possíveis baseados no funcionamento GLOBAL do salão
   const allPossibleSlots = useMemo(() => {
     const slots: string[] = [];
     const start = parseInt((settings.businessHours?.start || "08:00").split(':')[0]);
@@ -39,40 +38,54 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
     return slots;
   }, [settings.businessHours]);
 
-  // Filtra profissionais que fazem o serviço selecionado
   const professionalsForService = useMemo(() => {
     if (!bookingModal.service) return [];
     return settings.teamMembers.filter(m => m.assignedServiceIds.includes(bookingModal.service!.id));
   }, [bookingModal.service, settings.teamMembers]);
 
-  // Verifica disponibilidade considerando horário individual e folgas
+  // Função auxiliar para converter "HH:mm" em minutos totais desde 00:00
+  const timeToMinutes = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+  };
+
   const slotsAvailability = useMemo(() => {
     if (!bookingModal.service) return {};
     
     const availability: Record<string, TeamMember[]> = {};
-    const dateObj = new Date(selectedDate + 'T12:00:00'); // Evita problemas de fuso
-    const dayOfWeek = dateObj.getDay(); // 0=Domingo, 1=Segunda...
+    const dateObj = new Date(selectedDate + 'T12:00:00');
+    const dayOfWeek = dateObj.getDay();
+    const serviceDuration = bookingModal.service.duration; // em minutos
     
     allPossibleSlots.forEach(slot => {
-      const fullDateTime = `${selectedDate} ${slot}`;
+      const slotStartMin = timeToMinutes(slot);
+      const slotEndMin = slotStartMin + serviceDuration;
       
-      // Encontra profissionais livres, dentro de seus horários e fora de suas folgas
       const freePros = professionalsForService.filter(pro => {
-        // 1. Verifica se é dia de folga da profissional
+        // 1. Folga
         if (pro.offDays?.includes(dayOfWeek)) return false;
 
-        // 2. Verifica se o horário está dentro do horário de trabalho individual dela
+        // 2. Horário de trabalho individual (deve caber o serviço INTEIRO)
         const proStart = pro.businessHours?.start || settings.businessHours.start;
         const proEnd = pro.businessHours?.end || settings.businessHours.end;
-        if (slot < proStart || slot >= proEnd) return false;
+        const proStartMin = timeToMinutes(proStart);
+        const proEndMin = timeToMinutes(proEnd);
 
-        // 3. Verifica se ela já tem compromisso ou bloqueio
-        const isOccupied = bookings.some(b => 
-          b.teamMemberId === pro.id && 
-          b.dateTime === fullDateTime && 
-          b.status !== 'cancelled'
-        );
-        return !isOccupied;
+        if (slotStartMin < proStartMin || slotEndMin > proEndMin) return false;
+
+        // 3. Conflito com outros agendamentos (Overlap)
+        const hasConflict = bookings.some(b => {
+          if (b.teamMemberId !== pro.id || b.status === 'cancelled' || !b.dateTime.startsWith(selectedDate)) return false;
+          
+          const bStartMin = timeToMinutes(b.dateTime.split(' ')[1]);
+          const bDuration = (b as any).duration || 30; // Fallback para 30min se não houver
+          const bEndMin = bStartMin + bDuration;
+
+          // Se novo agendamento começa antes de b acabar e termina depois de b começar
+          return slotStartMin < bEndMin && slotEndMin > bStartMin;
+        });
+
+        return !hasConflict;
       });
 
       if (freePros.length > 0) {
@@ -109,7 +122,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
 
   return (
     <div className="animate-fade-in bg-white text-gray-900">
-      {/* Hero Section */}
       <section className="relative min-h-[95vh] flex flex-col items-center justify-center force-brand-bg bg-tea-900 overflow-hidden px-4">
         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center -mt-24 md:-mt-36">
           <div className="mb-6 md:mb-10">
@@ -127,7 +139,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/pinstriped-suit.png')]"></div>
       </section>
 
-      {/* Procedimentos Section */}
       <section id="procedimentos" className="max-w-7xl mx-auto px-4 py-24 bg-white">
         <div className="text-center mb-16">
           <h2 className="text-4xl font-serif text-gray-900 mb-4">Procedimentos</h2>
@@ -144,6 +155,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                   <div className="mb-6">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">A partir de</p>
                     <p className="text-tea-800 font-bold text-2xl">R$ {service.price.toFixed(2)}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">Duração: {service.duration} min</p>
                   </div>
                 )}
               </div>
@@ -153,7 +165,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         </div>
       </section>
 
-      {/* Contato Section */}
       <section id="contato" className="bg-tea-50 py-24 px-4">
         <div className="max-w-4xl mx-auto text-center">
            <h2 className="text-4xl font-serif text-tea-900 mb-4">Fale Conosco</h2>
@@ -170,12 +181,9 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         </div>
       </section>
 
-      {/* MODAL DE AGENDAMENTO COM GRADE DE HORÁRIOS */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-xl rounded-[3rem] p-8 shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto custom-scroll">
-            
-            {/* Passo 1: Seleção de Data e Horário (A Grade) */}
             {bookingModal.step === 1 && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center mb-4">
@@ -195,7 +203,10 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                 </div>
 
                 <div className="space-y-4">
-                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Horários para {bookingModal.service?.name}</label>
+                   <div className="flex justify-between items-center px-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Horários para {bookingModal.service?.name}</label>
+                      <span className="text-[9px] font-bold text-tea-600 bg-tea-50 px-2 py-0.5 rounded-full uppercase">Duração: {bookingModal.service?.duration} min</span>
+                   </div>
                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                       {allPossibleSlots.map(slot => {
                         const isAvailable = !!slotsAvailability[slot];
@@ -231,7 +242,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               </div>
             )}
 
-            {/* Passo 2: Seleção de Profissional */}
             {bookingModal.step === 2 && (
               <div className="space-y-8">
                 <div className="text-center">
@@ -277,7 +287,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               </div>
             )}
 
-            {/* Passo 3: Feedback de Envio */}
             {bookingModal.step === 3 && (
               <div className="text-center py-10 space-y-6">
                 <div className="w-24 h-24 bg-tea-50 text-tea-600 rounded-full flex items-center justify-center text-5xl mx-auto animate-bounce">⏳</div>

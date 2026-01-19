@@ -23,7 +23,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
   const dateObj = new Date(selectedDate + 'T12:00:00');
   const dayOfWeek = dateObj.getDay();
 
-  // Gera horários de 30 em 30 min das 07:00 as 21:00 para controle total
   const timeSlots = Array.from({ length: 29 }, (_, i) => {
     const totalMinutes = 7 * 60 + i * 30; 
     const h = Math.floor(totalMinutes / 60);
@@ -31,26 +30,51 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   });
 
+  const timeToMinutes = (time: string) => {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
+  };
+
+  const getSlotStatus = (hour: string) => {
+    const slotStartMin = timeToMinutes(hour);
+    
+    // Procura por qualquer agendamento que cubra este horário
+    const activeBooking = bookings.find(b => {
+      if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || !b.dateTime.startsWith(selectedDate)) return false;
+      
+      const bStartMin = timeToMinutes(b.dateTime.split(' ')[1]);
+      const bDuration = (b as any).duration || 30;
+      const bEndMin = bStartMin + bDuration;
+
+      // O slot atual de 30min está contido no intervalo do serviço?
+      return slotStartMin >= bStartMin && slotStartMin < bEndMin;
+    });
+
+    if (!activeBooking) return { type: 'free' };
+    
+    // Verifica se este é exatamente o slot de início do agendamento
+    const isStart = activeBooking.dateTime.split(' ')[1] === hour;
+    
+    return { 
+      type: activeBooking.status === 'blocked' ? 'blocked' : 'scheduled',
+      booking: activeBooking,
+      isStart
+    };
+  };
+
   const toggleSlot = async (hour: string) => {
     const dateTime = `${selectedDate} ${hour}`;
     if (!selectedPro) return;
 
-    const existing = bookings.find(b => 
-      b.teamMemberId === selectedProId && 
-      b.dateTime === dateTime && 
-      b.status !== 'cancelled'
-    );
+    const status = getSlotStatus(hour);
 
-    if (existing) {
-      if (existing.status === 'blocked') {
-        // Se estava bloqueado, libera (deleta o registro de bloqueio)
-        await deleteDoc(doc(db, "bookings", existing.id));
+    if (status.type !== 'free' && status.booking) {
+      if (status.type === 'blocked') {
+        await deleteDoc(doc(db, "bookings", status.booking.id));
       } else {
-        // Se for um agendamento real, não permite alternar por aqui para evitar erros
-        alert("Este horário possui um agendamento. Use a aba de Confirmações para gerenciar o cliente.");
+        alert(`Este horário faz parte do serviço "${status.booking.serviceName}" para ${status.booking.customerName}.`);
       }
     } else {
-      // Se estava livre, bloqueia
       const newBlocked = {
         customerId: 'admin-block',
         customerName: 'HORÁRIO BLOQUEADO',
@@ -59,6 +83,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
         teamMemberId: selectedProId,
         teamMemberName: selectedPro.name,
         dateTime: dateTime,
+        duration: 30, // Bloqueios manuais por padrão ocupam 30min
         status: 'blocked',
         depositStatus: 'paid'
       };
@@ -74,10 +99,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
     if (period === 'afternoon') targetHours = timeSlots.filter(h => h >= "12:00");
 
     for (const hour of targetHours) {
-      const dateTime = `${selectedDate} ${hour}`;
-      const existing = bookings.find(b => b.teamMemberId === selectedProId && b.dateTime === dateTime && b.status !== 'cancelled');
-
-      if (action === 'block' && !existing) {
+      const status = getSlotStatus(hour);
+      if (action === 'block' && status.type === 'free') {
         await addDoc(collection(db, "bookings"), {
           customerId: 'admin-block',
           customerName: 'HORÁRIO BLOQUEADO',
@@ -85,19 +108,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
           serviceName: 'Bloqueio em Massa',
           teamMemberId: selectedProId,
           teamMemberName: selectedPro.name,
-          dateTime: dateTime,
+          dateTime: `${selectedDate} ${hour}`,
+          duration: 30,
           status: 'blocked',
           depositStatus: 'paid'
         });
-      } else if (action === 'open' && existing?.status === 'blocked') {
-        await deleteDoc(doc(db, "bookings", existing.id));
+      } else if (action === 'open' && status.type === 'blocked' && status.booking) {
+        await deleteDoc(doc(db, "bookings", status.booking.id));
       }
     }
   };
 
   return (
     <div className="space-y-8 animate-fade-in pb-20 px-2 md:px-0">
-      {/* Cabeçalho de Controle */}
       <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex flex-wrap gap-4 items-center w-full md:w-auto">
@@ -132,76 +155,71 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
           <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 flex items-center gap-4 animate-pulse">
             <span className="text-2xl">📅</span>
             <div>
-              <p className="text-orange-800 font-bold text-sm uppercase">Atenção: Hoje é folga padrão de {selectedPro.name}</p>
-              <p className="text-orange-600 text-[10px] font-medium leading-tight">A agenda para clientes está fechada. Você pode abrir horários específicos clicando neles abaixo se desejar realizar um atendimento extra.</p>
+              <p className="text-orange-800 font-bold text-sm uppercase">Hoje é folga de {selectedPro.name}</p>
+              <p className="text-orange-600 text-[10px] font-medium leading-tight">Agenda fechada para o público. Clique nos slots abaixo se quiser abrir algum horário extra.</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Grade de Horários Estilo Seletor */}
       <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden">
-        <div className="bg-tea-900 text-white px-8 py-5 flex justify-between items-center">
-           <div>
-              <h3 className="font-serif font-bold italic text-lg">Gestão de Disponibilidade</h3>
-              <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">Toque em um horário para abrir ou fechar</p>
-           </div>
-           <div className="hidden md:flex gap-6 items-center">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-white/20 border border-white/40"></div> <span className="text-[9px] font-bold uppercase">Livre</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-tea-500"></div> <span className="text-[9px] font-bold uppercase">Agendado</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-gray-200"></div> <span className="text-[9px] font-bold uppercase">Fechado</span></div>
-           </div>
+        <div className="bg-tea-900 text-white px-8 py-5">
+            <h3 className="font-serif font-bold italic text-lg">Controle de Intervalos</h3>
+            <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">Serviços agora ocupam múltiplos slots baseados na duração</p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-8">
           {timeSlots.map(hour => {
-            const booking = bookings.find(b => b.teamMemberId === selectedProId && b.dateTime === `${selectedDate} ${hour}` && b.status !== 'cancelled');
-            
-            const isBlocked = booking?.status === 'blocked';
-            const isScheduled = booking && booking.status !== 'blocked';
+            const status = getSlotStatus(hour);
+            const isStandardOffDay = selectedPro?.offDays?.includes(dayOfWeek);
             const proStart = selectedPro?.businessHours?.start || startHour;
             const proEnd = selectedPro?.businessHours?.end || endHour;
             const isOutsidePattern = hour < proStart || hour >= proEnd;
-            const isStandardOffDay = selectedPro?.offDays?.includes(dayOfWeek);
 
-            // Definindo se está efetivamente livre para o cliente
-            const isEffectivelyFree = !booking && !isStandardOffDay && !isOutsidePattern;
+            let bgColor = 'bg-white border-tea-50 text-tea-900';
+            let labelText = 'Livre';
+            let subText = '';
+
+            if (status.type === 'scheduled') {
+              bgColor = 'bg-tea-600 border-tea-600 text-white';
+              labelText = status.isStart ? status.booking?.customerName?.split(' ')[0] : '●';
+              subText = status.isStart ? status.booking?.serviceName : '';
+            } else if (status.type === 'blocked') {
+              bgColor = 'bg-gray-100 border-gray-200 text-gray-400';
+              labelText = 'Fechado';
+            } else if (isStandardOffDay || isOutsidePattern) {
+              bgColor = 'bg-gray-50 border-gray-50 text-gray-300';
+              labelText = 'Inativo';
+            }
 
             return (
               <button
                 key={hour}
                 onClick={() => toggleSlot(hour)}
-                className={`relative group p-5 rounded-3xl border-2 transition-all flex flex-col items-center justify-center gap-1 ${
-                  isScheduled 
-                    ? 'bg-tea-600 border-tea-600 text-white cursor-default' 
-                    : isBlocked || isStandardOffDay || isOutsidePattern 
-                      ? 'bg-gray-50 border-gray-100 text-gray-400 hover:border-tea-200' 
-                      : 'bg-white border-tea-50 text-tea-900 hover:border-tea-400 shadow-sm'
-                }`}
+                className={`relative group p-4 rounded-3xl border-2 transition-all flex flex-col items-center justify-center min-h-[85px] ${bgColor} ${status.type === 'free' ? 'hover:border-tea-400 shadow-sm' : ''}`}
               >
-                <span className="text-xl font-serif font-bold italic leading-none">{hour}</span>
-                <span className="text-[8px] font-bold uppercase tracking-widest opacity-60">
-                  {isScheduled ? 'Agendado' : isBlocked ? 'Fechado' : isEffectivelyFree ? 'Livre' : 'Inativo'}
+                <span className="text-lg font-serif font-bold italic leading-none">{hour}</span>
+                <span className="text-[8px] font-bold uppercase tracking-widest opacity-60 mt-1 line-clamp-1">
+                  {labelText}
                 </span>
-
-                {/* Badge de Horário Especial (fora do turno padrão mas aberto) */}
-                {!booking && (isStandardOffDay || isOutsidePattern) && (
-                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-orange-400 rounded-full border-2 border-white shadow-sm" title="Horário fora do padrão/folga"></div>
+                {subText && (
+                  <span className="text-[7px] font-medium uppercase tracking-tighter opacity-80 line-clamp-1 mt-0.5">
+                    {subText}
+                  </span>
                 )}
                 
-                {/* Hover Indicator */}
-                {!isScheduled && (
-                  <div className="absolute inset-0 bg-tea-900/5 opacity-0 group-hover:opacity-100 rounded-[inherit] transition-opacity"></div>
+                {status.type === 'free' && (isStandardOffDay || isOutsidePattern) && (
+                   <div className="absolute top-1 right-1 w-2 h-2 bg-orange-300 rounded-full"></div>
                 )}
               </button>
             );
           })}
         </div>
         
-        <div className="bg-gray-50 p-6 border-t border-gray-100 flex flex-wrap gap-6 justify-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-400"></span> Horário Extra / Folga</div>
-           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-tea-600"></span> Cliente Confirmado</div>
+        <div className="bg-gray-50 p-6 border-t border-gray-100 flex flex-wrap gap-6 justify-center text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-tea-600"></span> Ocupado (Serviço)</div>
            <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-gray-200"></span> Bloqueio Administrativo</div>
+           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-300"></span> Horário Extra/Folga</div>
         </div>
       </div>
     </div>
