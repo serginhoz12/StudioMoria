@@ -1,20 +1,26 @@
 
 import React, { useState } from 'react';
-import { Booking, Service, TeamMember, SalonSettings } from '../types';
+import { Booking, Service, TeamMember, SalonSettings, Customer } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
 
 interface AdminCalendarProps {
   bookings: Booking[];
-  setBookings?: React.Dispatch<React.SetStateAction<Booking[]>>;
   services: Service[];
+  customers: Customer[];
   teamMembers: TeamMember[];
   settings?: SalonSettings; 
 }
 
-const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamMembers, settings }) => {
+const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, teamMembers, settings }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
+  
+  // Estados para o Modal de Agendamento Assistido
+  const [bookingModal, setBookingModal] = useState<{ open: boolean; hour: string }>({ open: false, hour: '' });
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [customerSearch, setCustomerSearch] = useState('');
 
   const selectedPro = teamMembers.find(m => m.id === selectedProId);
   const startHour = settings?.businessHours?.start || "08:00";
@@ -59,32 +65,64 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
     };
   };
 
-  const toggleSlot = async (hour: string) => {
-    const dateTime = `${selectedDate} ${hour}`;
-    if (!selectedPro) return;
-
+  const handleSlotClick = (hour: string) => {
     const status = getSlotStatus(hour);
-
-    if (status.type !== 'free' && status.booking) {
-      if (status.type === 'blocked') {
-        await deleteDoc(doc(db, "bookings", status.booking.id));
-      } else {
-        alert(`Este horário faz parte do serviço "${status.booking.serviceName}" para ${status.booking.customerName}.`);
+    if (status.type === 'free') {
+      setBookingModal({ open: true, hour });
+    } else if (status.type === 'blocked' && status.booking) {
+      if (confirm("Deseja reabrir este horário?")) {
+        deleteDoc(doc(db, "bookings", status.booking.id));
       }
-    } else {
-      const newBlocked = {
-        customerId: 'admin-block',
-        customerName: 'HORÁRIO BLOQUEADO',
-        serviceId: 'block',
-        serviceName: 'Indisponível (Pausa/Bloqueio)',
+    } else if (status.type === 'scheduled' && status.booking) {
+      alert(`Agendamento de ${status.booking.customerName} (${status.booking.serviceName})`);
+    }
+  };
+
+  const confirmQuickBlock = async () => {
+    if (!selectedPro || !bookingModal.hour) return;
+    const dateTime = `${selectedDate} ${bookingModal.hour}`;
+    
+    await addDoc(collection(db, "bookings"), {
+      customerId: 'admin-block',
+      customerName: 'HORÁRIO BLOQUEADO',
+      serviceId: 'block',
+      serviceName: 'Indisponível (Pausa/Bloqueio)',
+      teamMemberId: selectedProId,
+      teamMemberName: selectedPro.name,
+      dateTime: dateTime,
+      duration: 30,
+      status: 'blocked',
+      depositStatus: 'paid'
+    });
+    setBookingModal({ open: false, hour: '' });
+  };
+
+  const confirmCustomerBooking = async () => {
+    if (!selectedPro || !bookingModal.hour || !selectedCustomerId || !selectedServiceId) {
+      alert("Por favor, selecione a cliente e o serviço.");
+      return;
+    }
+
+    const customer = customers.find(c => c.id === selectedCustomerId);
+    const service = services.find(s => s.id === selectedServiceId);
+
+    if (customer && service) {
+      await addDoc(collection(db, "bookings"), {
+        customerId: customer.id,
+        customerName: customer.name,
+        serviceId: service.id,
+        serviceName: service.name,
         teamMemberId: selectedProId,
         teamMemberName: selectedPro.name,
-        dateTime: dateTime,
-        duration: 30,
-        status: 'blocked',
-        depositStatus: 'paid'
-      };
-      await addDoc(collection(db, "bookings"), newBlocked);
+        dateTime: `${selectedDate} ${bookingModal.hour}`,
+        duration: service.duration,
+        status: 'scheduled', // Já entra como confirmado pois foi feito pela equipe
+        depositStatus: 'paid' // Consideramos como 'pago' ou 'presencial'
+      });
+      setBookingModal({ open: false, hour: '' });
+      setSelectedCustomerId('');
+      setSelectedServiceId('');
+      setCustomerSearch('');
     }
   };
 
@@ -116,6 +154,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
     }
   };
 
+  const filteredCustomers = customers.filter(c => 
+    c.name.toLowerCase().includes(customerSearch.toLowerCase()) || 
+    c.cpf.includes(customerSearch)
+  ).slice(0, 5);
+
   const isAgendaOpenToPublic = settings?.agendaOpenUntil ? selectedDate <= settings.agendaOpenUntil : true;
 
   return (
@@ -131,9 +174,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
                 onChange={(e) => setSelectedDate(e.target.value)} 
                 className={`w-full p-4 border-2 rounded-2xl outline-none font-bold transition-all ${isAgendaOpenToPublic ? 'bg-tea-50/30 border-tea-100 text-tea-900 focus:border-tea-400' : 'bg-gray-50 border-gray-200 text-gray-500 focus:border-gray-400'}`} 
               />
-              {!isAgendaOpenToPublic && (
-                <p className="text-[8px] text-red-400 font-bold uppercase mt-1 ml-2 tracking-widest">⚠️ Fechado para o Público</p>
-              )}
             </div>
             <div className="flex-1 md:flex-none">
               <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest block mb-1">Profissional</label>
@@ -152,31 +192,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
              <button onClick={() => massAction('open', 'all')} className="flex-1 md:flex-none px-6 py-4 bg-tea-50 text-tea-700 text-[10px] font-bold rounded-2xl hover:bg-tea-100 transition-all uppercase tracking-widest border border-tea-100">Abrir Tudo</button>
           </div>
         </div>
-
-        {selectedPro?.offDays?.includes(dayOfWeek) && (
-          <div className="bg-orange-50 p-5 rounded-2xl border border-orange-100 flex items-center gap-4 animate-pulse">
-            <span className="text-2xl">📅</span>
-            <div>
-              <p className="text-orange-800 font-bold text-sm uppercase">Hoje é folga de {selectedPro.name}</p>
-              <p className="text-orange-600 text-[10px] font-medium leading-tight">Agenda fechada para o público. Clique nos slots abaixo se quiser abrir algum horário extra.</p>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div className="bg-tea-900 text-white px-8 py-5 flex justify-between items-center">
             <div>
-              <h3 className="font-serif font-bold italic text-lg">Controle de Intervalos</h3>
-              <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">
-                {isAgendaOpenToPublic ? '✓ Visível para Clientes' : 'Ø Restrito: Apenas Equipe'}
-              </p>
+              <h3 className="font-serif font-bold italic text-lg">Controle da Agenda</h3>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">Clique em um horário para agendar ou bloquear</p>
             </div>
-            {settings?.agendaOpenUntil && (
-              <span className="text-[9px] font-bold uppercase tracking-widest bg-white/10 px-3 py-1 rounded-full border border-white/20">
-                Abertura até: {new Date(settings.agendaOpenUntil).toLocaleDateString()}
-              </span>
-            )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 p-8">
@@ -206,7 +229,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
             return (
               <button
                 key={hour}
-                onClick={() => toggleSlot(hour)}
+                onClick={() => handleSlotClick(hour)}
                 className={`relative group p-4 rounded-3xl border-2 transition-all flex flex-col items-center justify-center min-h-[85px] ${bgColor} ${status.type === 'free' ? 'hover:border-tea-400 shadow-sm' : ''}`}
               >
                 <span className="text-lg font-serif font-bold italic leading-none">{hour}</span>
@@ -218,21 +241,93 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, teamM
                     {subText}
                   </span>
                 )}
-                
-                {status.type === 'free' && (isStandardOffDay || isOutsidePattern) && (
-                   <div className="absolute top-1 right-1 w-2 h-2 bg-orange-300 rounded-full"></div>
-                )}
               </button>
             );
           })}
         </div>
-        
-        <div className="bg-gray-50 p-6 border-t border-gray-100 flex flex-wrap gap-6 justify-center text-[9px] text-gray-400 font-bold uppercase tracking-widest">
-           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-tea-600"></span> Ocupado (Serviço)</div>
-           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-gray-200"></span> Bloqueio Administrativo</div>
-           <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-300"></span> Horário Extra/Folga</div>
-        </div>
       </div>
+
+      {/* Modal de Agendamento Assistido */}
+      {bookingModal.open && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[3rem] p-8 shadow-2xl animate-slide-up space-y-8">
+            <div className="text-center">
+              <h3 className="text-2xl font-serif text-tea-900 font-bold italic">Agendamento Assistido</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Horário: {bookingModal.hour} em {new Date(selectedDate).toLocaleDateString()}</p>
+            </div>
+
+            <div className="space-y-6">
+              {/* Opção 1: Bloquear Horário */}
+              <button 
+                onClick={confirmQuickBlock}
+                className="w-full p-4 border-2 border-dashed border-red-100 text-red-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-50 transition-all"
+              >
+                🚫 Bloquear apenas este horário
+              </button>
+
+              <div className="h-px bg-gray-100 w-full"></div>
+
+              {/* Opção 2: Agendar Cliente */}
+              <div className="space-y-4">
+                <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Buscar Cliente</label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Nome ou CPF da cliente..."
+                    className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 focus:ring-tea-200 transition-all"
+                    value={customerSearch}
+                    onChange={(e) => setCustomerSearch(e.target.value)}
+                  />
+                  {customerSearch.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 bg-white border border-gray-100 rounded-2xl mt-2 shadow-xl z-10 overflow-hidden divide-y divide-gray-50">
+                      {filteredCustomers.map(c => (
+                        <button 
+                          key={c.id} 
+                          onClick={() => { setSelectedCustomerId(c.id); setCustomerSearch(c.name); }}
+                          className={`w-full p-4 text-left hover:bg-tea-50 transition-colors ${selectedCustomerId === c.id ? 'bg-tea-50' : ''}`}
+                        >
+                          <p className="font-bold text-sm text-gray-800">{c.name}</p>
+                          <p className="text-[10px] text-gray-400">CPF: {c.cpf}</p>
+                        </button>
+                      ))}
+                      {filteredCustomers.length === 0 && (
+                        <p className="p-4 text-[10px] text-gray-400 italic">Nenhuma cliente encontrada.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 block mt-4">Procedimento</label>
+                <select 
+                  className="w-full p-4 bg-gray-50 rounded-2xl outline-none focus:ring-2 focus:ring-tea-200 transition-all font-bold text-tea-900"
+                  value={selectedServiceId}
+                  onChange={(e) => setSelectedServiceId(e.target.value)}
+                >
+                  <option value="">Selecione um serviço...</option>
+                  {services.filter(s => s.isVisible).map(s => (
+                    <option key={s.id} value={s.id}>{s.name} - R$ {s.price.toFixed(2)}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-4 pt-4">
+                <button 
+                  onClick={() => setBookingModal({ open: false, hour: '' })}
+                  className="flex-1 py-4 text-gray-400 font-bold hover:text-gray-600 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={confirmCustomerBooking}
+                  className="flex-[2] bg-tea-900 text-white py-4 rounded-2xl font-bold shadow-xl hover:bg-black transition-all uppercase tracking-widest text-[10px]"
+                >
+                  Confirmar Agendamento
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
