@@ -108,9 +108,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
-  const handleWaitlist = (service: Service) => {
+  const handleWaitlist = async (service: Service) => {
     if (onAddToWaitlist) {
-      onAddToWaitlist(service.id, new Date().toISOString().split('T')[0]);
+      await onAddToWaitlist(service.id, new Date().toISOString().split('T')[0]);
       alert("Excelente! Você entrou na lista de espera para " + service.name + ". Avisaremos você assim que abrirmos a agenda!");
     }
   };

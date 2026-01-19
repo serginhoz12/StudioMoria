@@ -139,10 +139,24 @@ const App: React.FC = () => {
       depositStatus: 'pending',
       teamMemberId: mid,
       teamMemberName: settings.teamMembers.find(m => m.id === mid)?.name,
-      agreedToCancellationPolicy: true, // Registrado após checkbox no dashboard
+      agreedToCancellationPolicy: true,
       policyAgreedAt: new Date().toISOString()
     };
     await addDoc(collection(db, "bookings"), booking);
+  };
+
+  const handleAddToWaitlist = async (sid: string, dt: string) => {
+    if (!currentUser) return;
+    const srv = services.find(s => s.id === sid);
+    await addDoc(collection(db, "waitlist"), {
+      customerId: currentUser.id,
+      customerName: currentUser.name,
+      customerWhatsapp: currentUser.whatsapp,
+      serviceId: sid,
+      serviceName: srv?.name || '',
+      preferredDate: dt,
+      createdAt: new Date().toISOString()
+    });
   };
 
   const handleUpdateStatus = async (id: string, status: any) => {
@@ -186,6 +200,7 @@ const App: React.FC = () => {
             onCancelBooking={async (id) => {
               await updateDoc(doc(db, "bookings", id), { status: 'cancelled' });
             }}
+            onAddToWaitlist={handleAddToWaitlist}
          />
        );
     }
@@ -198,15 +213,7 @@ const App: React.FC = () => {
           settings={settings} services={services} bookings={bookings} 
           onBook={handleBook} 
           onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} 
-          onAddToWaitlist={async (sid, dt) => {
-            if(!currentUser) return;
-            const srv = services.find(s => s.id === sid);
-            await addDoc(collection(db, "waitlist"), {
-              customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp,
-              serviceId: sid, serviceName: srv?.name || '', preferredDate: dt, createdAt: new Date().toISOString()
-            });
-            alert("Você está na lista de espera!");
-          }} 
+          onAddToWaitlist={handleAddToWaitlist} 
           currentUser={currentUser} 
         />
       );
