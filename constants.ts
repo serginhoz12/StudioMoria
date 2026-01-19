@@ -11,7 +11,8 @@ export const INITIAL_SERVICES: Service[] = [
 export const DEFAULT_SETTINGS: SalonSettings = {
   name: "Studio Moriá Estética",
   primaryColor: "tea", 
-  logo: "https://lh3.googleusercontent.com/d/15KFidcKVQniucz9tEtmgKWLLKttnrGgd", 
+  logo: "https://lh3.googleusercontent.com/d/15KFidcKVQniucz9tEtmgKWLLKttnrGgd",
+  lastUpdated: Date.now(), // Marca o momento da criação do código
   teamMembers: [
     { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
   ],

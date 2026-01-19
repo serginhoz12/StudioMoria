@@ -1,5 +1,4 @@
 
-// Definindo os estados de visualização do aplicativo
 export enum View {
   CUSTOMER_HOME = 'CUSTOMER_HOME',
   CUSTOMER_LOGIN = 'CUSTOMER_LOGIN',
@@ -53,6 +52,7 @@ export interface Booking {
   teamMemberName?: string;
   dateTime: string;
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
+  depositStatus: 'pending' | 'paid'; // NOVO: Controle de sinal
   rescheduledCount?: number; 
 }
 
@@ -92,6 +92,7 @@ export interface SalonSettings {
   name: string;
   primaryColor: string;
   logo: string;
+  lastUpdated: number;
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
   servicesSectionTitle?: string;

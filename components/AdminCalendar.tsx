@@ -32,6 +32,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
     // Verifica se já existe algo
     if (bookings.some(b => b.teamMemberId === selectedPro && b.dateTime === dateTime && b.status !== 'cancelled')) return;
 
+    // FIX: Added missing depositStatus property
     const newBlocked: Booking = {
       id: Math.random().toString(36).substr(2, 9),
       customerId: 'admin-block',
@@ -41,7 +42,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
       teamMemberId: selectedPro,
       teamMemberName: pro.name,
       dateTime: dateTime,
-      status: 'blocked'
+      status: 'blocked',
+      depositStatus: 'paid'
     };
     setBookings(prev => [...prev, newBlocked]);
   };
@@ -55,6 +57,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
     if (type === 'morning') targetHours = hours.filter(h => h < "12:00");
     if (type === 'afternoon') targetHours = hours.filter(h => h >= "12:00");
 
+    // FIX: Added missing depositStatus property
     const newBlocks: Booking[] = targetHours
       .filter(hour => !bookings.some(b => b.teamMemberId === selectedPro && b.dateTime === `${selectedDate} ${hour}` && b.status !== 'cancelled'))
       .map(hour => ({
@@ -66,7 +69,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, setBookings, se
         teamMemberId: selectedPro,
         teamMemberName: pro.name,
         dateTime: `${selectedDate} ${hour}`,
-        status: 'blocked'
+        status: 'blocked',
+        depositStatus: 'paid'
       }));
 
     setBookings(prev => [...prev, ...newBlocks]);
