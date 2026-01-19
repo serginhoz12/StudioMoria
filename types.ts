@@ -1,0 +1,90 @@
+
+// Definindo os estados de visualização do aplicativo
+export enum View {
+  CUSTOMER_HOME = 'CUSTOMER_HOME',
+  CUSTOMER_LOGIN = 'CUSTOMER_LOGIN',
+  CUSTOMER_REGISTER = 'CUSTOMER_REGISTER',
+  CUSTOMER_PROFILE = 'CUSTOMER_PROFILE',
+  CUSTOMER_DASHBOARD = 'CUSTOMER_DASHBOARD',
+  ADMIN_LOGIN = 'ADMIN_LOGIN',
+  ADMIN_DASHBOARD = 'ADMIN_DASHBOARD',
+  ADMIN_CALENDAR = 'ADMIN_CALENDAR',
+  ADMIN_FINANCE = 'ADMIN_FINANCE',
+  ADMIN_CLIENTS = 'ADMIN_CLIENTS',
+  ADMIN_CONFIRMATIONS = 'ADMIN_CONFIRMATIONS',
+  ADMIN_VEO = 'ADMIN_VEO',
+  ADMIN_SETTINGS = 'ADMIN_SETTINGS'
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  whatsapp: string;
+  cpf: string;
+  password?: string;
+  profilePhoto?: string;
+  receivesNotifications: boolean;
+  agreedToTerms: boolean;
+  history: Booking[];
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  price: number;
+  duration: number;
+  description: string;
+  isVisible: boolean;
+}
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  assignedServiceIds: string[];
+}
+
+export interface Booking {
+  id: string;
+  customerId: string;
+  customerName: string;
+  serviceId: string;
+  serviceName: string;
+  teamMemberId?: string;
+  teamMemberName?: string;
+  dateTime: string;
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled';
+  rescheduledCount?: number; // Contador de remarcações
+}
+
+export interface Transaction {
+  id: string;
+  type: 'payable' | 'receivable';
+  description: string;
+  amount: number;
+  date: string;
+  dueDate?: string;
+  paidAt?: string; // Data real do pagamento
+  status: 'pending' | 'paid';
+  customerId?: string;
+  customerName?: string;
+  serviceId?: string;
+  serviceName?: string;
+  observation?: string;
+}
+
+export interface SalonSettings {
+  name: string;
+  primaryColor: string;
+  logo: string;
+  teamMembers: TeamMember[];
+  servicesSectionTitle?: string;
+  servicesSectionSubtitle?: string;
+  socialLinks: {
+    instagram: string;
+    facebook: string;
+    whatsapp: string;
+  };
+  usefulLinks: Array<{ label: string; url: string }>;
+  comments: Array<{ author: string; text: string }>;
+  photos: string[];
+}

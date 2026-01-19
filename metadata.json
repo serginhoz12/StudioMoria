@@ -1,0 +1,7 @@
+{
+  "name": "Studio Moriá Estética",
+  "description": "Uma plataforma completa para gestão de salão de beleza e agendamento de clientes, com recursos de IA para geração de vídeos de marketing.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
