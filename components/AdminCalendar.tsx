@@ -74,7 +74,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         deleteDoc(doc(db, "bookings", status.booking.id));
       }
     } else if (status.type === 'scheduled' && status.booking) {
-      alert(`Agendamento de ${status.booking.customerName} (${status.booking.serviceName})`);
+      if (confirm(`Agendamento: ${status.booking.customerName}\nServiço: ${status.booking.serviceName}\n\nDeseja EXCLUIR permanentemente este agendamento do sistema?`)) {
+        deleteDoc(doc(db, "bookings", status.booking.id));
+      }
     }
   };
 

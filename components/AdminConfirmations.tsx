@@ -7,6 +7,7 @@ interface AdminConfirmationsProps {
   customers: Customer[];
   onUpdateStatus: (id: string, status: 'scheduled' | 'cancelled' | 'completed') => void;
   onUpdateDeposit: (id: string, status: 'paid' | 'pending') => void;
+  onDeleteBooking: (id: string) => void;
   waitlist: WaitlistEntry[];
   onRemoveWaitlist: (id: string) => void;
 }
@@ -15,6 +16,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
   bookings, 
   onUpdateStatus, 
   onUpdateDeposit, 
+  onDeleteBooking,
   waitlist = [], 
   onRemoveWaitlist 
 }) => {
@@ -54,7 +56,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+              <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto items-center">
                 {booking.depositStatus !== 'paid' && (
                   <button 
                     onClick={() => onUpdateDeposit(booking.id, 'paid')}
@@ -72,7 +74,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
                 >
                   Aprovar Agenda
                 </button>
-                <button onClick={() => onUpdateStatus(booking.id, 'cancelled')} className="px-6 py-4 text-red-300 font-bold uppercase text-[10px] tracking-widest hover:text-red-500 transition-colors">Recusar</button>
+                <button onClick={() => onUpdateStatus(booking.id, 'cancelled')} className="px-4 py-4 text-red-300 font-bold uppercase text-[10px] tracking-widest hover:text-red-500 transition-colors">Recusar</button>
+                <button onClick={() => onDeleteBooking(booking.id)} className="p-3 bg-red-50 text-red-400 rounded-xl hover:bg-red-100 transition-all" title="Excluir Permanentemente">🗑️</button>
               </div>
             </div>
           ))}

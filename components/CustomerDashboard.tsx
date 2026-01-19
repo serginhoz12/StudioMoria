@@ -11,6 +11,7 @@ interface CustomerDashboardProps {
   onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
   onUpdateProfile: (updated: Partial<Customer>) => void;
   onLogout: () => void;
+  onCancelBooking: (id: string) => void;
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -20,7 +21,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   settings,
   onBook,
   onUpdateProfile, 
-  onLogout 
+  onLogout,
+  onCancelBooking
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [careTips, setCareTips] = useState<string>('');
@@ -31,6 +33,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedProId, setSelectedProId] = useState<string>('');
+  const [agreedToCancellation, setAgreedToCancellation] = useState(false);
 
   const myBookings = useMemo(() => 
     bookings.filter(b => b.customerId === customer.id && b.status !== 'cancelled')
@@ -88,9 +91,18 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   }, [selectedService, selectedDate, settings, bookings, allPossibleSlots]);
 
   const handleBookSubmit = () => {
-    if (selectedService && selectedProId && selectedTime) {
+    if (selectedService && selectedProId && selectedTime && agreedToCancellation) {
       onBook(selectedService.id, `${selectedDate} ${selectedTime}`, selectedProId);
       setBookingStep(3);
+    } else if (!agreedToCancellation) {
+      alert("Para agendar, você precisa estar ciente da nossa política de cancelamento.");
+    }
+  };
+
+  const handleCancelClick = (bookingId: string) => {
+    if (confirm("ATENÇÃO: O cancelamento deste agendamento implica na PERDA INTEGRAL do valor pago como sinal/reserva. Deseja prosseguir com o cancelamento?")) {
+      onCancelBooking(bookingId);
+      alert("Agendamento cancelado. Conforme nossa política, o sinal não será reembolsado.");
     }
   };
 
@@ -354,10 +366,31 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                        </div>
                     </div>
                   )}
+
+                  {selectedProId && (
+                    <div className="p-6 bg-red-50 rounded-[2rem] border border-red-100 space-y-4 animate-slide-up">
+                      <label className="flex items-start gap-4 cursor-pointer group">
+                        <div className="relative mt-1">
+                          <input 
+                            type="checkbox"
+                            checked={agreedToCancellation}
+                            onChange={(e) => setAgreedToCancellation(e.target.checked)}
+                            className="peer appearance-none w-5 h-5 rounded border-2 border-red-200 checked:bg-red-600 checked:border-red-600 transition-all cursor-pointer"
+                          />
+                          <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <div className="flex-1">
+                          <span className="text-[10px] font-bold text-red-900 uppercase tracking-widest leading-relaxed">
+                            Estou ciente que o cancelamento do agendamento implica na perda integral do valor da antecipação (sinal).
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
                 </div>
 
                 <button 
-                  disabled={!selectedTime || !selectedProId}
+                  disabled={!selectedTime || !selectedProId || !agreedToCancellation}
                   onClick={handleBookSubmit}
                   className="w-full py-7 bg-tea-800 text-white rounded-[2.5rem] font-bold text-[11px] uppercase tracking-[0.2em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-300 disabled:shadow-none transition-all active:scale-95"
                 >
@@ -389,7 +422,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
         )}
 
-        {/* Outras abas permanecem com o mesmo fluxo lógico */}
+        {/* Aba AGENDAMENTOS */}
         {activeTab === 'agenda' && (
           <div className="space-y-6 animate-slide-up">
              <div className="flex items-center justify-between px-4">
@@ -397,25 +430,38 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
              </div>
              <div className="space-y-4">
                 {myBookings.length > 0 ? myBookings.map(b => (
-                  <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex items-center justify-between shadow-sm">
-                    <div className="flex items-center gap-6">
-                      <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl ${b.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-tea-50 text-tea-700 shadow-inner'}`}>
-                         {b.status === 'completed' ? '✨' : '📅'}
+                  <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex flex-col gap-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-6">
+                        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl ${b.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-tea-50 text-tea-700 shadow-inner'}`}>
+                           {b.status === 'completed' ? '✨' : '📅'}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-tea-950 text-lg mb-1">{b.serviceName}</h4>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                             {new Date(b.dateTime).toLocaleDateString()} às {new Date(b.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-tea-950 text-lg mb-1">{b.serviceName}</h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                           {new Date(b.dateTime).toLocaleDateString()} às {new Date(b.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                        </p>
+                      <div className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
+                        b.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' :
+                        b.status === 'pending' ? 'bg-orange-50 text-orange-700 border-orange-100 animate-pulse' :
+                        'bg-blue-50 text-blue-700 border-blue-100'
+                      }`}>
+                        {b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : 'Confirmado'}
                       </div>
                     </div>
-                    <div className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
-                      b.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' :
-                      b.status === 'pending' ? 'bg-orange-50 text-orange-700 border-orange-100 animate-pulse' :
-                      'bg-blue-50 text-blue-700 border-blue-100'
-                    }`}>
-                      {b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : 'Confirmado'}
-                    </div>
+                    
+                    {b.status !== 'completed' && b.status !== 'cancelled' && (
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => handleCancelClick(b.id)}
+                          className="flex-1 py-4 text-red-500 bg-red-50 rounded-2xl font-bold uppercase text-[9px] tracking-widest border border-red-100 hover:bg-red-100 transition-colors"
+                        >
+                          Cancelar Agendamento
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )) : (
                   <div className="py-24 text-center opacity-30 italic font-serif text-xl px-10 leading-relaxed">Você ainda não possui atendimentos registrados.</div>
@@ -424,6 +470,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
         )}
 
+        {/* Aba PERFIL */}
         {activeTab === 'perfil' && (
           <div className="space-y-8 animate-slide-up">
              <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-100 space-y-10">

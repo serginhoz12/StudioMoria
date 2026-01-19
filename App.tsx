@@ -138,7 +138,9 @@ const App: React.FC = () => {
       status: 'pending',
       depositStatus: 'pending',
       teamMemberId: mid,
-      teamMemberName: settings.teamMembers.find(m => m.id === mid)?.name
+      teamMemberName: settings.teamMembers.find(m => m.id === mid)?.name,
+      agreedToCancellationPolicy: true, // Registrado após checkbox no dashboard
+      policyAgreedAt: new Date().toISOString()
     };
     await addDoc(collection(db, "bookings"), booking);
   };
@@ -151,13 +153,19 @@ const App: React.FC = () => {
     await updateDoc(doc(db, "bookings", id), { depositStatus });
   };
 
+  const handleDeleteBooking = async (id: string) => {
+    if (confirm("Tem certeza que deseja excluir permanentemente este agendamento? Esta ação não pode ser desfeita.")) {
+      await deleteDoc(doc(db, "bookings", id));
+    }
+  };
+
   const renderView = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={() => {}} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} />;
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} waitlist={waitlist} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleDeleteBooking} waitlist={waitlist} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} setTransactions={() => {}} customers={customers} services={services} />;
         case View.ADMIN_VEO: return <AdminVeo />;
@@ -175,6 +183,9 @@ const App: React.FC = () => {
             onBook={handleBook}
             onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
+            onCancelBooking={async (id) => {
+              await updateDoc(doc(db, "bookings", id), { status: 'cancelled' });
+            }}
          />
        );
     }

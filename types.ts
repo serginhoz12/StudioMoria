@@ -62,6 +62,10 @@ export interface Booking {
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
   depositStatus: 'pending' | 'paid'; 
   rescheduledCount?: number; 
+  // Campos de Conformidade Jurídica
+  agreedToCancellationPolicy: boolean;
+  policyAgreedAt: string;
+  ipAddress?: string; // Opcional, para rastro digital
 }
 
 export interface WaitlistEntry {
