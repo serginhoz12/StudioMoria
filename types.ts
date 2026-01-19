@@ -66,6 +66,7 @@ export interface Booking {
   agreedToCancellationPolicy: boolean;
   policyAgreedAt: string;
   ipAddress?: string; // Opcional, para rastro digital
+  cancelledAt?: string;
 }
 
 export interface WaitlistEntry {
@@ -77,6 +78,8 @@ export interface WaitlistEntry {
   serviceName: string;
   preferredDate: string;
   createdAt: string;
+  status?: 'active' | 'cancelled';
+  cancelledAt?: string;
 }
 
 export interface Transaction {

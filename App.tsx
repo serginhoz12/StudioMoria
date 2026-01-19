@@ -155,22 +155,35 @@ const App: React.FC = () => {
       serviceId: sid,
       serviceName: srv?.name || '',
       preferredDate: dt,
+      status: 'active',
       createdAt: new Date().toISOString()
     });
   };
 
   const handleUpdateStatus = async (id: string, status: any) => {
-    await updateDoc(doc(db, "bookings", id), { status });
+    const updateData: any = { status };
+    if (status === 'cancelled') updateData.cancelledAt = new Date().toISOString();
+    await updateDoc(doc(db, "bookings", id), updateData);
   };
 
   const handleUpdateDeposit = async (id: string, depositStatus: 'paid' | 'pending') => {
     await updateDoc(doc(db, "bookings", id), { depositStatus });
   };
 
-  const handleDeleteBooking = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir permanentemente este agendamento? Esta ação não pode ser desfeita.")) {
-      await deleteDoc(doc(db, "bookings", id));
+  const handleCancelBooking = async (id: string) => {
+    if (confirm("Deseja cancelar este agendamento? O registro será mantido no histórico da equipe.")) {
+      await updateDoc(doc(db, "bookings", id), { 
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString()
+      });
     }
+  };
+
+  const handleCancelWaitlist = async (id: string) => {
+    await updateDoc(doc(db, "waitlist", id), { 
+      status: 'cancelled',
+      cancelledAt: new Date().toISOString()
+    });
   };
 
   const renderView = () => {
@@ -179,8 +192,8 @@ const App: React.FC = () => {
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={() => {}} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} />;
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleDeleteBooking} waitlist={waitlist} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
-        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
+        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} setTransactions={() => {}} customers={customers} services={services} />;
         case View.ADMIN_VEO: return <AdminVeo />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} />;
@@ -197,12 +210,10 @@ const App: React.FC = () => {
             onBook={handleBook}
             onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
-            onCancelBooking={async (id) => {
-              await updateDoc(doc(db, "bookings", id), { status: 'cancelled' });
-            }}
+            onCancelBooking={handleCancelBooking}
             onAddToWaitlist={handleAddToWaitlist}
-            waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
-            onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
+            waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
+            onRemoveWaitlist={handleCancelWaitlist}
          />
        );
     }
