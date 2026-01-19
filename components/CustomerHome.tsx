@@ -64,6 +64,16 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                 Fale conosco
               </button>
             </div>
+
+            {/* Endereço em destaque logo abaixo dos botões principais */}
+            <div className="mt-8 px-6 animate-slide-up">
+              <div className="inline-flex items-center gap-2 text-white/90 font-medium leading-relaxed max-w-[360px] mx-auto">
+                <span className="text-lg">📍</span>
+                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em]">
+                  {settings.address || "Rua Santa Monica, Sítio Novo - Cubatão SP, próximo ao material de construção do Fabio"}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -79,7 +89,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               <h3 className="text-xl md:text-2xl font-serif font-bold text-tea-950 mb-3">{service.name}</h3>
               <p className="text-gray-400 text-xs md:text-sm font-light mb-8 leading-relaxed line-clamp-2">{service.description}</p>
               <div className="mb-8">
-                {/* Lógica solicitada: Valor apenas se logado e com prefixo 'a partir de' */}
                 {currentUser ? (
                   <div className="flex flex-col">
                     <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mb-1">a partir de</span>
@@ -106,13 +115,12 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
           <div className="flex-1 space-y-6 md:space-y-10 text-center lg:text-left">
             <div className="space-y-4">
               <h2 className="text-3xl md:text-5xl font-serif text-tea-950 italic">Localização</h2>
-              <p className="text-gray-500 text-lg md:text-xl font-light leading-relaxed max-w-md mx-auto lg:mx-0">
-                Studio Moriá Estética<br/>
-                GPS: -23.9004600, -46.4425140
+              <p className="text-gray-500 text-lg md:text-xl font-light leading-relaxed max-w-md mx-auto lg:mx-0 whitespace-pre-line">
+                {settings.address}
               </p>
             </div>
             <a 
-              href="https://www.google.com/maps/search/?api=1&query=-23.9004600,-46.4425140" 
+              href={settings.googleMapsLink} 
               target="_blank" 
               rel="noreferrer"
               className="inline-flex items-center gap-4 bg-tea-900 text-white px-10 md:px-12 py-4 md:py-6 rounded-full font-bold uppercase tracking-widest text-[10px] md:text-[11px] hover:bg-black transition-all shadow-xl"
@@ -122,7 +130,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
             </a>
           </div>
           <div className="flex-1 w-full bg-white p-3 md:p-5 rounded-[2.5rem] md:rounded-[5rem] shadow-2xl border border-gray-100 h-[300px] md:h-[500px]">
-            {/* Mapa exato solicitado: -23.9004600, -46.4425140 */}
             <iframe 
               src="https://maps.google.com/maps?q=-23.9004600,-46.4425140&hl=pt&z=15&output=embed" 
               width="100%" 
