@@ -204,7 +204,7 @@ const App: React.FC = () => {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={() => {}} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
-        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} />;
+        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={handleDeleteTransaction} customers={customers} services={services} />;

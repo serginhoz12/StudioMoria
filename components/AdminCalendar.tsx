@@ -10,14 +10,17 @@ interface AdminCalendarProps {
   customers: Customer[];
   teamMembers: TeamMember[];
   settings?: SalonSettings; 
+  onUpdateStatus?: (id: string, status: 'scheduled' | 'cancelled' | 'completed') => void;
 }
 
-const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, teamMembers, settings }) => {
+const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, teamMembers, settings, onUpdateStatus }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
   
-  // Estados para o Modal de Agendamento Assistido
+  // Estados para os Modais
   const [bookingModal, setBookingModal] = useState<{ open: boolean; hour: string }>({ open: false, hour: '' });
+  const [actionModal, setActionModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
@@ -59,7 +62,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     const isStart = activeBooking.dateTime.split(' ')[1] === hour;
     
     return { 
-      type: activeBooking.status === 'blocked' ? 'blocked' : 'scheduled',
+      type: activeBooking.status === 'blocked' ? 'blocked' : (activeBooking.status === 'completed' ? 'completed' : 'scheduled'),
       booking: activeBooking,
       isStart
     };
@@ -74,9 +77,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         deleteDoc(doc(db, "bookings", status.booking.id));
       }
     } else if (status.type === 'scheduled' && status.booking) {
-      if (confirm(`Agendamento: ${status.booking.customerName}\nServiço: ${status.booking.serviceName}\n\nDeseja EXCLUIR permanentemente este agendamento do sistema?`)) {
-        deleteDoc(doc(db, "bookings", status.booking.id));
-      }
+      setActionModal({ open: true, booking: status.booking });
+    } else if (status.type === 'completed' && status.booking) {
+        alert(`Este atendimento já foi concluído e avaliado pela cliente.`);
     }
   };
 
@@ -99,6 +102,23 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setBookingModal({ open: false, hour: '' });
   };
 
+  const handleFinishBooking = () => {
+    if (actionModal.booking && onUpdateStatus) {
+      onUpdateStatus(actionModal.booking.id, 'completed');
+      setActionModal({ open: false, booking: null });
+      alert("Atendimento finalizado com sucesso! A cliente agora poderá avaliar o serviço no painel dela.");
+    }
+  };
+
+  const handleDeleteBooking = () => {
+    if (actionModal.booking) {
+      if (confirm(`Deseja EXCLUIR permanentemente este agendamento do sistema?`)) {
+        deleteDoc(doc(db, "bookings", actionModal.booking.id));
+        setActionModal({ open: false, booking: null });
+      }
+    }
+  };
+
   const confirmCustomerBooking = async () => {
     if (!selectedPro || !bookingModal.hour || !selectedCustomerId || !selectedServiceId) {
       alert("Por favor, selecione a cliente e o serviço.");
@@ -118,8 +138,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         teamMemberName: selectedPro.name,
         dateTime: `${selectedDate} ${bookingModal.hour}`,
         duration: service.duration,
-        status: 'scheduled', // Já entra como confirmado pois foi feito pela equipe
-        depositStatus: 'paid' // Consideramos como 'pago' ou 'presencial'
+        status: 'scheduled', 
+        depositStatus: 'paid' 
       });
       setBookingModal({ open: false, hour: '' });
       setSelectedCustomerId('');
@@ -200,7 +220,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         <div className="bg-tea-900 text-white px-8 py-5 flex justify-between items-center">
             <div>
               <h3 className="font-serif font-bold italic text-lg">Controle da Agenda</h3>
-              <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">Clique em um horário para agendar ou bloquear</p>
+              <p className="text-[9px] uppercase tracking-[0.2em] text-tea-300">Clique em um horário para agendar ou gerenciar</p>
             </div>
         </div>
 
@@ -220,6 +240,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               bgColor = 'bg-tea-600 border-tea-600 text-white';
               labelText = status.isStart ? status.booking?.customerName?.split(' ')[0] : '●';
               subText = status.isStart ? status.booking?.serviceName : '';
+            } else if (status.type === 'completed') {
+              bgColor = 'bg-green-600 border-green-600 text-white';
+              labelText = status.isStart ? status.booking?.customerName?.split(' ')[0] : '✓';
+              subText = status.isStart ? 'CONCLUÍDO' : '';
             } else if (status.type === 'blocked') {
               bgColor = 'bg-gray-100 border-gray-200 text-gray-400';
               labelText = 'Fechado';
@@ -249,7 +273,43 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         </div>
       </div>
 
-      {/* Modal de Agendamento Assistido */}
+      {/* Modal de Ação para Agendamento Existente */}
+      {actionModal.open && actionModal.booking && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-3xl animate-slide-up text-center">
+            <div className="w-20 h-20 bg-tea-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✨</div>
+            <h3 className="text-2xl font-serif text-tea-950 font-bold italic mb-2">Gerenciar Atendimento</h3>
+            <div className="mb-8 space-y-1">
+               <p className="text-gray-800 font-bold text-lg">{actionModal.booking.customerName}</p>
+               <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{actionModal.booking.serviceName}</p>
+               <p className="text-xs text-gray-400">{new Date(actionModal.booking.dateTime).toLocaleDateString()} às {new Date(actionModal.booking.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+               <button 
+                 onClick={handleFinishBooking}
+                 className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
+               >
+                 ✅ Finalizar Atendimento
+               </button>
+               <button 
+                 onClick={handleDeleteBooking}
+                 className="w-full py-4 text-red-500 bg-red-50 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-red-100 transition-all border border-red-100"
+               >
+                 🗑️ Excluir Agendamento
+               </button>
+               <button 
+                 onClick={() => setActionModal({ open: false, booking: null })}
+                 className="mt-2 text-[9px] text-gray-400 font-bold uppercase tracking-widest hover:text-gray-600"
+               >
+                 Fechar
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Novo Agendamento Assistido */}
       {bookingModal.open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[3rem] p-8 shadow-2xl animate-slide-up space-y-8">
@@ -259,7 +319,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             </div>
 
             <div className="space-y-6">
-              {/* Opção 1: Bloquear Horário */}
               <button 
                 onClick={confirmQuickBlock}
                 className="w-full p-4 border-2 border-dashed border-red-100 text-red-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-50 transition-all"
@@ -269,7 +328,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
               <div className="h-px bg-gray-100 w-full"></div>
 
-              {/* Opção 2: Agendar Cliente */}
               <div className="space-y-4">
                 <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Buscar Cliente</label>
                 <div className="relative">
