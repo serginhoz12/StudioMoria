@@ -1,18 +1,15 @@
 
 import React, { useState } from 'react';
-import { SalonSettings, Service, TeamMember, BusinessHours } from '../types.ts';
+import { SalonSettings, Service, TeamMember } from '../types.ts';
 import { db } from '../firebase.ts';
 import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 
 interface AdminSettingsViewProps {
   settings: SalonSettings;
-  setSettings: (s: SalonSettings) => void;
   services: Service[];
-  setServices: (s: Service[]) => void;
   customers: any[];
   bookings: any[];
   transactions: any[];
-  onImport: (data: any) => void;
 }
 
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
@@ -24,7 +21,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newMemberName, setNewMemberName] = useState('');
 
   const updateGlobalSettings = async (newSet: SalonSettings) => {
-    await setDoc(doc(db, "settings", "main"), newSet);
+    await setDoc(doc(db, "settings", "main"), { ...newSet, lastUpdated: Date.now() });
   };
 
   const addTeamMember = () => {
@@ -43,7 +40,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   };
 
   const removeTeamMember = (id: string) => {
-    if (confirm("Remover profissional?")) {
+    if (confirm("Remover profissional permanentemente?")) {
       const updated = { ...settings, teamMembers: settings.teamMembers.filter(m => m.id !== id) };
       updateGlobalSettings(updated);
     }
@@ -72,10 +69,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const toggleServiceToMember = (memberId: string, serviceId: string) => {
     const member = settings.teamMembers.find(m => m.id === memberId);
     if (!member) return;
-    const hasService = member.assignedServiceIds.includes(serviceId);
+    const currentIds = member.assignedServiceIds || [];
+    const hasService = currentIds.includes(serviceId);
     const newServices = hasService 
-      ? member.assignedServiceIds.filter(id => id !== serviceId)
-      : [...member.assignedServiceIds, serviceId];
+      ? currentIds.filter(id => id !== serviceId)
+      : [...currentIds, serviceId];
     updateMemberField(memberId, 'assignedServiceIds', newServices);
   };
 
@@ -127,59 +125,91 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   return (
     <div className="space-y-12 pb-32 animate-fade-in">
       <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl">
-        <h2 className="text-3xl font-serif font-bold mb-2">Configurações Gerais</h2>
-        <p className="text-tea-100 font-light text-sm italic">Defina as bases do seu salão e controle o catálogo de destaques.</p>
+        <h2 className="text-3xl font-serif font-bold mb-2 italic">Configurações Studio Moriá</h2>
+        <p className="text-tea-100 font-light text-sm italic">Gestão de profissionais, catálogo e controle de agenda.</p>
       </div>
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-          <span className="text-3xl">📅</span> Janela de Agendamento
+          <span className="text-3xl">📅</span> Disponibilidade da Agenda
         </h3>
         <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
            <div className="max-w-md">
-             <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 mb-2 block">Agenda Aberta para Clientes Até:</label>
+             <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 mb-2 block">Liberar Agenda para Clientes até:</label>
              <input 
               type="date" 
               className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
               value={settings.agendaOpenUntil || ''}
               onChange={e => updateGlobalSettings({...settings, agendaOpenUntil: e.target.value})}
              />
+             <p className="text-[9px] text-gray-400 mt-2 ml-1 italic">* Após esta data, nenhum horário estará visível para as clientes no app.</p>
            </div>
         </div>
       </section>
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-           <span className="text-3xl">👥</span> Profissionais & Disponibilidade
+           <span className="text-3xl">👥</span> Gestão da Equipe & Folgas
         </h3>
         <div className="flex gap-4 mb-10">
-          <input placeholder="Nome da nova profissional..." className="flex-grow p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
-          <button onClick={addTeamMember} className="bg-tea-800 text-white px-10 py-5 rounded-2xl font-bold hover:bg-tea-950 transition-colors shadow-lg">Adicionar</button>
+          <input placeholder="Nome da nova colaboradora..." className="flex-grow p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
+          <button onClick={addTeamMember} className="bg-tea-800 text-white px-10 py-5 rounded-2xl font-bold hover:bg-tea-950 transition-colors shadow-lg uppercase text-[10px] tracking-widest">Adicionar Equipe</button>
         </div>
         
-        <div className="space-y-8">
+        <div className="space-y-12">
           {settings.teamMembers.map(member => (
-            <div key={member.id} className="p-8 border-2 border-gray-50 rounded-[2.5rem] bg-white shadow-sm hover:border-tea-100 transition-all space-y-8">
+            <div key={member.id} className="p-8 border-2 border-gray-50 rounded-[2.5rem] bg-white shadow-sm hover:border-tea-100 transition-all space-y-10 relative overflow-hidden">
               <div className="flex justify-between items-center border-b border-gray-50 pb-6">
-                <div>
-                  <span className="font-serif font-bold text-2xl text-tea-950">{member.name}</span>
+                <div className="flex items-center gap-4">
+                  <div className="w-14 h-14 bg-tea-900 text-white rounded-2xl flex items-center justify-center font-serif text-xl font-bold">{member.name.charAt(0)}</div>
+                  <span className="font-serif font-bold text-2xl text-tea-950 italic">{member.name}</span>
                 </div>
-                <button onClick={() => removeTeamMember(member.id)} className="text-red-400 text-xs font-bold uppercase tracking-widest hover:text-red-600 p-3 bg-red-50 rounded-xl">Remover</button>
+                <button onClick={() => removeTeamMember(member.id)} className="text-red-400 text-[10px] font-bold uppercase tracking-widest hover:text-red-600 p-3 bg-red-50 rounded-xl transition-colors">Remover da Unidade</button>
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                <div className="space-y-6">
-                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">⏰ Turno de Trabalho</h4>
-                  <div className="flex items-center gap-4">
-                    <input type="time" className="flex-1 p-4 bg-gray-50 rounded-xl border-none font-bold text-sm" value={member.businessHours?.start || settings.businessHours.start} onChange={e => updateMemberField(member.id, 'businessHours', { ... (member.businessHours || settings.businessHours), start: e.target.value })} />
-                    <span className="text-gray-300">até</span>
-                    <input type="time" className="flex-1 p-4 bg-gray-50 rounded-xl border-none font-bold text-sm" value={member.businessHours?.end || settings.businessHours.end} onChange={e => updateMemberField(member.id, 'businessHours', { ... (member.businessHours || settings.businessHours), end: e.target.value })} />
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                <div className="space-y-8">
+                  <div>
+                    <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                       <span className="text-lg">⏰</span> Turno de Atendimento
+                    </h4>
+                    <div className="flex items-center gap-4">
+                      <input type="time" className="flex-1 p-4 bg-gray-50 rounded-xl border-none font-bold text-sm shadow-inner" value={member.businessHours?.start || settings.businessHours.start} onChange={e => updateMemberField(member.id, 'businessHours', { ... (member.businessHours || settings.businessHours), start: e.target.value })} />
+                      <span className="text-gray-300 font-bold">às</span>
+                      <input type="time" className="flex-1 p-4 bg-gray-50 rounded-xl border-none font-bold text-sm shadow-inner" value={member.businessHours?.end || settings.businessHours.end} onChange={e => updateMemberField(member.id, 'businessHours', { ... (member.businessHours || settings.businessHours), end: e.target.value })} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                       <span className="text-lg">🚫</span> Dias de Folga (Agenda Fechada)
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {weekDays.map(day => (
+                        <button 
+                          key={day.n} 
+                          onClick={() => toggleOffDay(member.id, day.n)}
+                          className={`px-4 py-2 rounded-xl text-[10px] font-bold border-2 transition-all ${member.offDays?.includes(day.n) ? 'bg-red-500 border-red-500 text-white shadow-md' : 'bg-gray-50 border-gray-100 text-gray-400 hover:bg-gray-100'}`}
+                        >
+                          {day.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[8px] text-gray-400 mt-3 font-bold uppercase tracking-widest">* Selecione os dias em que a profissional NÃO atende.</p>
                   </div>
                 </div>
+
                 <div className="space-y-6">
-                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">💅 Serviços Autorizados</h4>
+                  <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
+                     <span className="text-lg">✨</span> Procedimentos Habilitados
+                  </h4>
                   <div className="flex flex-wrap gap-2">
                     {services.map(s => (
-                      <button key={s.id} onClick={() => toggleServiceToMember(member.id, s.id)} className={`px-4 py-2 rounded-xl text-[10px] font-bold border-2 transition-all ${member.assignedServiceIds?.includes(s.id) ? 'bg-tea-800 border-tea-800 text-white' : 'bg-gray-50 border-gray-100 text-gray-400 hover:bg-gray-100'}`}>
+                      <button 
+                        key={s.id} 
+                        onClick={() => toggleServiceToMember(member.id, s.id)} 
+                        className={`px-5 py-3 rounded-2xl text-[10px] font-bold border-2 transition-all ${member.assignedServiceIds?.includes(s.id) ? 'bg-tea-800 border-tea-800 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-tea-200'}`}
+                      >
                         {s.name}
                       </button>
                     ))}
@@ -193,34 +223,34 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-           <span className="text-3xl">📋</span> Catálogo de Serviços
+           <span className="text-3xl">📋</span> Catálogo de Cuidados
         </h3>
         
         <div className="bg-tea-50/50 p-8 rounded-3xl mb-10 border border-tea-100">
-           <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-6 ml-1">Criar Novo Procedimento</h4>
+           <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-6 ml-1">Adicionar Novo Procedimento</h4>
            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <input placeholder="Ex: Micropigmentação" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
-              <input type="number" placeholder="Preço Base R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
-              <input type="number" placeholder="Minutos" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
+              <input placeholder="Nome do Procedimento" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
+              <input type="number" placeholder="Preço R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
+              <input type="number" placeholder="Duração (minutos)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
            </div>
-           <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar Procedimento</button>
+           <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar no Catálogo</button>
         </div>
 
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4">
           {services.map(s => (
             <div key={s.id} className={`p-6 border-2 rounded-3xl flex justify-between items-center transition-all ${s.isVisible ? 'border-gray-50 hover:bg-gray-50/30' : 'bg-red-50/10 opacity-60 border-transparent'}`}>
               <div className="flex items-center gap-4">
                 <button 
                   onClick={() => toggleServiceHighlight(s.id, !!s.isHighlighted)}
                   className={`p-3 rounded-2xl transition-all ${s.isHighlighted ? 'bg-orange-100 text-orange-600 scale-110 shadow-sm' : 'bg-gray-50 text-gray-300'}`}
-                  title={s.isHighlighted ? 'Remover Destaque' : 'Marcar como Destaque'}
+                  title={s.isHighlighted ? 'Remover Destaque' : 'Destacar no Site'}
                 >
                   ⭐
                 </button>
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-lg text-tea-950">{s.name}</p>
-                    {s.isHighlighted && <span className="text-[7px] bg-orange-400 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-[0.2em]">Destaque</span>}
+                    {s.isHighlighted && <span className="text-[7px] bg-orange-400 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-[0.2em]">VIP</span>}
                   </div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase">R$ {s.price.toFixed(2)} • {s.duration} min</p>
                 </div>
@@ -228,9 +258,9 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               <div className="flex gap-2 items-center">
                 <button onClick={() => setEditingService(s)} className="p-3 bg-white text-tea-600 rounded-xl border border-tea-50 shadow-sm">✏️</button>
                 <button onClick={() => toggleServiceVisibility(s.id, s.isVisible)} className={`px-6 py-3 rounded-xl text-[10px] font-bold border-2 transition-all ${s.isVisible ? 'bg-white text-tea-700 border-tea-100' : 'bg-tea-800 text-white border-tea-800'}`}>
-                  {s.isVisible ? 'OCULTAR' : 'EXIBIR'}
+                  {s.isVisible ? 'VISÍVEL' : 'OCULTO'}
                 </button>
-                <button onClick={() => handleDeleteService(s.id)} className="p-3 text-red-200 hover:text-red-500">🗑️</button>
+                <button onClick={() => handleDeleteService(s.id)} className="p-3 text-red-200 hover:text-red-500 transition-colors">🗑️</button>
               </div>
             </div>
           ))}
@@ -238,19 +268,19 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       </section>
 
       {editingService && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-slide-up">
-            <h3 className="text-2xl font-serif text-tea-900 mb-8 italic">Editar Procedimento</h3>
+            <h3 className="text-2xl font-serif text-tea-900 mb-8 italic font-bold">Ajustar Procedimento</h3>
             <div className="space-y-6">
-              <input className="w-full p-4 rounded-2xl bg-gray-50 border-2 border-transparent outline-none font-bold" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} />
+              <input className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none font-bold shadow-inner" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} />
               <div className="grid grid-cols-2 gap-4">
-                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
-                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: parseInt(e.target.value)})} />
+                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
+                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: parseInt(e.target.value)})} />
               </div>
-              <textarea className="w-full p-4 rounded-2xl bg-gray-50 outline-none h-24" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
-              <div className="flex gap-4">
-                <button onClick={() => setEditingService(null)} className="flex-1 py-4 text-gray-400 font-bold">Cancelar</button>
-                <button onClick={saveEditedService} className="flex-[2] bg-tea-800 text-white py-4 rounded-2xl font-bold shadow-xl">Salvar</button>
+              <textarea className="w-full p-4 rounded-2xl bg-gray-50 outline-none h-24 shadow-inner" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setEditingService(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
+                <button onClick={saveEditedService} className="flex-[2] bg-tea-800 text-white py-4 rounded-2xl font-bold shadow-xl uppercase text-[10px] tracking-widest">Confirmar Alterações</button>
               </div>
             </div>
           </div>

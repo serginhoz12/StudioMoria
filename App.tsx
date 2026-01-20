@@ -11,7 +11,8 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
-  increment
+  increment,
+  getDoc
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
   const [services, setServices] = useState<Service[]>([]);
@@ -44,24 +46,20 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
   useEffect(() => {
-    const unsubSettings = onSnapshot(doc(db, "settings", "main"), (doc) => {
-      if (doc.exists()) {
-        setSettings(doc.data() as SalonSettings);
+    // Sincronização inicial com o Firebase
+    const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
+      if (snap.exists()) {
+        setSettings(snap.data() as SalonSettings);
+        setIsLoading(false);
       } else {
-        setDoc(doc.ref, DEFAULT_SETTINGS);
+        // Apenas cria se for a PRIMEIRA vez absoluta
+        setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
       }
     });
 
-    // Incrementar contador de visitas ao carregar a página
-    if (currentView === View.CUSTOMER_HOME) {
-      updateDoc(doc(db, "settings", "main"), {
-        visitCount: increment(1)
-      }).catch(() => {});
-    }
-
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
-      if (data.length === 0) {
+      if (data.length === 0 && !isLoading) {
         INITIAL_SERVICES.forEach(s => setDoc(doc(db, "services", s.id), s));
       }
       setServices(data);
@@ -93,6 +91,15 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Contador de visitas só após carregar settings
+  useEffect(() => {
+    if (!isLoading && currentView === View.CUSTOMER_HOME) {
+      updateDoc(doc(db, "settings", "main"), {
+        visitCount: increment(1)
+      }).catch(() => {});
+    }
+  }, [isLoading, currentView]);
+
   useEffect(() => {
     const savedUser = localStorage.getItem('moria_user_session');
     if (savedUser) {
@@ -115,14 +122,11 @@ const App: React.FC = () => {
         receivesNotifications: !!currentUser.receivesNotifications
       };
       localStorage.setItem('moria_user_session', JSON.stringify(cleanUser));
-      if (currentView === View.CUSTOMER_HOME || currentView === View.CUSTOMER_LOGIN) {
-        setCurrentView(View.CUSTOMER_DASHBOARD);
-      }
     } else {
       localStorage.removeItem('moria_user_session');
     }
     localStorage.setItem('moria_admin_session', isAdminAuthenticated.toString());
-  }, [currentUser, isAdminAuthenticated, currentView]);
+  }, [currentUser, isAdminAuthenticated]);
 
   const handleRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
     const id = Math.random().toString(36).substr(2, 9);
@@ -199,29 +203,27 @@ const App: React.FC = () => {
     });
   };
 
-  const handleAddTransaction = async (data: any) => {
-    await addDoc(collection(db, "transactions"), data);
-  };
-
-  const handleUpdateTransaction = async (id: string, data: any) => {
-    await updateDoc(doc(db, "transactions", id), data);
-  };
-
-  const handleDeleteTransaction = async (id: string) => {
-    if (confirm("Deseja excluir permanentemente este registro financeiro?")) {
-      await deleteDoc(doc(db, "transactions", id));
-    }
-  };
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-tea-950 flex flex-col items-center justify-center space-y-6">
+        <div className="w-16 h-16 border-4 border-tea-400 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-center">
+           <p className="text-tea-100 font-serif italic text-xl animate-pulse">Sincronizando com Studio Moriá...</p>
+           <p className="text-[9px] text-tea-400 uppercase tracking-widest mt-2">Carregando dados da nuvem</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderView = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
-        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} setSettings={() => {}} services={services} setServices={() => {}} customers={customers} bookings={bookings} transactions={transactions} onImport={() => {}} />;
+        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={handleDeleteTransaction} customers={customers} services={services} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} />;
       }
