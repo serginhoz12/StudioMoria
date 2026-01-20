@@ -1,266 +1,240 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Promotion } from '../types';
+import { Customer, Promotion, Service } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../firebase.ts';
-import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
 interface AdminMarketingProps {
   customers: Customer[];
   promotions: Promotion[];
+  services: Service[];
 }
 
-const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions }) => {
+const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions, services }) => {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [topic, setTopic] = useState('');
-  const [type, setType] = useState<'promotion' | 'tip'>('promotion');
+  const [showForm, setShowForm] = useState(false);
+  
+  // Estado do Formulário de Campanha
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  
-  // Seleção de Clientes
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [discount, setDiscount] = useState(0);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [selectedServices, setSelectedServices] = useState<string[]>([]);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Clientes que aceitam notificações
   const eligibleCustomers = useMemo(() => 
     customers.filter(c => c.receivesNotifications && 
       (c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.whatsapp.includes(searchTerm))
     ), [customers, searchTerm]);
 
-  const toggleSelectAll = () => {
-    if (selectedIds.size === eligibleCustomers.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(eligibleCustomers.map(c => c.id)));
-    }
+  const toggleService = (id: string) => {
+    setSelectedServices(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const toggleSelectCustomer = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setSelectedIds(next);
+  const toggleSelectAll = () => {
+    if (selectedCustomerIds.size === eligibleCustomers.length) {
+      setSelectedCustomerIds(new Set());
+    } else {
+      setSelectedCustomerIds(new Set(eligibleCustomers.map(c => c.id)));
+    }
   };
 
   const generateSmartContent = async () => {
-    if (!topic) return alert("Por favor, digite um tema para a IA trabalhar.");
+    if (!title && !discount) return alert("Defina um título ou desconto para a IA ter contexto.");
     setIsGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Crie uma ${type === 'promotion' ? 'promoção irresistível' : 'dica de beleza elegante'} para um salão de estética de luxo chamado Studio Moriá. 
-      Tema: ${topic}. 
-      Público: Mulheres que buscam autocuidado e sofisticação.
-      Retorne estritamente em formato JSON: { "title": "Título curto e impactante", "content": "Texto envolvente com emojis apropriados" }`;
-      
+      const prompt = `Crie uma mensagem persuasiva de WhatsApp para Studio Moriá. Promoção: ${title}. Desconto: ${discount}%. Validade: até ${new Date(endDate).toLocaleDateString()}. Seja elegante e use emojis. Retorne apenas o texto da mensagem.`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
-        config: { responseMimeType: "application/json" }
       });
-
-      const data = JSON.parse(response.text);
-      setTitle(data.title);
-      setContent(data.content);
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao gerar conteúdo inteligente.");
-    } finally {
-      setIsGenerating(false);
-    }
+      setContent(response.text || '');
+    } catch (e) { alert("Erro na IA."); } finally { setIsGenerating(false); }
   };
 
-  const publishAndSendBatch = async () => {
-    if (!title || !content) return alert("Preencha o título e o conteúdo.");
-    if (selectedIds.size === 0) return alert("Selecione pelo menos uma cliente para o envio.");
+  const saveCampaign = async () => {
+    if (!title || !content) return alert("Título e conteúdo são obrigatórios.");
+    if (selectedCustomerIds.size === 0) return alert("Selecione pelo menos uma cliente.");
 
-    setIsBroadcasting(true);
     try {
-      // 1. Salvar no App (Dashboard do Cliente)
-      await addDoc(collection(db, "promotions"), {
+      const promoData: Omit<Promotion, 'id'> = {
         title,
         content,
-        type,
+        type: 'promotion',
+        discountPercentage: discount,
+        applicableServiceIds: selectedServices,
+        targetCustomerIds: Array.from(selectedCustomerIds),
+        startDate,
+        endDate,
         createdAt: new Date().toISOString(),
-        isActive: true,
-        targetCount: selectedIds.size
-      });
+        isActive: true
+      };
 
-      // 2. Disparo Automático WhatsApp
-      // Nota: Navegadores bloqueiam múltiplos popups automáticos. 
-      // Abriremos a primeira e informaremos que as demais estão prontas para processamento.
-      const selectedCustomers = customers.filter(c => selectedIds.has(c.id));
-      const message = `🌟 *STUDIO MORIÁ ESTÉTICA* 🌟\n\n*${title}*\n\n${content}\n\nAcesse nosso app para agendar seu horário!`;
+      await addDoc(collection(db, "promotions"), promoData);
 
-      // Loop de disparos (O navegador pode bloquear se forem muitos, o usuário precisará permitir popups)
-      selectedCustomers.forEach((c, index) => {
-        const url = `https://wa.me/${c.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-        // Pequeno delay para tentar burlar o bloqueio de popups sucessivos
-        setTimeout(() => {
-          window.open(url, '_blank');
-        }, index * 800);
-      });
-
-      alert(`Campanha publicada! Iniciando disparos automáticos para ${selectedIds.size} clientes. Certifique-se de permitir pop-ups neste site.`);
+      // Disparo WhatsApp Simulado (Abre o link para o usuário disparar)
+      const message = `🌟 *STUDIO MORIÁ* 🌟\n\n${content}`;
+      const targetCustomers = customers.filter(c => selectedCustomerIds.has(c.id));
       
-      setTitle('');
-      setContent('');
-      setTopic('');
-      setSelectedIds(new Set());
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao processar campanha.");
-    } finally {
-      setIsBroadcasting(false);
-    }
+      if (confirm(`Campanha salva! Deseja abrir os links de WhatsApp para as ${targetCustomers.length} clientes agora?`)) {
+        targetCustomers.forEach((c, i) => {
+          const url = `https://wa.me/${c.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+          setTimeout(() => window.open(url, '_blank'), i * 1500);
+        });
+      }
+
+      setShowForm(false);
+      resetForm();
+    } catch (e) { alert("Erro ao salvar campanha."); }
   };
 
-  const deletePromotion = async (id: string) => {
-    if (confirm("Deseja remover este conteúdo?")) {
-      await deleteDoc(doc(db, "promotions", id));
-    }
+  const resetForm = () => {
+    setTitle(''); setContent(''); setDiscount(0); 
+    setSelectedServices([]); setSelectedCustomerIds(new Set());
   };
+
+  const sortedPromotions = [...promotions].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
-      <div className="bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-gray-100">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-           <div>
-             <h2 className="text-3xl font-serif text-tea-950 font-bold italic">Marketing Moriá</h2>
-             <p className="text-gray-400 text-sm italic">Gestão de Campanhas e Disparos WhatsApp</p>
-           </div>
-           <button 
-             onClick={() => setShowHistory(!showHistory)}
-             className="px-6 py-3 border-2 border-tea-100 text-tea-700 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-tea-50 transition-all"
-           >
-             {showHistory ? "← Criar Nova Campanha" : "Ver Histórico de Envios"}
-           </button>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-serif text-tea-950 font-bold italic">Campanhas & Promoções</h2>
+          <p className="text-gray-400 text-sm">Gerencie seus descontos e envie para as clientes.</p>
         </div>
-
-        {!showHistory ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            {/* Coluna 1: Conteúdo */}
-            <div className="lg:col-span-7 space-y-8">
-              <div className="bg-tea-50/50 p-8 rounded-[2.5rem] border border-tea-100 space-y-6">
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">✨</span>
-                  <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest">IA Especialista</h4>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex gap-2 p-1 bg-white rounded-xl border border-tea-50">
-                    <button onClick={() => setType('promotion')} className={`flex-1 py-3 rounded-lg text-[10px] font-bold uppercase transition-all ${type === 'promotion' ? 'bg-tea-900 text-white shadow-md' : 'text-gray-400'}`}>Promoção</button>
-                    <button onClick={() => setType('tip')} className={`flex-1 py-3 rounded-lg text-[10px] font-bold uppercase transition-all ${type === 'tip' ? 'bg-tea-900 text-white shadow-md' : 'text-gray-400'}`}>Dica</button>
-                  </div>
-                  <input 
-                    type="text" 
-                    placeholder="Tema da campanha..."
-                    className="w-full p-5 rounded-2xl bg-white border border-tea-100 outline-none text-sm"
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                  />
-                  <button 
-                    onClick={generateSmartContent}
-                    disabled={isGenerating}
-                    className="w-full py-4 bg-tea-800 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-lg disabled:bg-gray-200"
-                  >
-                    {isGenerating ? "Gerando..." : "Gerar com IA"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                 <input 
-                   type="text" 
-                   placeholder="Título chamativo"
-                   className="w-full p-6 rounded-2xl bg-gray-50 border-none font-bold text-tea-950 text-lg outline-none"
-                   value={title}
-                   onChange={(e) => setTitle(e.target.value)}
-                 />
-                 <textarea 
-                   rows={6}
-                   placeholder="Conteúdo da mensagem..."
-                   className="w-full p-6 rounded-3xl bg-gray-50 border-none text-gray-700 text-sm outline-none resize-none"
-                   value={content}
-                   onChange={(e) => setContent(e.target.value)}
-                 />
-              </div>
-            </div>
-
-            {/* Coluna 2: Seleção de Clientes */}
-            <div className="lg:col-span-5 flex flex-col h-full bg-gray-50/50 rounded-[3rem] border border-gray-100 overflow-hidden">
-               <div className="p-6 border-b border-gray-100 bg-white">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest">Selecionar Público ({selectedIds.size})</h4>
-                    <button onClick={toggleSelectAll} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">
-                      {selectedIds.size === eligibleCustomers.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      placeholder="Buscar cliente..."
-                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 text-xs outline-none border border-transparent focus:border-tea-200"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
-                  </div>
-               </div>
-
-               <div className="flex-grow overflow-y-auto custom-scroll p-4 space-y-2 max-h-[400px]">
-                 {eligibleCustomers.map(customer => (
-                   <label key={customer.id} className={`flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${selectedIds.has(customer.id) ? 'bg-tea-50 border-tea-200' : 'bg-white border-transparent hover:border-gray-100'}`}>
-                      <input 
-                        type="checkbox" 
-                        className="peer appearance-none w-5 h-5 rounded border-2 border-tea-100 checked:bg-tea-900 checked:border-tea-900 transition-all"
-                        checked={selectedIds.has(customer.id)}
-                        onChange={() => toggleSelectCustomer(customer.id)}
-                      />
-                      <div className="flex-1">
-                         <p className="text-xs font-bold text-tea-950">{customer.name}</p>
-                         <p className="text-[10px] text-gray-400 font-medium">{customer.whatsapp}</p>
-                      </div>
-                   </label>
-                 ))}
-                 {eligibleCustomers.length === 0 && <p className="text-center py-10 text-[10px] text-gray-300 italic">Nenhuma cliente encontrada.</p>}
-               </div>
-
-               <div className="p-6 bg-white border-t border-gray-100">
-                  <button 
-                    onClick={publishAndSendBatch}
-                    disabled={isBroadcasting || selectedIds.size === 0 || !title}
-                    className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-[0.2em] text-[10px] shadow-xl disabled:bg-gray-200 transition-all active:scale-95"
-                  >
-                    {isBroadcasting ? "Enviando..." : "🚀 Publicar e Disparar WhatsApp"}
-                  </button>
-                  <p className="text-[8px] text-gray-400 text-center mt-3 uppercase tracking-widest font-bold">
-                    O disparo em lote abrirá novas abas do WhatsApp Web automaticamente.
-                  </p>
-               </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {promotions.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(promo => (
-              <div key={promo.id} className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-6">
-                <div className="flex-1">
-                   <div className="flex items-center gap-3 mb-2">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${promo.type === 'promotion' ? 'bg-orange-100 text-orange-700' : 'bg-tea-900 text-white'}`}>
-                        {promo.type === 'promotion' ? 'Promoção' : 'Dica'}
-                      </span>
-                      <span className="text-[9px] text-gray-400 font-medium italic">Enviado em {new Date(promo.createdAt).toLocaleDateString()}</span>
-                   </div>
-                   <h4 className="font-bold text-tea-950 text-xl mb-1 italic font-serif">{promo.title}</h4>
-                   <p className="text-gray-500 text-xs line-clamp-2">{promo.content}</p>
-                </div>
-                <button onClick={() => deletePromotion(promo.id)} className="p-4 text-red-200 hover:text-red-500 rounded-2xl transition-all">🗑️</button>
-              </div>
-            ))}
-            {promotions.length === 0 && <p className="text-center py-20 text-gray-300 italic">Nenhum histórico disponível.</p>}
-          </div>
-        )}
+        <button 
+          onClick={() => setShowForm(!showForm)} 
+          className="bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
+        >
+          {showForm ? '← Voltar à Lista' : '+ Nova Campanha'}
+        </button>
       </div>
+
+      {showForm ? (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-slide-up">
+          <div className="lg:col-span-8 bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-gray-100 space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Título da Campanha</label>
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Especial Mês das Noivas" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Desconto (%)</label>
+                <input type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))} min="0" max="100" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Início da Validade</label>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Fim da Validade</label>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Serviços Inclusos (Se vazio, aplica a todos)</label>
+              <div className="flex flex-wrap gap-2">
+                {services.map(s => (
+                  <button 
+                    key={s.id} 
+                    onClick={() => toggleService(s.id)} 
+                    className={`px-4 py-2 rounded-xl text-[10px] font-bold border-2 transition-all ${selectedServices.includes(s.id) ? 'bg-tea-800 border-tea-800 text-white' : 'bg-white border-gray-100 text-gray-400'}`}
+                  >
+                    {s.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t border-gray-50">
+               <div className="flex justify-between items-center">
+                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Texto para WhatsApp</label>
+                 <button onClick={generateSmartContent} disabled={isGenerating} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">{isGenerating ? 'IA está escrevendo...' : 'Gerar com IA ✨'}</button>
+               </div>
+               <textarea rows={6} value={content} onChange={e => setContent(e.target.value)} placeholder="O que a cliente vai receber no WhatsApp..." className="w-full p-6 bg-gray-50 rounded-3xl outline-none focus:ring-2 focus:ring-tea-100 transition-all resize-none text-sm leading-relaxed" />
+            </div>
+          </div>
+
+          <div className="lg:col-span-4 flex flex-col gap-6">
+             <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 flex-grow flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-xs font-bold text-tea-950 uppercase tracking-widest">Selecionar Clientes</h3>
+                   <button onClick={toggleSelectAll} className="text-[9px] font-bold text-tea-600 uppercase">{selectedCustomerIds.size === eligibleCustomers.length ? 'Ninguém' : 'Todos'}</button>
+                </div>
+                <input type="text" placeholder="Buscar cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-xs mb-4 outline-none" />
+                <div className="flex-grow overflow-y-auto max-h-[400px] space-y-2 custom-scroll pr-2">
+                   {eligibleCustomers.map(c => (
+                     <label key={c.id} className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${selectedCustomerIds.has(c.id) ? 'bg-tea-50 border-tea-200' : 'bg-white border-transparent hover:bg-gray-50'}`}>
+                        <input type="checkbox" checked={selectedCustomerIds.has(c.id)} onChange={() => {
+                          const next = new Set(selectedCustomerIds);
+                          next.has(c.id) ? next.delete(c.id) : next.add(c.id);
+                          setSelectedCustomerIds(next);
+                        }} className="w-4 h-4 rounded text-tea-900 focus:ring-tea-900 border-gray-300" />
+                        <div className="text-[11px]">
+                          <p className="font-bold text-tea-950">{c.name}</p>
+                          <p className="text-gray-400">{c.whatsapp}</p>
+                        </div>
+                     </label>
+                   ))}
+                </div>
+                <div className="pt-6 mt-4 border-t border-gray-50">
+                   <button onClick={saveCampaign} disabled={selectedCustomerIds.size === 0} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl disabled:bg-gray-100">Criar Campanha e Disparar</button>
+                </div>
+             </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {sortedPromotions.map(promo => {
+            const today = new Date().toISOString().split('T')[0];
+            const isPast = promo.endDate < today;
+            const isFuture = promo.startDate > today;
+            const isOngoing = !isPast && !isFuture;
+
+            return (
+              <div key={promo.id} className={`bg-white p-8 rounded-[2.5rem] border-2 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 transition-all ${isPast ? 'opacity-50 border-gray-100' : 'border-tea-50 hover:border-tea-100'}`}>
+                <div className="flex items-center gap-6">
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl ${isPast ? 'bg-gray-100' : 'bg-tea-900 text-white'}`}>
+                    {promo.discountPercentage}%
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-3 mb-1">
+                      <h3 className="font-bold text-tea-950 text-xl font-serif">{promo.title}</h3>
+                      {isOngoing && <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[8px] font-bold uppercase">Ativa</span>}
+                      {isPast && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">Encerrada</span>}
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                      Validade: {new Date(promo.startDate).toLocaleDateString()} até {new Date(promo.endDate).toLocaleDateString()}
+                    </p>
+                    <p className="text-xs text-tea-600 font-medium mt-1">
+                      {promo.applicableServiceIds.length === 0 ? 'Válido para todos os serviços' : `${promo.applicableServiceIds.length} serviços selecionados`}
+                      {' • '} {promo.targetCustomerIds.length} clientes participando
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                   <button onClick={async () => { if(confirm("Deseja encerrar esta campanha?")) await updateDoc(doc(db, "promotions", promo.id), { isActive: false, endDate: today }); }} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 transition-colors">⏹️</button>
+                   <button onClick={async () => { if(confirm("Excluir histórico da campanha?")) await deleteDoc(doc(db, "promotions", promo.id)); }} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 transition-colors">🗑️</button>
+                </div>
+              </div>
+            );
+          })}
+          {sortedPromotions.length === 0 && (
+            <div className="text-center py-32 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
+               <p className="text-gray-300 font-serif italic text-xl">Nenhuma campanha criada ainda.</p>
+               <button onClick={() => setShowForm(true)} className="text-tea-600 font-bold text-xs uppercase tracking-widest mt-4 hover:underline">Criar minha primeira campanha</button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

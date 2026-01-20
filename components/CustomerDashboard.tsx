@@ -1,16 +1,15 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry, Promotion } from '../types';
-import { GoogleGenAI } from '@google/genai';
 import { db } from '../firebase.ts';
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, collection, addDoc } from "firebase/firestore";
 
 interface CustomerDashboardProps {
   customer: Customer;
   bookings: Booking[];
   services: Service[];
   settings: SalonSettings;
-  onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
+  onBook: (serviceId: string, dateTime: string, teamMemberId?: string, promoData?: any) => void;
   onUpdateProfile: (updated: Partial<Customer>) => void;
   onLogout: () => void;
   onCancelBooking: (id: string) => void;
@@ -25,7 +24,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   bookings, 
   services, 
   settings,
-  onBook,
   onUpdateProfile, 
   onLogout,
   onCancelBooking,
@@ -35,10 +33,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   promotions = []
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
-  const [careTips, setCareTips] = useState<string>('');
-  const [isLoadingTips, setIsLoadingTips] = useState(false);
   
-  // Estados de Agendamento
+  // Agendamento
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -46,42 +42,32 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedProId, setSelectedProId] = useState<string>('');
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
 
-  // Estados de Avaliação
-  const [reviewModal, setReviewModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
-  const [rating, setRating] = useState(0);
-  const [hoverRating, setHoverRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  // Lógica de Promoção Ativa para o Cliente Logado
+  const activePromoForService = useMemo(() => {
+    if (!selectedService) return null;
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Filtra promoções válidas, ativas e que incluem este cliente e este serviço
+    return promotions.find(p => 
+      p.isActive &&
+      today >= p.startDate &&
+      today <= p.endDate &&
+      p.targetCustomerIds.includes(customer.id) &&
+      (p.applicableServiceIds.length === 0 || p.applicableServiceIds.includes(selectedService.id))
+    );
+  }, [selectedService, promotions, customer.id]);
 
-  // Estados de Troca de Senha
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [pwdData, setPwdData] = useState({ current: '', new: '', confirm: '' });
-  const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
-
-  const myBookings = useMemo(() => 
-    bookings.filter(b => b.customerId === customer.id && b.status !== 'cancelled')
-      .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()),
-    [bookings, customer.id]
-  );
-
-  // Verificar se há agendamentos finalizados sem avaliação ao carregar
-  useEffect(() => {
-    const unreviewed = myBookings.find(b => b.status === 'completed' && !b.rating);
-    if (unreviewed) {
-      setReviewModal({ open: true, booking: unreviewed });
-    }
-  }, [myBookings]);
-
-  const nextBooking = useMemo(() => 
-    myBookings.find(b => b.status === 'scheduled' || b.status === 'pending'),
-    [myBookings]
-  );
-
-  const activePromotions = useMemo(() => 
-    promotions.filter(p => p.isActive).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [promotions]
-  );
+  const priceInfo = useMemo(() => {
+    if (!selectedService) return { original: 0, final: 0, discount: 0 };
+    const original = selectedService.price;
+    const discountPercent = activePromoForService?.discountPercentage || 0;
+    const discountVal = (original * discountPercent) / 100;
+    return {
+      original,
+      final: original - discountVal,
+      discount: discountVal
+    };
+  }, [selectedService, activePromoForService]);
 
   const allPossibleSlots = useMemo(() => {
     const slots: string[] = [];
@@ -127,710 +113,250 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     return availability;
   }, [selectedService, selectedDate, settings, bookings, allPossibleSlots]);
 
-  const handleBookSubmit = () => {
+  const handleBookSubmit = async () => {
     if (selectedService && selectedProId && selectedTime && agreedToCancellation) {
-      onBook(selectedService.id, `${selectedDate} ${selectedTime}`, selectedProId);
+      const pro = settings.teamMembers.find(m => m.id === selectedProId);
+      
+      const bookingData: Omit<Booking, 'id'> = {
+        customerId: customer.id,
+        customerName: customer.name,
+        serviceId: selectedService.id,
+        serviceName: selectedService.name,
+        dateTime: `${selectedDate} ${selectedTime}`,
+        duration: selectedService.duration,
+        status: 'pending',
+        depositStatus: 'pending',
+        teamMemberId: selectedProId,
+        teamMemberName: pro?.name,
+        agreedToCancellationPolicy: true,
+        policyAgreedAt: new Date().toISOString(),
+        // Dados da Promoção
+        promotionId: activePromoForService?.id || undefined,
+        promotionTitle: activePromoForService?.title || undefined,
+        originalPrice: priceInfo.original,
+        discountApplied: priceInfo.discount,
+        finalPrice: priceInfo.final
+      };
+
+      await addDoc(collection(db, "bookings"), bookingData);
       setBookingStep(3);
-    } else if (!agreedToCancellation) {
-      alert("Para agendar, você precisa estar ciente da nossa política de cancelamento.");
     }
   };
 
-  const handleCancelClick = (bookingId: string) => {
-    if (confirm("ATENÇÃO: O cancelamento deste agendamento implica na PERDA INTEGRAL do valor pago como sinal/reserva. Deseja prosseguir com o cancelamento?")) {
-      onCancelBooking(bookingId);
-      alert("Agendamento cancelado. Conforme nossa política, o sinal não será reembolsado.");
-    }
-  };
-
-  const submitReview = async () => {
-    if (!reviewModal.booking || rating === 0) return;
-    setIsSubmittingReview(true);
-    try {
-      const bookingRef = doc(db, "bookings", reviewModal.booking.id);
-      await updateDoc(bookingRef, {
-        rating,
-        reviewComment: comment,
-        reviewPhoto: reviewPhoto,
-        reviewedAt: new Date().toISOString()
-      });
-      setReviewModal({ open: false, booking: null });
-      setRating(0);
-      setComment('');
-      setReviewPhoto(null);
-      alert("Obrigada pelo carinho! Sua avaliação é muito importante para nós.");
-    } catch (e) {
-      console.error(e);
-      alert("Erro ao salvar avaliação. Tente novamente.");
-    } finally {
-      setIsSubmittingReview(false);
-    }
-  };
-
-  const handleReviewPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setReviewPhoto(reader.result as string);
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pwdData.current !== customer.password) {
-      alert("Senha atual incorreta.");
-      return;
-    }
-    if (pwdData.new !== pwdData.confirm) {
-      alert("As novas senhas não coincidem.");
-      return;
-    }
-    if (pwdData.new.length < 6) {
-      alert("A nova senha deve ter no mínimo 6 caracteres.");
-      return;
-    }
-
-    setIsUpdatingPwd(true);
-    try {
-      const customerRef = doc(db, "customers", customer.id);
-      await updateDoc(customerRef, { password: pwdData.new });
-      alert("Senha atualizada com sucesso!");
-      setShowPasswordForm(false);
-      setPwdData({ current: '', new: '', confirm: '' });
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao atualizar senha.");
-    } finally {
-      setIsUpdatingPwd(false);
-    }
-  };
-
-  const handleWaitlist = async (service: Service) => {
-    if (onAddToWaitlist) {
-      await onAddToWaitlist(service.id, new Date().toISOString().split('T')[0]);
-      alert("Excelente! Você entrou na lista de espera para " + service.name + ". Avisaremos você assim que abrirmos a agenda!");
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'home' && myBookings.length > 0 && !careTips) {
-      generateCareTips();
-    }
-  }, [activeTab]);
-
-  const generateCareTips = async () => {
-    setIsLoadingTips(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const lastService = myBookings[0]?.serviceName || "Estética";
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Dê 3 dicas curtas de cuidados para quem acabou de fazer ${lastService}. Seja elegante e carinhosa. Use emojis de beleza.`,
-      });
-      setCareTips(response.text || "");
-    } catch (e) {
-      setCareTips("Lembre-se de hidratar a pele e usar protetor solar diariamente.");
-    } finally {
-      setIsLoadingTips(false);
-    }
-  };
-
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => onUpdateProfile({ profilePhoto: reader.result as string });
-      reader.readAsDataURL(file);
-    }
-  };
+  const myBookings = bookings.filter(b => b.customerId === customer.id).sort((a,b) => b.dateTime.localeCompare(a.dateTime));
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in">
-      {/* Header Estilo Mobile com Ícone M Dominante */}
-      <header className="bg-tea-900 pt-12 pb-24 px-8 rounded-b-[4.5rem] shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-white/5 rounded-full -mr-32 -mt-32 blur-[80px]"></div>
-        <div className="max-w-md mx-auto flex flex-col items-center gap-6 relative z-10">
-          <div className="w-full flex justify-between items-start mb-2">
-            <button onClick={onLogout} className="p-4 bg-white/10 rounded-2xl text-white">🚪</button>
+      <header className="bg-tea-900 pt-12 pb-24 px-8 rounded-b-[4.5rem] shadow-2xl relative">
+        <div className="max-w-md mx-auto flex flex-col items-center gap-6 relative z-10 text-white">
+          <div className="w-full flex justify-between items-start">
+            <button onClick={onLogout} className="p-4 bg-white/10 rounded-2xl">🚪</button>
             <div className="text-right">
-              <p className="text-[9px] font-bold text-tea-300 uppercase tracking-[0.3em] mb-1">Bem-vinda de volta</p>
-              <h2 className="text-xl font-serif font-bold text-white italic">Studio Moriá</h2>
+              <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest">Studio Moriá</p>
+              <h2 className="text-xl font-serif font-bold italic">Dashboard</h2>
             </div>
           </div>
-          
           <div className="flex items-center gap-6 w-full mt-4">
-            <div className="w-24 h-24 rounded-[2.5rem] bg-white p-1.5 shadow-2xl relative group overflow-hidden flex-shrink-0">
-              <div className="w-full h-full rounded-[2rem] overflow-hidden bg-tea-800 flex items-center justify-center">
-                {customer.profilePhoto ? (
-                  <img src={customer.profilePhoto} className="w-full h-full object-cover" alt="Perfil" />
-                ) : (
-                  <span className="text-white font-serif font-bold text-4xl">M</span>
-                )}
-              </div>
-              <label className="absolute inset-0 cursor-pointer opacity-0 group-hover:opacity-100 bg-black/60 flex flex-col items-center justify-center transition-opacity">
-                <span className="text-[7px] text-white font-bold uppercase tracking-widest">Alterar Foto</span>
-                <input type="file" className="hidden" onChange={handlePhotoUpload} />
-              </label>
-            </div>
-            <div className="flex-1">
-              <p className="text-[10px] font-bold text-tea-200 uppercase tracking-widest mb-1">Olá, querida</p>
-              <h1 className="text-2xl font-serif font-bold text-white italic tracking-wide">
-                {customer.name.split(' ')[0]}
-              </h1>
-              <div className="h-px w-10 bg-tea-400/30 mt-2"></div>
-            </div>
+             <div className="w-20 h-20 bg-white/10 rounded-3xl border border-white/20 flex items-center justify-center text-3xl font-serif">
+                {customer.name.charAt(0)}
+             </div>
+             <div>
+                <p className="text-[10px] font-bold uppercase text-tea-200">Bem-vinda de volta,</p>
+                <h1 className="text-2xl font-serif font-bold italic">{customer.name.split(' ')[0]}</h1>
+             </div>
           </div>
         </div>
       </header>
 
       <main className="max-w-md mx-auto px-6 -mt-12 relative z-20">
-        
-        {/* Aba HOME */}
         {activeTab === 'home' && (
           <div className="space-y-6 animate-slide-up">
-            {nextBooking ? (
-              <div className="bg-white rounded-[3rem] shadow-2xl border border-tea-50 overflow-hidden">
-                <div className="bg-tea-50/50 px-8 py-4 border-b border-tea-100 flex justify-between items-center">
-                  <span className="text-[9px] font-bold text-tea-700 uppercase tracking-widest">Seu Próximo Cuidado</span>
-                  <div className="flex gap-1">
-                    <div className="w-1.5 h-1.5 bg-tea-500 rounded-full animate-pulse"></div>
-                    <div className="w-1.5 h-1.5 bg-tea-500 rounded-full animate-pulse delay-75"></div>
-                  </div>
-                </div>
-                <div className="p-10 text-center">
-                  <h3 className="text-3xl font-serif font-bold text-tea-950 mb-2">{nextBooking.serviceName}</h3>
-                  <p className="text-xs text-tea-500 font-bold uppercase tracking-widest mb-10 italic">Com nossa equipe</p>
-                  
-                  <div className="grid grid-cols-2 gap-4 mb-10">
-                    <div className="bg-gray-50/80 p-5 rounded-[2rem] border border-gray-100">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Data</p>
-                      <p className="font-bold text-tea-900 text-lg">{new Date(nextBooking.dateTime).toLocaleDateString()}</p>
-                    </div>
-                    <div className="bg-gray-50/80 p-5 rounded-[2rem] border border-gray-100">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Hora</p>
-                      <p className="font-bold text-tea-900 text-lg">{new Date(nextBooking.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
-                    </div>
-                  </div>
-                  
-                  <button onClick={() => setActiveTab('agenda')} className="w-full py-6 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-tea-900/10 active:scale-95 transition-all">Ver agendamento</button>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-white p-14 rounded-[4rem] shadow-xl border border-gray-50 text-center space-y-8">
-                <div className="w-24 h-24 bg-tea-50 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner border-2 border-white">✨</div>
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Cuidado Studio Moriá</h3>
-                  <p className="text-[11px] text-gray-400 font-light leading-relaxed max-w-[200px] mx-auto">Sua jornada de autocuidado merece um novo capítulo.</p>
-                </div>
-                <button onClick={() => setActiveTab('agendar')} className="bg-tea-800 text-white px-12 py-5 rounded-full font-bold text-[10px] uppercase tracking-widest shadow-2xl active:scale-95 transition-all">Escolher procedimento</button>
-              </div>
-            )}
-
-            {/* Seção de Novidades e Promoções */}
-            {activePromotions.length > 0 && customer.receivesNotifications && (
+            <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-gray-50 text-center space-y-6">
+               <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Sua beleza começa aqui</h3>
+               <button onClick={() => setActiveTab('agendar')} className="w-full py-5 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-xl">Novo Agendamento</button>
+            </div>
+            
+            {promotions.filter(p => p.targetCustomerIds.includes(customer.id) && p.isActive).length > 0 && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between px-2">
-                  <h4 className="text-[11px] font-bold text-tea-900 uppercase tracking-widest">Especial para você</h4>
-                  <span className="w-2 h-2 bg-tea-500 rounded-full animate-pulse"></span>
-                </div>
-                <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 -mx-2 px-2">
-                  {activePromotions.map(promo => (
-                    <div key={promo.id} className="min-w-[280px] max-w-[280px] bg-white p-8 rounded-[3rem] shadow-xl border border-tea-50 space-y-4 flex-shrink-0 relative overflow-hidden group">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-tea-50 rounded-full -mr-10 -mt-10 opacity-40"></div>
-                      <span className={`px-3 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest inline-block ${promo.type === 'promotion' ? 'bg-orange-50 text-orange-700' : 'bg-tea-50 text-tea-800'}`}>
-                        {promo.type === 'promotion' ? 'Oferta Exclusiva' : 'Dica do Studio'}
-                      </span>
-                      <h5 className="font-bold text-tea-950 text-base italic font-serif leading-tight">{promo.title}</h5>
-                      <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3 italic font-light">
-                        {promo.content}
-                      </p>
-                      <div className="pt-2">
-                         <button onClick={() => setActiveTab('agendar')} className="text-[8px] font-bold text-tea-900 uppercase tracking-widest flex items-center gap-2 group-hover:gap-3 transition-all">
-                            Ver mais <span className="text-xs">→</span>
-                         </button>
-                      </div>
+                <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest ml-4">Minhas Ofertas ✨</h4>
+                {promotions.filter(p => p.targetCustomerIds.includes(customer.id) && p.isActive).map(p => (
+                  <div key={p.id} className="bg-white p-6 rounded-[2.5rem] border-2 border-tea-50 shadow-sm flex items-center gap-5">
+                    <div className="w-14 h-14 bg-tea-900 text-white rounded-2xl flex items-center justify-center text-xl font-bold">{p.discountPercentage}%</div>
+                    <div>
+                      <h5 className="font-bold text-tea-950 text-sm">{p.title}</h5>
+                      <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest">Válido até {new Date(p.endDate).toLocaleDateString()}</p>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             )}
-
-            <div className="grid grid-cols-2 gap-4">
-              <a 
-                href={settings.googleMapsLink} 
-                target="_blank" 
-                rel="noreferrer"
-                className="bg-white p-8 rounded-[3rem] shadow-sm border border-tea-50 flex flex-col items-center gap-4 active:scale-95 transition-all"
-              >
-                 <div className="text-3xl">📍</div>
-                 <div className="text-center">
-                    <p className="text-[9px] font-bold text-tea-600 uppercase tracking-widest mb-1">Localização</p>
-                    <p className="text-[10px] text-tea-950 font-bold uppercase tracking-tight">Ver no Mapa</p>
-                 </div>
-              </a>
-              <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-tea-50 flex flex-col items-center gap-4">
-                 <div className="text-3xl">🎁</div>
-                 <div className="text-center">
-                    <p className="text-[9px] font-bold text-tea-600 uppercase tracking-widest mb-1">Pontos</p>
-                    <p className="text-[10px] text-tea-950 font-bold uppercase tracking-tight">Fidelidade</p>
-                 </div>
-              </div>
-            </div>
-
-            <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-tea-50 relative overflow-hidden group">
-               <div className="absolute top-0 left-0 w-1.5 h-full bg-tea-600"></div>
-               <div className="flex items-center gap-4 mb-6">
-                  <div className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-2xl shadow-sm">🌿</div>
-                  <h4 className="font-bold text-tea-900 text-sm tracking-widest uppercase">Dica Especial</h4>
-               </div>
-               {isLoadingTips ? (
-                 <div className="space-y-3 animate-pulse">
-                    <div className="h-3 bg-gray-100 rounded-full w-full"></div>
-                    <div className="h-3 bg-gray-100 rounded-full w-4/5"></div>
-                 </div>
-               ) : (
-                 <div className="text-xs text-gray-500 leading-relaxed italic font-light">
-                   {careTips || "Realize um serviço para receber orientações personalizadas pós-procedimento."}
-                 </div>
-               )}
-            </div>
           </div>
         )}
 
-        {/* Aba AGENDAR */}
         {activeTab === 'agendar' && (
           <div className="space-y-6 animate-slide-up">
             {bookingStep === 1 && (
-              <>
-                <div className="flex items-center justify-between px-2 mb-4">
-                   <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Catálogo de Serviços</h3>
-                   <span className="text-[10px] text-tea-400 font-bold uppercase tracking-widest">Moriá</span>
-                </div>
-                <div className="space-y-4">
-                  {services.filter(s => s.isVisible).map(service => (
-                    <div key={service.id} className="bg-white p-8 md:p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col gap-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 pr-4">
-                          <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
-                          {service.description && (
-                            <p className="text-gray-400 text-xs font-light mb-4 line-clamp-3 leading-relaxed">
-                              {service.description}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-5">
-                            <span className="text-[10px] font-bold text-tea-700 bg-tea-50 px-3 py-1.5 rounded-xl uppercase tracking-widest">
-                              <span className="opacity-50 text-[8px] mr-1">a partir de</span>
-                              R$ {service.price.toFixed(2)}
-                            </span>
-                            <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest flex items-center gap-1.5">
-                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                               {service.duration} min
-                            </span>
-                          </div>
-                        </div>
-                        <div className="w-12 h-12 bg-tea-900 text-white rounded-[1.5rem] flex items-center justify-center shadow-xl flex-shrink-0">✨</div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3 mt-4">
-                        <button 
-                          onClick={() => { setSelectedService(service); setBookingStep(2); }}
-                          className="py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[9px] shadow-lg active:scale-95 transition-all"
-                        >
-                          Agendar
-                        </button>
-                        <button 
-                          onClick={() => handleWaitlist(service)}
-                          className="py-4 bg-white text-tea-700 border border-tea-100 rounded-2xl font-bold uppercase tracking-widest text-[8px] active:scale-95 transition-all"
-                        >
-                          Lista de Espera
-                        </button>
-                      </div>
+              <div className="space-y-4">
+                {services.filter(s => s.isVisible).map(service => (
+                  <div key={service.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm hover:border-tea-200 transition-all group">
+                    <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
+                    <p className="text-gray-400 text-xs mb-6 line-clamp-2">{service.description}</p>
+                    <div className="flex justify-between items-center">
+                       <div className="text-tea-800 font-bold">R$ {service.price.toFixed(2)}</div>
+                       <button onClick={() => { setSelectedService(service); setBookingStep(2); }} className="px-8 py-3 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest group-hover:bg-black transition-all">Selecionar</button>
                     </div>
-                  ))}
-                </div>
-              </>
+                  </div>
+                ))}
+              </div>
             )}
 
             {bookingStep === 2 && selectedService && (
-              <div className="bg-white rounded-[3.5rem] p-10 shadow-2xl border border-tea-50 space-y-10 animate-fade-in mb-10">
-                <div className="flex items-center gap-5 border-b border-gray-50 pb-8">
-                   <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:text-tea-800">←</button>
-                   <div>
-                     <h3 className="font-bold text-tea-950 text-lg">{selectedService.name}</h3>
-                     <p className="text-[9px] text-gray-400 uppercase font-bold tracking-[0.3em]">Escolha data e horário</p>
-                   </div>
+              <div className="bg-white rounded-[3.5rem] p-10 shadow-2xl border border-tea-50 space-y-8">
+                <div className="flex items-center gap-4">
+                   <button onClick={() => setBookingStep(1)} className="p-2 bg-tea-50 rounded-xl text-tea-800">←</button>
+                   <h3 className="font-bold text-tea-950 text-lg">{selectedService.name}</h3>
                 </div>
 
-                <div className="space-y-8">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-2">Data</label>
-                    <input 
-                      type="date" 
-                      value={selectedDate}
-                      min={new Date().toISOString().split('T')[0]}
-                      max={settings.agendaOpenUntil || undefined}
-                      onChange={(e) => { setSelectedDate(e.target.value); setSelectedTime(''); }}
-                      className="w-full p-6 bg-gray-50/80 rounded-[2rem] border-none font-bold text-tea-900 outline-none focus:ring-4 focus:ring-tea-50 transition-all"
-                    />
+                {/* Bloco de Preço com Inteligência de Promoção */}
+                <div className="bg-tea-50 p-6 rounded-[2.5rem] border border-tea-100 space-y-4">
+                  <div className="flex justify-between items-center">
+                     <span className="text-[10px] font-bold text-tea-700 uppercase tracking-widest">Valor do Procedimento</span>
+                     <span className={`font-bold ${activePromoForService ? 'line-through text-gray-400' : 'text-tea-950'}`}>R$ {priceInfo.original.toFixed(2)}</span>
                   </div>
+                  {activePromoForService && (
+                    <div className="flex justify-between items-center pt-2 border-t border-tea-100">
+                       <div>
+                         <p className="text-[9px] font-bold text-tea-900 uppercase tracking-widest">Bônus: {activePromoForService.title}</p>
+                         <p className="text-[8px] text-tea-600 font-bold uppercase tracking-tighter">({activePromoForService.discountPercentage}% OFF aplicado)</p>
+                       </div>
+                       <span className="text-2xl font-serif font-bold text-tea-900">R$ {priceInfo.final.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
 
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-[0.2em] ml-2">Horário disponível</label>
-                    <div className="grid grid-cols-3 gap-3">
-                      {allPossibleSlots.map(slot => {
+                <div className="space-y-4">
+                   <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Data Preferida</label>
+                   <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-2xl font-bold border-none outline-none" />
+                   
+                   <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 block mt-4">Horário</label>
+                   <div className="grid grid-cols-3 gap-2">
+                     {allPossibleSlots.map(slot => {
                         const available = !!currentSlotsAvailability[slot];
                         return (
-                          <button 
-                            key={slot}
-                            disabled={!available}
-                            onClick={() => setSelectedTime(slot)}
-                            className={`p-5 rounded-2xl text-[10px] font-bold border-2 transition-all ${
-                              selectedTime === slot ? 'bg-tea-800 border-tea-800 text-white shadow-2xl shadow-tea-900/20' :
-                              available ? 'bg-white border-tea-50 text-tea-900 hover:border-tea-200 shadow-sm' :
-                              'bg-gray-50 border-transparent text-gray-200 opacity-50 cursor-not-allowed'
-                            }`}
-                          >
-                            {slot}
+                          <button key={slot} disabled={!available} onClick={() => setSelectedTime(slot)} className={`p-4 rounded-xl text-[10px] font-bold border-2 transition-all ${selectedTime === slot ? 'bg-tea-900 text-white border-tea-900 shadow-md' : available ? 'bg-white border-tea-100 text-tea-900' : 'bg-gray-50 text-gray-200 opacity-50 border-transparent cursor-not-allowed'}`}>
+                             {slot}
                           </button>
                         );
-                      })}
-                    </div>
-                  </div>
+                     })}
+                   </div>
+                   
+                   {selectedTime && (
+                     <div className="animate-fade-in space-y-4 pt-2">
+                       <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 block">Profissional Disponível</label>
+                       <select value={selectedProId} onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-2xl font-bold border-none outline-none">
+                          <option value="">Selecione...</option>
+                          {currentSlotsAvailability[selectedTime]?.map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
+                       </select>
+                     </div>
+                   )}
 
-                  {selectedTime && (
-                    <div className="space-y-4 animate-fade-in pt-4">
-                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking widest ml-2">Profissional</label>
-                       <div className="space-y-3">
-                          {currentSlotsAvailability[selectedTime]?.map(pro => (
-                            <button 
-                              key={pro.id}
-                              onClick={() => setSelectedProId(pro.id)}
-                              className={`w-full p-6 rounded-[2.5rem] border-2 flex items-center justify-between transition-all ${selectedProId === pro.id ? 'border-tea-600 bg-tea-50 shadow-md' : 'bg-white border-gray-50 hover:border-tea-100'}`}
-                            >
-                              <div className="flex items-center gap-5">
-                                <div className="w-12 h-12 bg-tea-900 text-white rounded-2xl flex items-center justify-center font-bold text-base shadow-lg">{pro.name.charAt(0)}</div>
-                                <span className="font-bold text-base text-tea-900">{pro.name}</span>
-                              </div>
-                              {selectedProId === pro.id && (
-                                <div className="w-8 h-8 bg-tea-600 text-white rounded-full flex items-center justify-center text-sm">✓</div>
-                              )}
-                            </button>
-                          ))}
-                       </div>
-                    </div>
-                  )}
-
-                  {selectedProId && (
-                    <div className="p-6 bg-red-50 rounded-[2rem] border border-red-100 space-y-4 animate-slide-up">
-                      <label className="flex items-start gap-4 cursor-pointer group">
-                        <div className="relative mt-1">
-                          <input 
-                            type="checkbox"
-                            checked={agreedToCancellation}
-                            onChange={(e) => setAgreedToCancellation(e.target.checked)}
-                            className="peer appearance-none w-5 h-5 rounded border-2 border-red-200 checked:bg-red-600 checked:border-red-600 transition-all cursor-pointer"
-                          />
-                          <svg className="absolute top-0.5 left-0.5 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
-                        </div>
-                        <div className="flex-1">
-                          <span className="text-[10px] font-bold text-red-900 uppercase tracking-widest leading-relaxed">
-                            Estou ciente que o cancelamento do agendamento implica na perda integral do valor da antecipação (sinal).
-                          </span>
-                        </div>
-                      </label>
-                    </div>
-                  )}
+                   <label className="flex items-start gap-4 p-5 bg-red-50 rounded-3xl cursor-pointer border border-red-100 mt-6">
+                      <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="mt-1 w-4 h-4 rounded text-red-600 border-red-200 focus:ring-red-500" />
+                      <span className="text-[9px] font-bold text-red-900 uppercase leading-relaxed">Ciente: O sinal de agendamento não será devolvido em caso de cancelamento.</span>
+                   </label>
                 </div>
 
-                <button 
-                  disabled={!selectedTime || !selectedProId || !agreedToCancellation}
-                  onClick={handleBookSubmit}
-                  className="w-full py-7 bg-tea-800 text-white rounded-[2.5rem] font-bold text-[11px] uppercase tracking-[0.2em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-300 disabled:shadow-none transition-all active:scale-95"
-                >
-                  Confirmar agora
-                </button>
+                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={handleBookSubmit} className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-widest shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all transform active:scale-95">Solicitar Agendamento</button>
               </div>
             )}
 
             {bookingStep === 3 && (
-              <div className="text-center py-20 space-y-10 animate-slide-up bg-white rounded-[4rem] border border-tea-50 shadow-2xl px-10">
-                <div className="w-32 h-32 bg-tea-50 rounded-full flex items-center justify-center text-7xl mx-auto shadow-inner border-4 border-white animate-bounce">⏳</div>
-                <div className="space-y-3">
-                  <h3 className="text-4xl font-serif font-bold text-tea-950 italic">Solicitado!</h3>
-                  <p className="text-gray-400 text-[11px] leading-relaxed max-w-[220px] mx-auto font-light">Para validar sua vaga, envie agora o comprovante do sinal pelo WhatsApp.</p>
+              <div className="text-center py-20 bg-white rounded-[4rem] shadow-2xl px-10 space-y-8 animate-slide-up border border-tea-50">
+                <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto">✓</div>
+                <div className="space-y-2">
+                  <h3 className="text-3xl font-serif font-bold text-tea-950">Solicitado!</h3>
+                  <p className="text-xs text-gray-400 font-light leading-relaxed">Seu agendamento para <strong>{selectedService?.name}</strong> está sendo processado. Envie o comprovante de sinal para confirmarmos sua vaga.</p>
                 </div>
-                <button 
-                  onClick={() => {
-                    const msg = `Olá Studio Moriá! Solicitei ${selectedService?.name} para ${selectedDate} às ${selectedTime}. Segue comprovante do sinal.`;
-                    window.open(`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
-                    setActiveTab('agenda');
-                    setBookingStep(1);
-                  }}
-                  className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold text-[10px] uppercase tracking-[0.2em] shadow-3xl flex items-center justify-center gap-4 hover:bg-black transition-colors"
-                >
-                   📱 Validar no WhatsApp
-                </button>
+                
+                <div className="bg-gray-50 p-6 rounded-3xl space-y-1">
+                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Valor do Sinal (30%)</p>
+                   <p className="text-2xl font-bold text-tea-950">R$ {(priceInfo.final * 0.3).toFixed(2)}</p>
+                </div>
+
+                <button onClick={() => {
+                  const msg = `Olá Moriá! Solicitei ${selectedService?.name} para o dia ${new Date(selectedDate).toLocaleDateString()} às ${selectedTime}. Segue o comprovante de sinal.`;
+                  window.open(`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                  setActiveTab('agenda'); setBookingStep(1);
+                }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black">📱 Enviar Comprovante</button>
               </div>
             )}
           </div>
         )}
 
-        {/* Aba AGENDAMENTOS */}
         {activeTab === 'agenda' && (
-          <div className="space-y-8 animate-slide-up">
-             <div className="flex items-center justify-between px-4">
-                <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Minha Agenda</h3>
-             </div>
-             
-             {/* Lista de Espera */}
-             {waitlist && waitlist.length > 0 && (
-               <div className="space-y-4">
-                  <h4 className="text-[10px] font-bold text-orange-600 uppercase tracking-widest ml-4">Na Lista de Espera</h4>
-                  {waitlist.map(entry => (
-                    <div key={entry.id} className="bg-orange-50/30 p-8 rounded-[3rem] border border-orange-100 flex flex-col gap-4 shadow-sm relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-3 text-orange-400 opacity-20 text-4xl">✨</div>
-                      <div className="flex items-center gap-6">
-                        <div className="w-16 h-16 rounded-[1.5rem] bg-orange-50 text-orange-600 flex items-center justify-center text-3xl shadow-inner">📝</div>
-                        <div>
-                          <h4 className="font-bold text-tea-950 text-lg mb-1">{entry.serviceName}</h4>
-                          <div className="flex items-center gap-2">
-                             <span className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-[8px] font-bold uppercase tracking-widest">Aguardando Vaga</span>
-                             <span className="text-[9px] text-orange-400 font-medium italic">Criado em {new Date(entry.createdAt).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={() => { if(confirm("Deseja sair da lista de espera para este serviço?")) onRemoveWaitlist?.(entry.id); }}
-                        className="w-full py-4 text-orange-700 bg-white border border-orange-100 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-orange-50 transition-colors"
-                      >
-                        Não quero mais aguardar
-                      </button>
-                    </div>
-                  ))}
-               </div>
-             )}
+          <div className="space-y-6 animate-slide-up">
+            {myBookings.map(b => (
+              <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-4 group hover:border-tea-100 transition-all">
+                <div className="flex justify-between items-start">
+                   <div>
+                     <h4 className="font-bold text-tea-950 text-lg leading-tight">{b.serviceName}</h4>
+                     <p className="text-[11px] text-gray-400 font-medium">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} às {new Date(b.dateTime.replace(' ', 'T')).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p>
+                   </div>
+                   <span className={`px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${
+                     b.status === 'completed' ? 'bg-green-50 text-green-700' : 
+                     b.status === 'cancelled' ? 'bg-red-50 text-red-700' :
+                     'bg-tea-50 text-tea-700'
+                   }`}>
+                     {b.status === 'pending' ? 'Pendente' : b.status === 'scheduled' ? 'Confirmado' : b.status === 'completed' ? 'Concluído' : 'Cancelado'}
+                   </span>
+                </div>
 
-             <div className="space-y-4">
-                {myBookings.length > 0 && <h4 className="text-[10px] font-bold text-tea-400 uppercase tracking-widest ml-4">Meus Procedimentos</h4>}
-                {myBookings.length > 0 ? myBookings.map(b => (
-                  <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex flex-col gap-6 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center text-3xl ${b.status === 'completed' ? 'bg-green-50 text-green-600' : 'bg-tea-50 text-tea-700 shadow-inner'}`}>
-                           {b.status === 'completed' ? '✨' : '📅'}
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-tea-950 text-lg mb-1">{b.serviceName}</h4>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                             {new Date(b.dateTime).toLocaleDateString()} às {new Date(b.dateTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                          </p>
-                        </div>
-                      </div>
-                      <div className={`px-4 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest border ${
-                        b.status === 'completed' ? 'bg-green-50 text-green-700 border-green-100' :
-                        b.status === 'pending' ? 'bg-orange-50 text-orange-700 border-orange-100 animate-pulse' :
-                        'bg-blue-50 text-blue-700 border-blue-100'
-                      }`}>
-                        {b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : 'Confirmado'}
-                      </div>
+                {b.promotionId && (
+                  <div className="bg-tea-50 p-4 rounded-2xl border border-tea-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-[8px] font-bold text-tea-700 uppercase tracking-widest">Bônus Aplicado</p>
+                      <p className="text-[10px] font-bold text-tea-900 uppercase">{b.promotionTitle}</p>
                     </div>
-                    
-                    {b.status !== 'completed' && b.status !== 'cancelled' && (
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleCancelClick(b.id)}
-                          className="flex-1 py-4 text-red-500 bg-red-50 rounded-2xl font-bold uppercase text-[9px] tracking-widest border border-red-100 hover:bg-red-100 transition-colors"
-                        >
-                          Cancelar Agendamento
-                        </button>
-                      </div>
-                    )}
+                    <span className="text-tea-800 font-bold text-xs">- R$ {b.discountApplied?.toFixed(2)}</span>
                   </div>
-                )) : (waitlist.length === 0 && (
-                  <div className="py-24 text-center opacity-30 italic font-serif text-xl px-10 leading-relaxed">Você ainda não possui atendimentos ou registros de espera.</div>
-                ))}
-             </div>
+                )}
+
+                <div className="pt-4 flex justify-between items-center border-t border-gray-50">
+                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Valor do Atendimento</span>
+                   <span className="font-bold text-tea-950 text-lg">R$ {b.finalPrice?.toFixed(2)}</span>
+                </div>
+              </div>
+            ))}
+            {myBookings.length === 0 && (
+              <div className="text-center py-32 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-100">
+                <p className="text-gray-300 italic font-serif text-lg">Nenhum atendimento agendado.</p>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Aba PERFIL */}
         {activeTab === 'perfil' && (
-          <div className="space-y-8 animate-slide-up">
-             <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-100 space-y-8">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-3">Nome</label>
-                     <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.name}</div>
-                  </div>
-                  <div className="space-y-2">
-                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-3">WhatsApp</label>
-                     <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.whatsapp}</div>
-                  </div>
-                  
-                  {/* Sessão de Troca de Senha */}
-                  <div className="pt-4">
-                    <button 
-                      onClick={() => setShowPasswordForm(!showPasswordForm)}
-                      className="w-full flex justify-between items-center p-6 bg-white border border-gray-100 rounded-3xl text-sm font-bold text-tea-900 shadow-sm"
-                    >
-                      <span>🔐 Segurança e Senha</span>
-                      <span>{showPasswordForm ? '▲' : '▼'}</span>
-                    </button>
-                    
-                    {showPasswordForm && (
-                      <form onSubmit={handlePasswordUpdate} className="mt-4 p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6 animate-slide-up">
-                        <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Senha Atual</label>
-                          <input 
-                            type="password" 
-                            required
-                            className="w-full p-4 rounded-2xl bg-white border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100"
-                            value={pwdData.current}
-                            onChange={(e) => setPwdData({...pwdData, current: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Nova Senha</label>
-                          <input 
-                            type="password" 
-                            required
-                            className="w-full p-4 rounded-2xl bg-white border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100"
-                            value={pwdData.new}
-                            onChange={(e) => setPwdData({...pwdData, new: e.target.value})}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Confirmar Nova Senha</label>
-                          <input 
-                            type="password" 
-                            required
-                            className="w-full p-4 rounded-2xl bg-white border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100"
-                            value={pwdData.confirm}
-                            onChange={(e) => setPwdData({...pwdData, confirm: e.target.value})}
-                          />
-                        </div>
-                        <button 
-                          type="submit"
-                          disabled={isUpdatingPwd}
-                          className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[9px] shadow-lg disabled:bg-gray-200"
-                        >
-                          {isUpdatingPwd ? "Atualizando..." : "Atualizar Senha"}
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </div>
-                
-                <button onClick={onLogout} className="w-full py-6 bg-red-50 text-red-500 rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.2em] border border-red-100 active:scale-95 transition-all">Sair da Conta</button>
+          <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-100 text-center space-y-8 animate-slide-up">
+             <div className="w-24 h-24 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-4xl mx-auto shadow-xl font-serif">{customer.name.charAt(0)}</div>
+             <div>
+                <h3 className="text-2xl font-serif font-bold text-tea-950 italic">{customer.name}</h3>
+                <p className="text-xs text-gray-400">CPF: {customer.cpf}</p>
              </div>
-             
-             <div className="text-center py-12 opacity-30 flex flex-col items-center gap-6">
-                <div className="w-16 h-16 bg-tea-900 rounded-2xl flex items-center justify-center shadow-lg">
-                   <span className="text-white font-serif font-bold text-2xl">M</span>
-                </div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.8em]">Studio Moriá</p>
-             </div>
+             <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-100 transition-all">Sair da Conta</button>
           </div>
         )}
       </main>
 
-      {/* Pop-up de Avaliação */}
-      {reviewModal.open && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-3xl animate-slide-up text-center relative overflow-hidden my-auto">
-            <div className="absolute top-0 left-0 w-full h-2 bg-tea-600"></div>
-            <div className="w-16 h-16 bg-tea-50 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">💖</div>
-            
-            <h3 className="text-xl font-serif text-tea-950 font-bold italic mb-1">Como foi seu atendimento?</h3>
-            <p className="text-gray-500 text-[10px] font-light mb-6 leading-relaxed px-4">
-              Olá {customer.name.split(' ')[0]}, conte-nos o que achou do seu procedimento de <strong>{reviewModal.booking?.serviceName}</strong>.
-            </p>
-
-            <div className="flex justify-center gap-2 mb-6">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <button
-                  key={star}
-                  onMouseEnter={() => setHoverRating(star)}
-                  onMouseLeave={() => setHoverRating(0)}
-                  onClick={() => setRating(star)}
-                  className="text-3xl transition-transform hover:scale-125 focus:outline-none"
-                >
-                  <span className={(hoverRating || rating) >= star ? "text-yellow-400" : "text-gray-200"}>
-                    ★
-                  </span>
-                </button>
-              ))}
-            </div>
-
-            <textarea
-              className="w-full p-4 bg-gray-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-tea-100 text-[11px] mb-4 h-20 resize-none placeholder-gray-300 shadow-inner"
-              placeholder="O que você mais gostou? (opcional)"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-
-            {/* Upload de Foto Opcional na Avaliação com Aviso */}
-            <div className="mb-6 space-y-3">
-              <div className="p-3 bg-tea-50 rounded-xl border border-tea-100">
-                <p className="text-[8px] font-bold text-tea-800 uppercase tracking-widest text-center">
-                   📸 A foto é opcional, mas adoraríamos ver seu resultado!
-                </p>
-              </div>
-              {reviewPhoto ? (
-                <div className="relative w-full h-32 rounded-2xl overflow-hidden group border-2 border-tea-100">
-                  <img src={reviewPhoto} className="w-full h-full object-cover" alt="Review preview" />
-                  <button 
-                    onClick={() => setReviewPhoto(null)}
-                    className="absolute top-2 right-2 bg-red-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center shadow-lg"
-                  >
-                    ×
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center w-full h-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 cursor-pointer hover:bg-tea-50 transition-colors">
-                  <div className="flex flex-col items-center justify-center pt-2">
-                    <span className="text-2xl mb-1">📷</span>
-                    <p className="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Tirar ou escolher foto</p>
-                  </div>
-                  <input type="file" className="hidden" accept="image/*" capture="camera" onChange={handleReviewPhotoUpload} />
-                </label>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <button
-                disabled={rating === 0 || isSubmittingReview}
-                onClick={submitReview}
-                className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all disabled:bg-gray-100 disabled:text-gray-300"
-              >
-                {isSubmittingReview ? "Enviando..." : "Enviar Avaliação"}
-              </button>
-              <button
-                onClick={() => { setReviewModal({ open: false, booking: null }); setReviewPhoto(null); }}
-                className="text-[9px] text-gray-400 font-bold uppercase tracking-widest hover:text-gray-600 transition-all"
-              >
-                Avaliar depois
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-3xl border-t border-gray-100 px-10 py-8 flex justify-between items-center z-[100] shadow-[0_-20px_60px_rgba(0,0,0,0.08)] rounded-t-[4rem]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 px-10 py-8 flex justify-between rounded-t-[4rem] z-50 shadow-2xl">
          {[
            { id: 'home', icon: '🏠', label: 'Início' },
            { id: 'agendar', icon: '✨', label: 'Agendar' },
            { id: 'agenda', icon: '🗓️', label: 'Agenda' },
            { id: 'perfil', icon: '👤', label: 'Eu' }
          ].map(tab => (
-           <button 
-             key={tab.id}
-             onClick={() => { setActiveTab(tab.id as any); if(tab.id === 'agendar') setBookingStep(1); }}
-             className={`flex flex-col items-center gap-2 transition-all duration-300 ${activeTab === tab.id ? 'text-tea-900 scale-110 -translate-y-2' : 'text-gray-300'}`}
-           >
-              <span className={`text-2xl ${activeTab === tab.id ? 'drop-shadow-[0_0_12px_rgba(41,91,53,0.4)]' : ''}`}>{tab.icon}</span>
-              <span className={`text-[9px] font-bold uppercase tracking-[0.2em] ${activeTab === tab.id ? 'opacity-100' : 'opacity-0 h-0 overflow-hidden'}`}>{tab.label}</span>
-              {activeTab === tab.id && <div className="w-1.5 h-1.5 bg-tea-900 rounded-full mt-1"></div>}
+           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center gap-1 transition-all ${activeTab === tab.id ? 'text-tea-900 scale-110' : 'text-gray-300 hover:text-gray-500'}`}>
+              <span className="text-2xl">{tab.icon}</span>
+              <span className={`text-[8px] font-bold uppercase tracking-[0.2em] transition-opacity duration-300 ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`}>{tab.label}</span>
            </button>
          ))}
       </nav>

@@ -45,8 +45,8 @@ export interface TeamMember {
   id: string;
   name: string;
   assignedServiceIds: string[];
-  businessHours?: BusinessHours; // Horário individual opcional
-  offDays?: number[]; // Dias de folga (0-6, onde 0 é domingo)
+  businessHours?: BusinessHours;
+  offDays?: number[]; 
 }
 
 export interface Booking {
@@ -62,26 +62,18 @@ export interface Booking {
   status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
   depositStatus: 'pending' | 'paid'; 
   rescheduledCount?: number; 
-  // Campos de Conformidade Jurídica
   agreedToCancellationPolicy: boolean;
   policyAgreedAt: string;
-  ipAddress?: string; // Opcional, para rastro digital
   cancelledAt?: string;
-  // Feedback do Cliente
-  rating?: number;
-  reviewComment?: string;
-  reviewPhoto?: string;
+  // Inteligência de Promoção
+  promotionId?: string;
+  promotionTitle?: string;
+  originalPrice?: number;
+  discountApplied?: number;
+  finalPrice?: number;
 }
 
-export interface Promotion {
-  id: string;
-  title: string;
-  content: string;
-  type: 'promotion' | 'tip';
-  createdAt: string;
-  isActive: boolean;
-}
-
+// Added missing WaitlistEntry interface
 export interface WaitlistEntry {
   id: string;
   customerId: string;
@@ -90,9 +82,23 @@ export interface WaitlistEntry {
   serviceId: string;
   serviceName: string;
   preferredDate: string;
+  status: 'active' | 'cancelled' | 'notified';
   createdAt: string;
-  status?: 'active' | 'cancelled';
-  cancelledAt?: string;
+  cancelledAt?: string | null;
+}
+
+export interface Promotion {
+  id: string;
+  title: string;
+  content: string;
+  type: 'promotion' | 'tip';
+  discountPercentage: number; // 0 a 100
+  applicableServiceIds: string[]; // Vazio = Todos
+  targetCustomerIds: string[]; // IDs das clientes autorizadas
+  startDate: string;
+  endDate: string;
+  createdAt: string;
+  isActive: boolean;
 }
 
 export interface Transaction {
@@ -102,13 +108,12 @@ export interface Transaction {
   amount: number;
   date: string;
   dueDate?: string;
-  paidAt?: string; 
   status: 'pending' | 'paid';
   customerId?: string;
   customerName?: string;
-  serviceId?: string;
-  serviceName?: string;
-  observation?: string;
+  promotionId?: string;
+  // Added missing paidAt property for admin reports
+  paidAt?: string;
 }
 
 export interface SalonSettings {
@@ -118,18 +123,19 @@ export interface SalonSettings {
   address?: string;
   googleMapsLink?: string;
   lastUpdated: number;
-  visitCount?: number; // Contador de BI
+  visitCount?: number;
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
   agendaOpenUntil?: string;
+  // Added missing properties for UI content management
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
+  usefulLinks?: { label: string; url: string }[];
+  comments?: { author: string; text: string }[];
+  photos?: string[];
   socialLinks: {
     instagram: string;
     facebook: string;
     whatsapp: string;
   };
-  usefulLinks: Array<{ label: string; url: string }>;
-  comments: Array<{ author: string; text: string }>;
-  photos: string[];
 }
