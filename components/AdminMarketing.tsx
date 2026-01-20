@@ -11,24 +11,42 @@ interface AdminMarketingProps {
   services: Service[];
 }
 
-const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions, services }) => {
+const AdminMarketing: React.FC<AdminMarketingProps> = ({ 
+  customers = [], 
+  promotions = [], 
+  services = [] 
+}) => {
+  const [activeTab, setActiveTab] = useState<'promotions' | 'tips'>('promotions');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   
-  // Estado do Formulário de Campanha
+  // Estado do Formulário
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [discount, setDiscount] = useState(0);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<string>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
 
-  const eligibleCustomers = useMemo(() => 
-    customers.filter(c => c.receivesNotifications && 
-      (c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.whatsapp.includes(searchTerm))
-    ), [customers, searchTerm]);
+  // Filtro de clientes com proteção contra campos nulos
+  const eligibleCustomers = useMemo(() => {
+    return (customers || []).filter(c => {
+      if (!c) return false;
+      const name = (c.name || '').toLowerCase();
+      const whatsapp = (c.whatsapp || '');
+      const search = (searchTerm || '').toLowerCase();
+      return c.receivesNotifications && (name.includes(search) || whatsapp.includes(search));
+    });
+  }, [customers, searchTerm]);
+
+  // Filtro e Ordenação por Tipo
+  const displayItems = useMemo(() => {
+    return [...(promotions || [])]
+      .filter(p => activeTab === 'promotions' ? p.type === 'promotion' : p.type === 'tip')
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  }, [promotions, activeTab]);
 
   const toggleService = (id: string) => {
     setSelectedServices(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -42,30 +60,41 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions, 
     }
   };
 
-  const generateSmartContent = async () => {
-    if (!title && !discount) return alert("Defina um título ou desconto para a IA ter contexto.");
+  const generateAIContent = async () => {
+    if (!title) return alert("Defina um título para a IA entender o tema.");
     setIsGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Crie uma mensagem persuasiva de WhatsApp para Studio Moriá. Promoção: ${title}. Desconto: ${discount}%. Validade: até ${new Date(endDate).toLocaleDateString()}. Seja elegante e use emojis. Retorne apenas o texto da mensagem.`;
+      let prompt = "";
+      
+      if (activeTab === 'promotions') {
+        prompt = `Crie uma mensagem persuasiva de WhatsApp para Studio Moriá. Título: ${title}. Desconto: ${discount}%. Validade: até ${new Date(endDate).toLocaleDateString()}. Foco: Vendas e Agendamento. Seja elegante e use emojis. Retorne apenas o texto da mensagem.`;
+      } else {
+        prompt = `Crie uma dica de cuidados estéticos profissional para as clientes do Studio Moriá. Tema: ${title}. Seja educativa, carinhosa e elegante. Use emojis e organize em passos se necessário. Retorne apenas o texto da mensagem de WhatsApp.`;
+      }
+
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
       setContent(response.text || '');
-    } catch (e) { alert("Erro na IA."); } finally { setIsGenerating(false); }
+    } catch (e) { 
+      alert("Erro na IA."); 
+    } finally { 
+      setIsGenerating(false); 
+    }
   };
 
   const saveCampaign = async () => {
-    if (!title || !content) return alert("Título e conteúdo são obrigatórios.");
+    if (!title.trim() || !content.trim()) return alert("Título e conteúdo são obrigatórios.");
     if (selectedCustomerIds.size === 0) return alert("Selecione pelo menos uma cliente.");
 
     try {
       const promoData: Omit<Promotion, 'id'> = {
         title,
         content,
-        type: 'promotion',
-        discountPercentage: discount,
+        type: activeTab === 'promotions' ? 'promotion' : 'tip',
+        discountPercentage: activeTab === 'promotions' ? discount : 0,
         applicableServiceIds: selectedServices,
         targetCustomerIds: Array.from(selectedCustomerIds),
         startDate,
@@ -76,20 +105,23 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions, 
 
       await addDoc(collection(db, "promotions"), promoData);
 
-      // Disparo WhatsApp Simulado (Abre o link para o usuário disparar)
-      const message = `🌟 *STUDIO MORIÁ* 🌟\n\n${content}`;
+      const header = activeTab === 'promotions' ? '🌟 *PROMOÇÃO STUDIO MORIÁ* 🌟' : '🌿 *DICA DA MORIÁ* 🌿';
+      const message = `${header}\n\n${content}`;
       const targetCustomers = customers.filter(c => selectedCustomerIds.has(c.id));
       
-      if (confirm(`Campanha salva! Deseja abrir os links de WhatsApp para as ${targetCustomers.length} clientes agora?`)) {
+      if (confirm(`Registro salvo! Deseja abrir os links de WhatsApp para as ${targetCustomers.length} clientes agora?`)) {
         targetCustomers.forEach((c, i) => {
-          const url = `https://wa.me/${c.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-          setTimeout(() => window.open(url, '_blank'), i * 1500);
+          const cleanPhone = (c.whatsapp || '').replace(/\D/g, '');
+          if (cleanPhone) {
+            const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+            setTimeout(() => window.open(url, '_blank'), i * 1500);
+          }
         });
       }
 
       setShowForm(false);
       resetForm();
-    } catch (e) { alert("Erro ao salvar campanha."); }
+    } catch (e) { alert("Erro ao salvar."); }
   };
 
   const resetForm = () => {
@@ -97,80 +129,77 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions, 
     setSelectedServices([]); setSelectedCustomerIds(new Set());
   };
 
-  const sortedPromotions = [...promotions].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
-
   return (
     <div className="space-y-8 animate-fade-in pb-20">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
         <div>
-          <h2 className="text-3xl font-serif text-tea-950 font-bold italic">Campanhas & Promoções</h2>
-          <p className="text-gray-400 text-sm">Gerencie seus descontos e envie para as clientes.</p>
+          <h2 className="text-3xl font-serif text-tea-950 font-bold italic">Marketing Moriá</h2>
+          <div className="flex gap-4 mt-2">
+            <button 
+              onClick={() => { setActiveTab('promotions'); setShowForm(false); }}
+              className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-all pb-1 border-b-2 ${activeTab === 'promotions' ? 'border-tea-900 text-tea-950' : 'border-transparent text-gray-400'}`}
+            >
+              Promoções 🏷️
+            </button>
+            <button 
+              onClick={() => { setActiveTab('tips'); setShowForm(false); }}
+              className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-all pb-1 border-b-2 ${activeTab === 'tips' ? 'border-tea-900 text-tea-950' : 'border-transparent text-gray-400'}`}
+            >
+              Dicas de Estética ✨
+            </button>
+          </div>
         </div>
         <button 
           onClick={() => setShowForm(!showForm)} 
-          className="bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
+          className="w-full sm:w-auto bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
         >
-          {showForm ? '← Voltar à Lista' : '+ Nova Campanha'}
+          {showForm ? '← Voltar' : activeTab === 'promotions' ? '+ Nova Promoção' : '+ Nova Dica'}
         </button>
       </div>
 
       {showForm ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-slide-up">
-          <div className="lg:col-span-8 bg-white p-8 md:p-10 rounded-[3rem] shadow-sm border border-gray-100 space-y-8">
+          <div className="lg:col-span-8 bg-white p-6 md:p-10 rounded-[3rem] shadow-sm border border-gray-100 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Título da Campanha</label>
-                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Ex: Especial Mês das Noivas" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">{activeTab === 'promotions' ? 'Título da Promoção' : 'Título da Dica'}</label>
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder={activeTab === 'promotions' ? "Ex: Mês das Noivas" : "Ex: Cuidados Pós-Micro"} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all" />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Desconto (%)</label>
-                <input type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))} min="0" max="100" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
-              </div>
+              {activeTab === 'promotions' && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Desconto (%)</label>
+                  <input type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Início da Validade</label>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data Início</label>
                 <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Fim da Validade</label>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data Término</label>
                 <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Serviços Inclusos (Se vazio, aplica a todos)</label>
-              <div className="flex flex-wrap gap-2">
-                {services.map(s => (
-                  <button 
-                    key={s.id} 
-                    onClick={() => toggleService(s.id)} 
-                    className={`px-4 py-2 rounded-xl text-[10px] font-bold border-2 transition-all ${selectedServices.includes(s.id) ? 'bg-tea-800 border-tea-800 text-white' : 'bg-white border-gray-100 text-gray-400'}`}
-                  >
-                    {s.name}
-                  </button>
-                ))}
               </div>
             </div>
 
             <div className="space-y-4 pt-4 border-t border-gray-50">
                <div className="flex justify-between items-center">
-                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Texto para WhatsApp</label>
-                 <button onClick={generateSmartContent} disabled={isGenerating} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">{isGenerating ? 'IA está escrevendo...' : 'Gerar com IA ✨'}</button>
+                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Conteúdo para WhatsApp</label>
+                 <button onClick={generateAIContent} disabled={isGenerating} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">
+                    {isGenerating ? 'A IA está escrevendo...' : 'Gerar com IA ✨'}
+                 </button>
                </div>
-               <textarea rows={6} value={content} onChange={e => setContent(e.target.value)} placeholder="O que a cliente vai receber no WhatsApp..." className="w-full p-6 bg-gray-50 rounded-3xl outline-none focus:ring-2 focus:ring-tea-100 transition-all resize-none text-sm leading-relaxed" />
+               <textarea rows={8} value={content} onChange={e => setContent(e.target.value)} placeholder="O que a cliente receberá..." className="w-full p-6 bg-gray-50 rounded-3xl outline-none focus:ring-2 focus:ring-tea-100 transition-all text-sm leading-relaxed" />
             </div>
           </div>
 
           <div className="lg:col-span-4 flex flex-col gap-6">
-             <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 flex-grow flex flex-col">
-                <div className="flex justify-between items-center mb-6">
-                   <h3 className="text-xs font-bold text-tea-950 uppercase tracking-widest">Selecionar Clientes</h3>
-                   <button onClick={toggleSelectAll} className="text-[9px] font-bold text-tea-600 uppercase">{selectedCustomerIds.size === eligibleCustomers.length ? 'Ninguém' : 'Todos'}</button>
-                </div>
-                <input type="text" placeholder="Buscar cliente..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-xs mb-4 outline-none" />
-                <div className="flex-grow overflow-y-auto max-h-[400px] space-y-2 custom-scroll pr-2">
+             <div className="bg-white p-6 md:p-8 rounded-[3rem] shadow-sm border border-gray-100 flex-grow flex flex-col min-h-[400px]">
+                <h3 className="text-xs font-bold text-tea-950 uppercase tracking-widest mb-6">Público Alvo</h3>
+                <input type="text" placeholder="Filtrar clientes..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full p-3 bg-gray-50 rounded-xl text-xs mb-4 outline-none" />
+                <div className="flex-grow overflow-y-auto max-h-[300px] space-y-2 custom-scroll pr-2">
                    {eligibleCustomers.map(c => (
                      <label key={c.id} className={`flex items-center gap-3 p-4 rounded-2xl border-2 transition-all cursor-pointer ${selectedCustomerIds.has(c.id) ? 'bg-tea-50 border-tea-200' : 'bg-white border-transparent hover:bg-gray-50'}`}>
                         <input type="checkbox" checked={selectedCustomerIds.has(c.id)} onChange={() => {
@@ -186,51 +215,48 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({ customers, promotions, 
                    ))}
                 </div>
                 <div className="pt-6 mt-4 border-t border-gray-50">
-                   <button onClick={saveCampaign} disabled={selectedCustomerIds.size === 0} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl disabled:bg-gray-100">Criar Campanha e Disparar</button>
+                   <button onClick={saveCampaign} disabled={selectedCustomerIds.size === 0} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl transition-all hover:bg-black">
+                    Finalizar & Enviar ({selectedCustomerIds.size})
+                   </button>
                 </div>
              </div>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {sortedPromotions.map(promo => {
+          {displayItems.map(promo => {
             const today = new Date().toISOString().split('T')[0];
-            const isPast = promo.endDate < today;
-            const isFuture = promo.startDate > today;
-            const isOngoing = !isPast && !isFuture;
+            const isPast = (promo.endDate || '') < today;
 
             return (
-              <div key={promo.id} className={`bg-white p-8 rounded-[2.5rem] border-2 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 transition-all ${isPast ? 'opacity-50 border-gray-100' : 'border-tea-50 hover:border-tea-100'}`}>
+              <div key={promo.id} className={`bg-white p-6 md:p-8 rounded-[2.5rem] border-2 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 transition-all ${isPast ? 'opacity-50' : 'border-tea-50 hover:border-tea-100'}`}>
                 <div className="flex items-center gap-6">
-                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl ${isPast ? 'bg-gray-100' : 'bg-tea-900 text-white'}`}>
-                    {promo.discountPercentage}%
+                  <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-bold ${activeTab === 'promotions' ? 'bg-tea-900 text-white shadow-lg' : 'bg-tea-100 text-tea-900 border border-tea-200'}`}>
+                    {activeTab === 'promotions' ? `${promo.discountPercentage}%` : '✨'}
                   </div>
                   <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <h3 className="font-bold text-tea-950 text-xl font-serif">{promo.title}</h3>
-                      {isOngoing && <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-[8px] font-bold uppercase">Ativa</span>}
-                      {isPast && <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[8px] font-bold uppercase">Encerrada</span>}
-                    </div>
+                    <h3 className="font-bold text-tea-950 text-lg md:text-xl font-serif">{promo.title}</h3>
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                      Validade: {new Date(promo.startDate).toLocaleDateString()} até {new Date(promo.endDate).toLocaleDateString()}
+                      {activeTab === 'tips' ? 'Cuidados Publicados em:' : 'Validade:'} {new Date(promo.startDate).toLocaleDateString()}
                     </p>
-                    <p className="text-xs text-tea-600 font-medium mt-1">
-                      {promo.applicableServiceIds.length === 0 ? 'Válido para todos os serviços' : `${promo.applicableServiceIds.length} serviços selecionados`}
-                      {' • '} {promo.targetCustomerIds.length} clientes participando
+                    <p className="text-xs text-tea-600 font-medium mt-1 line-clamp-1 italic">
+                      "{promo.content.substring(0, 60)}..."
                     </p>
                   </div>
                 </div>
                 <div className="flex gap-2">
-                   <button onClick={async () => { if(confirm("Deseja encerrar esta campanha?")) await updateDoc(doc(db, "promotions", promo.id), { isActive: false, endDate: today }); }} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 transition-colors">⏹️</button>
-                   <button onClick={async () => { if(confirm("Excluir histórico da campanha?")) await deleteDoc(doc(db, "promotions", promo.id)); }} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 transition-colors">🗑️</button>
+                   <button onClick={async () => { if(confirm("Remover permanentemente?")) await deleteDoc(doc(db, "promotions", promo.id)); }} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 transition-colors">🗑️</button>
                 </div>
               </div>
             );
           })}
-          {sortedPromotions.length === 0 && (
+          
+          {displayItems.length === 0 && (
             <div className="text-center py-32 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
-               <p className="text-gray-300 font-serif italic text-xl">Nenhuma campanha criada ainda.</p>
-               <button onClick={() => setShowForm(true)} className="text-tea-600 font-bold text-xs uppercase tracking-widest mt-4 hover:underline">Criar minha primeira campanha</button>
+               <p className="text-gray-400 font-serif italic text-xl">Nenhuma {activeTab === 'promotions' ? 'promoção' : 'dica'} cadastrada.</p>
+               <button onClick={() => setShowForm(true)} className="text-tea-600 font-bold text-xs uppercase tracking-widest mt-4 hover:underline">
+                  {activeTab === 'promotions' ? 'Criar minha primeira oferta' : 'Escrever minha primeira dica'}
+               </button>
             </div>
           )}
         </div>
