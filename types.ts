@@ -73,7 +73,6 @@ export interface Booking {
   finalPrice?: number;
 }
 
-// Added missing WaitlistEntry interface
 export interface WaitlistEntry {
   id: string;
   customerId: string;
@@ -94,6 +93,7 @@ export interface Promotion {
   type: 'promotion' | 'tip';
   discountPercentage: number; // 0 a 100
   applicableServiceIds: string[]; // Vazio = Todos
+  linkedServiceId?: string; // Procedimento específico vinculado
   targetCustomerIds: string[]; // IDs das clientes autorizadas
   startDate: string;
   endDate: string;
@@ -112,7 +112,6 @@ export interface Transaction {
   customerId?: string;
   customerName?: string;
   promotionId?: string;
-  // Added missing paidAt property for admin reports
   paidAt?: string;
 }
 
@@ -127,7 +126,6 @@ export interface SalonSettings {
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
   agendaOpenUntil?: string;
-  // Added missing properties for UI content management
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
   usefulLinks?: { label: string; url: string }[];

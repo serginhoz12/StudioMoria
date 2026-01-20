@@ -24,6 +24,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [linkedServiceId, setLinkedServiceId] = useState<string>('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
@@ -65,12 +66,13 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setIsGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const linkedService = services.find(s => s.id === linkedServiceId);
       let prompt = "";
       
       if (activeTab === 'promotions') {
-        prompt = `Crie uma mensagem persuasiva de WhatsApp para Studio Moriá. Título: ${title}. Desconto: ${discount}%. Validade: até ${new Date(endDate).toLocaleDateString()}. Foco: Vendas e Agendamento. Seja elegante e use emojis. Retorne apenas o texto da mensagem.`;
+        prompt = `Crie uma mensagem persuasiva de WhatsApp para Studio Moriá. Título: ${title}. ${linkedService ? `Procedimento Vinculado: ${linkedService.name}.` : ''} Desconto: ${discount}%. Validade: até ${new Date(endDate).toLocaleDateString()}. Foco: Vendas e Agendamento. Seja elegante e use emojis. Retorne apenas o texto da mensagem.`;
       } else {
-        prompt = `Crie uma dica de cuidados estéticos profissional para as clientes do Studio Moriá. Tema: ${title}. Seja educativa, carinhosa e elegante. Use emojis e organize em passos se necessário. Retorne apenas o texto da mensagem de WhatsApp.`;
+        prompt = `Crie uma dica de cuidados estéticos profissional para as clientes do Studio Moriá. Tema: ${title}. ${linkedService ? `Relacionado ao serviço: ${linkedService.name}.` : ''} Seja educativa, carinhosa e elegante. Use emojis. Retorne apenas o texto da mensagem de WhatsApp.`;
       }
 
       const response = await ai.models.generateContent({
@@ -95,6 +97,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
         content,
         type: activeTab === 'promotions' ? 'promotion' : 'tip',
         discountPercentage: activeTab === 'promotions' ? discount : 0,
+        linkedServiceId: linkedServiceId || undefined,
         applicableServiceIds: selectedServices,
         targetCustomerIds: Array.from(selectedCustomerIds),
         startDate,
@@ -125,7 +128,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   };
 
   const resetForm = () => {
-    setTitle(''); setContent(''); setDiscount(0); 
+    setTitle(''); setContent(''); setDiscount(0); setLinkedServiceId('');
     setSelectedServices([]); setSelectedCustomerIds(new Set());
   };
 
@@ -168,19 +171,32 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
               {activeTab === 'promotions' && (
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Desconto (%)</label>
-                  <input type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+                  <input type="number" value={discount} onChange={e => setDiscount(Number(e.target.value))} min="0" max="100" className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
                 </div>
               )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data Início</label>
-                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Vincular Procedimento (Opcional)</label>
+                <select 
+                  value={linkedServiceId} 
+                  onChange={e => setLinkedServiceId(e.target.value)}
+                  className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 transition-all appearance-none"
+                >
+                  <option value="">Nenhum procedimento específico</option>
+                  {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data Término</label>
-                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Início</label>
+                  <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Término</label>
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" />
+                </div>
               </div>
             </div>
 
@@ -227,21 +243,26 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
           {displayItems.map(promo => {
             const today = new Date().toISOString().split('T')[0];
             const isPast = (promo.endDate || '') < today;
+            const linkedService = services.find(s => s.id === promo.linkedServiceId);
 
             return (
               <div key={promo.id} className={`bg-white p-6 md:p-8 rounded-[2.5rem] border-2 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 transition-all ${isPast ? 'opacity-50' : 'border-tea-50 hover:border-tea-100'}`}>
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-6 w-full md:w-auto">
                   <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-bold ${activeTab === 'promotions' ? 'bg-tea-900 text-white shadow-lg' : 'bg-tea-100 text-tea-900 border border-tea-200'}`}>
-                    {activeTab === 'promotions' ? `${promo.discountPercentage}%` : '✨'}
+                    {activeTab === 'promotions' ? (promo.discountPercentage === 100 ? 'FREE' : `${promo.discountPercentage}%`) : '✨'}
                   </div>
                   <div>
                     <h3 className="font-bold text-tea-950 text-lg md:text-xl font-serif">{promo.title}</h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                      {activeTab === 'tips' ? 'Cuidados Publicados em:' : 'Validade:'} {new Date(promo.startDate).toLocaleDateString()}
-                    </p>
-                    <p className="text-xs text-tea-600 font-medium mt-1 line-clamp-1 italic">
-                      "{promo.content.substring(0, 60)}..."
-                    </p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                        {activeTab === 'tips' ? 'Publicada em:' : 'Expira em:'} {new Date(promo.endDate).toLocaleDateString()}
+                      </p>
+                      {linkedService && (
+                        <span className="text-[9px] bg-tea-50 text-tea-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest border border-tea-100">
+                           Link: {linkedService.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -253,9 +274,9 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
           
           {displayItems.length === 0 && (
             <div className="text-center py-32 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
-               <p className="text-gray-400 font-serif italic text-xl">Nenhuma {activeTab === 'promotions' ? 'promoção' : 'dica'} cadastrada.</p>
+               <p className="text-gray-400 font-serif italic text-xl">Nenhum registro encontrado.</p>
                <button onClick={() => setShowForm(true)} className="text-tea-600 font-bold text-xs uppercase tracking-widest mt-4 hover:underline">
-                  {activeTab === 'promotions' ? 'Criar minha primeira oferta' : 'Escrever minha primeira dica'}
+                  Começar agora
                </button>
             </div>
           )}
