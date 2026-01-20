@@ -12,7 +12,7 @@ interface CustomerHomeProps {
   currentUser: Customer | null;
 }
 
-const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthClick, onAddToWaitlist, currentUser }) => {
+const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthClick, currentUser }) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
   const [selectedServiceDetail, setSelectedServiceDetail] = useState<Service | null>(null);
   
@@ -54,9 +54,10 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
           
           <div className="w-full max-w-md mx-auto space-y-6 px-6">
             <div className="flex flex-col gap-3">
+              {/* Botão solicitado: Ver Serviços */}
               <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
               <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
-              <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Minha Conta</button>
+              <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Acessar Minha Conta</button>
             </div>
             
             <div className="pt-6 animate-slide-up">
@@ -90,12 +91,13 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                 <p className="text-gray-400 text-sm leading-relaxed line-clamp-3 italic">
                   {service.description}
                 </p>
-                <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-4 block">Clique para ver detalhes</span>
+                <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-4 block">Toque para ver detalhes</span>
               </div>
               <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
                 <div>
                    <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">Investimento</p>
-                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">Sob consulta</span>
+                   {/* Preço oculto conforme solicitado */}
+                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">Valor para Clientes</span>
                 </div>
                 <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
               </div>
@@ -203,7 +205,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                  </div>
                  <div className="p-6 bg-tea-900 rounded-3xl text-white">
                     <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor</p>
-                    <p className="text-sm font-bold uppercase tracking-widest">Sob Consulta</p>
+                    <p className="text-sm font-bold uppercase tracking-widest">Para Clientes</p>
                  </div>
               </div>
             </div>
@@ -213,7 +215,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                  onClick={() => { onAuthClick(); setSelectedServiceDetail(null); }} 
                  className="w-full py-6 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
                >
-                 Acessar Agenda & Ver Preço
+                 Ver Valor & Agendar
                </button>
                <button 
                  onClick={() => setSelectedServiceDetail(null)} 

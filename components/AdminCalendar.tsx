@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Booking, Service, TeamMember, SalonSettings, Customer } from '../types';
 import { db } from '../firebase.ts';
-import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
 interface AdminCalendarProps {
   bookings: Booking[];
@@ -18,21 +18,21 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
   
   const [bookingModal, setBookingModal] = useState<{ open: boolean; hour: string }>({ open: false, hour: '' });
-  const [actionModal, setActionModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  const [actionModal, setActionModal] = useState<{ open: boolean; booking: Booking | null; hour: string }>({ open: false, booking: null, hour: '' });
   
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [customerSearch, setCustomerSearch] = useState('');
 
   const selectedPro = teamMembers.find(m => m.id === selectedProId);
-  const startHour = settings?.businessHours?.start || "08:00";
-  const endHour = settings?.businessHours?.end || "19:00";
+  const startHourNum = parseInt((settings?.businessHours?.start || "08:00").split(':')[0]);
+  const endHourNum = parseInt((settings?.businessHours?.end || "19:00").split(':')[0]);
 
   const dateObj = new Date(selectedDate + 'T12:00:00');
   const dayOfWeek = dateObj.getDay();
 
-  const timeSlots = Array.from({ length: 29 }, (_, i) => {
-    const totalMinutes = 7 * 60 + i * 30; 
+  const timeSlots = Array.from({ length: (endHourNum - startHourNum) * 2 + 1 }, (_, i) => {
+    const totalMinutes = startHourNum * 60 + i * 30; 
     const h = Math.floor(totalMinutes / 60);
     const m = totalMinutes % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
@@ -67,8 +67,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     const status = getSlotStatus(hour);
     if (status.type === 'free') {
       setBookingModal({ open: true, hour });
-    } else if (status.booking) {
-      setActionModal({ open: true, booking: status.booking });
+    } else {
+      setActionModal({ open: true, booking: status.booking || null, hour });
     }
   };
 
@@ -91,11 +91,67 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         depositStatus: 'paid',
         finalPrice: service.price,
         originalPrice: service.price,
-        discountApplied: 0
+        discountApplied: 0,
+        agreedToCancellationPolicy: true,
+        policyAgreedAt: new Date().toISOString()
       });
       setBookingModal({ open: false, hour: '' });
       setCustomerSearch(''); setSelectedCustomerId(''); setSelectedServiceId('');
     }
+  };
+
+  const handleBlockSlot = async (hour: string) => {
+    await addDoc(collection(db, "bookings"), {
+      customerId: 'blocked',
+      customerName: 'HORÁRIO BLOQUEADO',
+      serviceId: 'blocked',
+      serviceName: 'Bloqueio Manual',
+      teamMemberId: selectedProId,
+      teamMemberName: selectedPro?.name,
+      dateTime: `${selectedDate} ${hour}`,
+      duration: 30,
+      status: 'blocked',
+      depositStatus: 'paid',
+      agreedToCancellationPolicy: false,
+      policyAgreedAt: new Date().toISOString()
+    });
+    setBookingModal({ open: false, hour: '' });
+  };
+
+  const handleBlockFullDay = async () => {
+    if (!confirm(`Deseja bloquear todos os horários livres de ${selectedPro?.name} para o dia ${new Date(selectedDate).toLocaleDateString()}?`)) return;
+    
+    for (const slot of timeSlots) {
+      const status = getSlotStatus(slot);
+      if (status.type === 'free') {
+        await addDoc(collection(db, "bookings"), {
+          customerId: 'blocked',
+          customerName: 'BLOQUEIO TOTAL',
+          serviceId: 'blocked',
+          serviceName: 'Bloqueio de Agenda',
+          teamMemberId: selectedProId,
+          teamMemberName: selectedPro?.name,
+          dateTime: `${selectedDate} ${slot}`,
+          duration: 30,
+          status: 'blocked',
+          depositStatus: 'paid',
+          agreedToCancellationPolicy: false,
+          policyAgreedAt: new Date().toISOString()
+        });
+      }
+    }
+    alert("Agenda bloqueada com sucesso.");
+  };
+
+  const handleUnblockOrCancel = async (bookingId: string) => {
+    if (!confirm("Tem certeza que deseja remover este registro da agenda?")) return;
+    await updateDoc(doc(db, "bookings", bookingId), { status: 'cancelled', cancelledAt: new Date().toISOString() });
+    setActionModal({ open: false, booking: null, hour: '' });
+  };
+
+  const handleComplete = async (bookingId: string) => {
+    await updateDoc(doc(db, "bookings", bookingId), { status: 'completed' });
+    setActionModal({ open: false, booking: null, hour: '' });
   };
 
   return (
@@ -111,6 +167,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </div>
+        <button 
+          onClick={handleBlockFullDay}
+          className="bg-red-50 text-red-600 px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-100 transition-all border border-red-100"
+        >
+          Bloquear Dia Todo 🚫
+        </button>
       </div>
 
       <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden">
@@ -120,7 +182,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             const isOff = selectedPro?.offDays?.includes(dayOfWeek);
             
             let color = 'bg-white border-tea-50 text-tea-950';
-            let label = 'Livre';
+            let label = 'Disponível';
             
             if (status.type === 'scheduled') {
               color = 'bg-tea-800 text-white border-tea-800';
@@ -130,45 +192,49 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               label = 'Concluído';
             } else if (status.type === 'blocked' || isOff) {
               color = 'bg-gray-100 text-gray-400 border-transparent';
-              label = 'Fechado';
+              label = 'Bloqueado';
             }
 
             return (
               <button key={hour} onClick={() => handleSlotClick(hour)} className={`relative p-5 rounded-3xl border-2 transition-all flex flex-col items-center justify-center min-h-[90px] ${color} hover:shadow-lg transform active:scale-95`}>
                  <span className="text-lg font-serif font-bold italic leading-none">{hour}</span>
                  <span className="text-[8px] font-bold uppercase tracking-widest mt-1 opacity-80">{label}</span>
-                 {status.isStart && status.booking?.promotionId && (
-                   <span className="absolute top-2 right-2 text-[7px] bg-orange-400 text-white px-1.5 py-0.5 rounded-full font-bold shadow-sm">PROMO</span>
-                 )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {actionModal.open && actionModal.booking && (
+      {actionModal.open && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-3xl animate-slide-up space-y-8">
             <div className="text-center">
-              <h3 className="text-2xl font-serif text-tea-950 font-bold italic mb-2">{actionModal.booking.customerName}</h3>
-              <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{actionModal.booking.serviceName}</p>
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic mb-2">
+                {actionModal.booking ? actionModal.booking.customerName : 'Horário Bloqueado'}
+              </h3>
+              <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">
+                {actionModal.booking ? actionModal.booking.serviceName : actionModal.hour}
+              </p>
             </div>
 
-            {actionModal.booking.promotionId && (
-              <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 text-center">
-                <p className="text-[10px] text-orange-400 font-bold uppercase tracking-widest mb-1">Atenção Equipe</p>
-                <p className="text-xs font-bold text-orange-950">Cliente Participando da Campanha:</p>
-                <p className="text-sm font-serif italic font-bold text-orange-900">"{actionModal.booking.promotionTitle}"</p>
-                <div className="flex justify-between mt-4 text-[10px] font-bold uppercase border-t border-orange-100 pt-3">
-                   <span>Valor Líquido:</span>
-                   <span className="text-lg text-orange-950">R$ {actionModal.booking.finalPrice?.toFixed(2)}</span>
-                </div>
-              </div>
-            )}
-
             <div className="flex flex-col gap-3">
-              <button onClick={() => onUpdateStatus?.(actionModal.booking!.id, 'completed')} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest">Finalizar Atendimento</button>
-              <button onClick={() => setActionModal({open:false, booking:null})} className="w-full py-4 text-gray-400 font-bold uppercase text-[10px]">Fechar</button>
+              {actionModal.booking && actionModal.booking.status !== 'blocked' && (
+                <button onClick={() => handleComplete(actionModal.booking!.id)} className="w-full py-5 bg-green-600 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg">Marcar como Concluído</button>
+              )}
+              <button 
+                onClick={() => {
+                  if (actionModal.booking) {
+                    handleUnblockOrCancel(actionModal.booking.id);
+                  } else {
+                    // Se clicou num slot ocupado mas não tem objeto de booking (raro)
+                    setActionModal({open:false, booking:null, hour:''});
+                  }
+                }} 
+                className="w-full py-5 bg-red-50 text-red-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-red-100"
+              >
+                {actionModal.booking?.status === 'blocked' ? 'Desbloquear Horário' : 'Cancelar Procedimento'}
+              </button>
+              <button onClick={() => setActionModal({open:false, booking:null, hour:''})} className="w-full py-4 text-gray-400 font-bold uppercase text-[10px]">Fechar</button>
             </div>
           </div>
         </div>
@@ -177,23 +243,30 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       {bookingModal.open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
           <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-3xl animate-slide-up space-y-6">
-            <h3 className="text-2xl font-serif text-tea-950 font-bold italic text-center">Agendamento Manual</h3>
-            <div className="space-y-4">
-               <input type="text" placeholder="Buscar cliente..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl outline-none" />
-               <div className="max-h-32 overflow-y-auto space-y-1">
-                 {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).slice(0, 3).map(c => (
-                   <button key={c.id} onClick={() => { setSelectedCustomerId(c.id); setCustomerSearch(c.name); }} className={`w-full p-3 text-left text-xs rounded-xl ${selectedCustomerId === c.id ? 'bg-tea-50 font-bold' : 'bg-white'}`}>{c.name}</button>
-                 ))}
+            <h3 className="text-2xl font-serif text-tea-950 font-bold italic text-center">Opções para {bookingModal.hour}</h3>
+            
+            <div className="space-y-6">
+               <div className="p-6 bg-tea-50/50 rounded-3xl border border-tea-100 space-y-4">
+                  <p className="text-[10px] font-bold text-tea-900 uppercase tracking-widest text-center">Agendar para Cliente</p>
+                  <input type="text" placeholder="Buscar cliente..." value={customerSearch} onChange={e => setCustomerSearch(e.target.value)} className="w-full p-4 bg-white rounded-2xl outline-none shadow-sm border border-gray-100" />
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).slice(0, 4).map(c => (
+                      <button key={c.id} onClick={() => { setSelectedCustomerId(c.id); setCustomerSearch(c.name); }} className={`w-full p-3 text-left text-xs rounded-xl transition-all ${selectedCustomerId === c.id ? 'bg-tea-800 text-white font-bold' : 'bg-white hover:bg-tea-50'}`}>{c.name}</button>
+                    ))}
+                  </div>
+                  <select value={selectedServiceId} onChange={e => setSelectedServiceId(e.target.value)} className="w-full p-4 bg-white rounded-2xl outline-none font-bold border border-gray-100 shadow-sm">
+                    <option value="">Selecione o serviço...</option>
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name} - R$ {s.price}</option>)}
+                  </select>
+                  <button onClick={confirmCustomerBooking} disabled={!selectedCustomerId || !selectedServiceId} className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl disabled:opacity-50">Confirmar Agendamento</button>
                </div>
-               <select value={selectedServiceId} onChange={e => setSelectedServiceId(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold">
-                 <option value="">Selecione o serviço...</option>
-                 {services.map(s => <option key={s.id} value={s.id}>{s.name} - R$ {s.price}</option>)}
-               </select>
+
+               <div className="pt-4 border-t border-gray-100">
+                  <button onClick={() => handleBlockSlot(bookingModal.hour)} className="w-full py-4 bg-red-50 text-red-700 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-red-100 hover:bg-red-100">Bloquear Horário Individual 🔒</button>
+               </div>
             </div>
-            <div className="flex gap-4">
-              <button onClick={() => setBookingModal({open:false, hour:''})} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px]">Cancelar</button>
-              <button onClick={confirmCustomerBooking} className="flex-[2] py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px]">Confirmar</button>
-            </div>
+
+            <button onClick={() => setBookingModal({open:false, hour:''})} className="w-full py-2 text-gray-400 font-bold uppercase text-[9px] tracking-widest">Cancelar</button>
           </div>
         </div>
       )}
