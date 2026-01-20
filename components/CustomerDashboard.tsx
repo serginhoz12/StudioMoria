@@ -36,6 +36,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
   const [viewingPromo, setViewingPromo] = useState<Promotion | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
+  
+  // Modal de Detalhes (Descrição Completa)
+  const [viewingServiceDetail, setViewingServiceDetail] = useState<Service | null>(null);
 
   // Filtros de Marketing
   const allMyPromotions = useMemo(() => 
@@ -49,7 +52,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const activeTips = useMemo(() => 
     allMyPromotions.filter(p => p.type === 'tip' && p.isActive), [allMyPromotions]);
 
-  // Procedimentos em Destaque (Exclusivo Dashboard com Valores)
+  // Procedimentos em Destaque
   const highlightedServices = useMemo(() => 
     services.filter(s => s.isVisible && s.isHighlighted), [services]);
 
@@ -145,13 +148,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             <button onClick={onLogout} className="p-4 bg-white/10 rounded-2xl hover:bg-white/20 transition-all">🚪</button>
             <div className="text-right">
               <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest">Studio Moriá</p>
-              <h2 className="text-xl font-serif font-bold italic">Painel da Cliente</h2>
+              <h2 className="text-xl font-serif font-bold italic">Painel Exclusivo</h2>
             </div>
           </div>
           <div className="flex items-center gap-6 w-full mt-4">
              <div className="w-20 h-20 bg-white/10 rounded-3xl border border-white/20 flex items-center justify-center text-3xl font-serif shadow-inner">{customer.name.charAt(0)}</div>
              <div>
-                <p className="text-[10px] font-bold uppercase text-tea-200">Bem-vinda,</p>
+                <p className="text-[10px] font-bold uppercase text-tea-200">Bem-vinda de volta,</p>
                 <h1 className="text-2xl font-serif font-bold italic">{customer.name.split(' ')[0]}</h1>
              </div>
           </div>
@@ -162,16 +165,16 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {activeTab === 'home' && (
           <div className="space-y-10 animate-slide-up">
             <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-gray-50 text-center space-y-6">
-               <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Sua beleza começa aqui</h3>
+               <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Cuidamos de Você</h3>
                <button onClick={() => setActiveTab('agendar')} className="w-full py-5 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-xl hover:bg-tea-950 transition-all">Novo Agendamento</button>
             </div>
 
-            {/* 1. Promoções e Dicas */}
+            {/* Promoções e Dicas */}
             {(activePromotions.length > 0 || activeTips.length > 0) && (
               <section className="space-y-4">
                 <div className="flex justify-between items-center px-4">
-                  <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Para Você ✨</h4>
-                  <button onClick={() => setActiveTab('ofertas')} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">Ver Tudo</button>
+                  <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Especial Para Você ✨</h4>
+                  <button onClick={() => setActiveTab('ofertas')} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">Ver Todas</button>
                 </div>
                 <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
                   {activePromotions.map(p => (
@@ -190,14 +193,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       <div className="absolute top-0 right-0 p-3 opacity-10 text-4xl text-tea-900">✨</div>
                       <span className="bg-tea-900/10 text-tea-900 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest inline-block">Dica Moriá</span>
                       <h5 className="font-bold text-sm leading-tight line-clamp-2">{p.title}</h5>
-                      <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest">Leia Agora</p>
+                      <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest">Clique para ler</p>
                     </div>
                   ))}
                 </div>
               </section>
             )}
 
-            {/* 2. Procedimentos em Destaque (Com Preços Liberados) */}
+            {/* Procedimentos em Destaque (Carrossel no Dashboard) */}
             {highlightedServices.length > 0 && (
               <section className="space-y-4">
                 <div className="px-4">
@@ -207,27 +210,69 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   {highlightedServices.map(service => (
                     <div 
                       key={service.id} 
-                      className="min-w-[280px] bg-white p-8 rounded-[3.5rem] border border-orange-50 shadow-md flex flex-col justify-between relative group hover:border-orange-100 transition-all"
+                      onClick={() => setViewingServiceDetail(service)}
+                      className="min-w-[280px] bg-white p-8 rounded-[3.5rem] border border-orange-50 shadow-md flex flex-col justify-between relative group hover:border-orange-100 transition-all cursor-pointer"
                     >
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <span className="bg-orange-400 text-white px-3 py-1 rounded-full text-[7px] font-bold uppercase tracking-widest">Em Alta</span>
+                          <span className="bg-orange-400 text-white px-3 py-1 rounded-full text-[7px] font-bold uppercase tracking-widest">Mais Pedido</span>
                           <span className="text-tea-900 font-serif font-bold text-sm italic">R$ {service.price.toFixed(2)}</span>
                         </div>
                         <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">{service.name}</h3>
-                        <p className="text-gray-400 text-[10px] leading-relaxed line-clamp-2">{service.description}</p>
+                        <p className="text-gray-400 text-[10px] leading-relaxed line-clamp-2 italic">{service.description}</p>
                       </div>
-                      <button 
-                        onClick={() => { setSelectedService(service); setActiveTab('agendar'); setBookingStep(2); }} 
-                        className="mt-6 w-full py-4 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-lg active:scale-95 transition-all"
-                      >
-                        Agendar Agora
-                      </button>
+                      <span className="mt-6 text-[8px] font-bold text-tea-600 uppercase tracking-widest text-center">Ver detalhes & Agendar</span>
                     </div>
                   ))}
                 </div>
               </section>
             )}
+          </div>
+        )}
+
+        {/* Modal de Detalhes do Serviço (Dashboard) */}
+        {viewingServiceDetail && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
+            <div className="bg-white w-full max-w-sm rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
+              <div className="p-10 overflow-y-auto custom-scroll space-y-8">
+                <div className="flex justify-between items-start">
+                   <h3 className="text-2xl font-serif text-tea-950 font-bold italic leading-tight">{viewingServiceDetail.name}</h3>
+                   <button onClick={() => setViewingServiceDetail(null)} className="p-3 bg-gray-50 rounded-xl text-gray-300">✕</button>
+                </div>
+                
+                <div className="space-y-4">
+                   <p className="text-gray-500 text-base font-light leading-relaxed whitespace-pre-line italic">
+                     {viewingServiceDetail.description}
+                   </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="p-4 bg-gray-50 rounded-3xl text-center">
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Duração</p>
+                      <p className="text-lg font-serif text-tea-900 font-bold">{viewingServiceDetail.duration} min</p>
+                   </div>
+                   <div className="p-4 bg-tea-900 rounded-3xl text-white text-center">
+                      <p className="text-[8px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor</p>
+                      <p className="text-lg font-serif font-bold">R$ {viewingServiceDetail.price.toFixed(2)}</p>
+                   </div>
+                </div>
+              </div>
+              
+              <div className="p-8 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
+                 <button 
+                   onClick={() => { setSelectedService(viewingServiceDetail); setActiveTab('agendar'); setBookingStep(2); setViewingServiceDetail(null); }} 
+                   className="w-full py-5 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl"
+                 >
+                   Continuar Agendamento
+                 </button>
+                 <button 
+                   onClick={() => setViewingServiceDetail(null)} 
+                   className="w-full py-3 text-gray-400 font-bold uppercase text-[9px] tracking-widest"
+                 >
+                   Voltar
+                 </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -252,7 +297,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     }} 
                     className="w-full py-4 bg-tea-50 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-100"
                   >
-                    Agendar com Desconto
+                    Aproveitar Desconto
                   </button>
                 )}
               </div>
@@ -282,17 +327,21 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 
                 <div className="space-y-4">
                   {filteredServices.map(service => (
-                    <div key={service.id} className={`bg-white p-8 rounded-[3rem] border transition-all flex flex-col h-full relative overflow-hidden ${service.isHighlighted ? 'border-orange-100 bg-orange-50/5' : 'border-gray-50 shadow-sm'}`}>
+                    <div 
+                      key={service.id} 
+                      onClick={() => setViewingServiceDetail(service)}
+                      className={`bg-white p-8 rounded-[3rem] border transition-all flex flex-col h-full relative overflow-hidden cursor-pointer ${service.isHighlighted ? 'border-orange-100 bg-orange-50/5' : 'border-gray-50 shadow-sm'}`}
+                    >
                       {service.isHighlighted && (
                         <div className="absolute top-0 right-0 bg-orange-400 text-white px-4 py-1.5 rounded-bl-3xl text-[8px] font-bold uppercase tracking-widest">
                           Destaque ⭐
                         </div>
                       )}
                       <h4 className="font-bold text-tea-950 text-xl font-serif italic mb-2">{service.name}</h4>
-                      <p className="text-gray-400 text-xs mb-8 line-clamp-2">{service.description}</p>
+                      <p className="text-gray-400 text-xs mb-8 line-clamp-2 italic">{service.description}</p>
                       <div className="flex justify-between items-center mt-auto">
                          <div className="text-tea-800 font-bold font-serif italic">R$ {service.price.toFixed(2)}</div>
-                         <button onClick={() => { setSelectedService(service); setBookingStep(2); }} className="px-10 py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Agendar</button>
+                         <button onClick={(e) => { e.stopPropagation(); setSelectedService(service); setBookingStep(2); }} className="px-10 py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Agendar</button>
                       </div>
                     </div>
                   ))}
@@ -306,12 +355,12 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                    <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-tea-900 font-bold hover:bg-tea-100 transition-all">←</button>
                    <div>
                       <h3 className="font-bold text-tea-950 text-lg font-serif italic">{selectedService.name}</h3>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Confirmando Reserva</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Escolha Horário & Profissional</p>
                    </div>
                 </div>
                 <div className="space-y-8">
                    <div className="space-y-3">
-                      <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Data do Atendimento</label>
+                      <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Data da Sessão</label>
                       <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" />
                    </div>
                    <div className="space-y-3">
@@ -327,7 +376,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                    </div>
                    {selectedTime && (
                      <div className="space-y-3 animate-fade-in">
-                        <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Profissional Responsável</label>
+                        <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Profissional</label>
                         <select value={selectedProId} onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none appearance-none shadow-inner">
                            <option value="">Selecione...</option>
                            {currentSlotsAvailability[selectedTime]?.map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
@@ -336,10 +385,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                    )}
                    <label className="flex items-start gap-4 p-6 bg-red-50/50 rounded-[2.5rem] cursor-pointer border border-red-100">
                       <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="mt-1 w-5 h-5 accent-red-600" />
-                      <span className="text-[10px] font-bold text-red-900 uppercase leading-relaxed tracking-wider">Aceito a taxa de reserva de 30% (não reembolsável).</span>
+                      <span className="text-[10px] font-bold text-red-900 uppercase leading-relaxed tracking-wider">Declaro ciência da taxa de reserva de 30% em caso de falta.</span>
                    </label>
                 </div>
-                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={handleBookSubmit} className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.3em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all">Solicitar Agendamento</button>
+                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={handleBookSubmit} className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.3em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all">Solicitar Horário</button>
               </div>
             )}
 
@@ -347,10 +396,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               <div className="bg-white rounded-[4rem] p-16 shadow-2xl border border-tea-100 text-center space-y-8 animate-slide-up">
                  <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner">✓</div>
                  <div>
-                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-3">Solicitação Enviada!</h3>
-                    <p className="text-gray-500 text-sm leading-relaxed">Sua reserva está em análise pela equipe Moriá. Você receberá um WhatsApp com a confirmação em breve.</p>
+                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-3">Enviado com Sucesso!</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">Sua solicitação de agendamento está em análise pela equipe Moriá. Você receberá um WhatsApp de confirmação.</p>
                  </div>
-                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Ver Meus Agendamentos</button>
+                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Ver Minha Agenda</button>
               </div>
             )}
           </div>
@@ -379,7 +428,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             ))}
             {myBookings.length === 0 && (
               <div className="text-center py-20 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
-                <p className="text-gray-400 font-serif italic">Você ainda não possui agendamentos.</p>
+                <p className="text-gray-400 font-serif italic">Você ainda não possui procedimentos agendados.</p>
               </div>
             )}
           </div>
@@ -407,7 +456,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         )}
       </main>
 
-      {/* Navegação Inferior (Fixa) */}
+      {/* Navegação Inferior */}
       <nav className="fixed bottom-6 left-6 right-6 bg-white/90 backdrop-blur-xl border border-gray-100 p-6 flex justify-between rounded-[3rem] z-50 shadow-[0_40px_80px_rgba(0,0,0,0.15)] max-w-md mx-auto">
          {[
            { id: 'home', icon: '🏠', label: 'Início' },
