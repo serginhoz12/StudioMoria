@@ -35,6 +35,7 @@ const Navbar: React.FC<NavbarProps> = ({
     { id: View.ADMIN_CALENDAR, label: 'Agenda', icon: '📅' },
     { id: View.ADMIN_FINANCE, label: 'Caixa', icon: '💰' },
     { id: View.ADMIN_CLIENTS, label: 'Clientes', icon: '👤' },
+    { id: View.ADMIN_MARKETING, label: 'Marketing', icon: '📢' },
     { id: View.ADMIN_SETTINGS, label: 'Config', icon: '⚙️' },
   ];
 

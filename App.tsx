@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry } from './types.ts';
+import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
 import { db } from './firebase.ts';
 import { 
@@ -26,6 +26,7 @@ import AdminClients from './components/AdminClients.tsx';
 import AdminConfirmations from './components/AdminConfirmations.tsx';
 import AdminSettingsView from './components/AdminSettingsView.tsx';
 import AdminLogin from './components/AdminLogin.tsx';
+import AdminMarketing from './components/AdminMarketing.tsx';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
@@ -38,6 +39,7 @@ const App: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
   useEffect(() => {
@@ -73,9 +75,13 @@ const App: React.FC = () => {
       setWaitlist(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as WaitlistEntry)));
     });
 
+    const unsubPromotions = onSnapshot(collection(db, "promotions"), (snapshot) => {
+      setPromotions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Promotion)));
+    });
+
     return () => {
       unsubSettings(); unsubServices(); unsubCustomers();
-      unsubBookings(); unsubTransactions(); unsubWaitlist();
+      unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
     };
   }, []);
 
@@ -208,6 +214,7 @@ const App: React.FC = () => {
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={handleDeleteTransaction} customers={customers} services={services} />;
+        case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} />;
       }
     }
@@ -226,6 +233,7 @@ const App: React.FC = () => {
             onAddToWaitlist={handleAddToWaitlist}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={handleCancelWaitlist}
+            promotions={promotions}
          />
        );
     }

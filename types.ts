@@ -11,7 +11,8 @@ export enum View {
   ADMIN_FINANCE = 'ADMIN_FINANCE',
   ADMIN_CLIENTS = 'ADMIN_CLIENTS',
   ADMIN_CONFIRMATIONS = 'ADMIN_CONFIRMATIONS',
-  ADMIN_SETTINGS = 'ADMIN_SETTINGS'
+  ADMIN_SETTINGS = 'ADMIN_SETTINGS',
+  ADMIN_MARKETING = 'ADMIN_MARKETING'
 }
 
 export interface Customer {
@@ -70,6 +71,15 @@ export interface Booking {
   rating?: number;
   reviewComment?: string;
   reviewPhoto?: string;
+}
+
+export interface Promotion {
+  id: string;
+  title: string;
+  content: string;
+  type: 'promotion' | 'tip';
+  createdAt: string;
+  isActive: boolean;
 }
 
 export interface WaitlistEntry {

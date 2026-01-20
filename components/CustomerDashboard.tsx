@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry } from '../types';
+import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry, Promotion } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../firebase.ts';
 import { doc, updateDoc } from "firebase/firestore";
@@ -17,6 +17,7 @@ interface CustomerDashboardProps {
   onAddToWaitlist?: (serviceId: string, date: string) => void;
   waitlist?: WaitlistEntry[];
   onRemoveWaitlist?: (id: string) => void;
+  promotions?: Promotion[];
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -30,7 +31,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onCancelBooking,
   onAddToWaitlist,
   waitlist = [],
-  onRemoveWaitlist
+  onRemoveWaitlist,
+  promotions = []
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [careTips, setCareTips] = useState<string>('');
@@ -74,6 +76,11 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const nextBooking = useMemo(() => 
     myBookings.find(b => b.status === 'scheduled' || b.status === 'pending'),
     [myBookings]
+  );
+
+  const activePromotions = useMemo(() => 
+    promotions.filter(p => p.isActive).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [promotions]
   );
 
   const allPossibleSlots = useMemo(() => {
@@ -317,6 +324,35 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   <p className="text-[11px] text-gray-400 font-light leading-relaxed max-w-[200px] mx-auto">Sua jornada de autocuidado merece um novo capítulo.</p>
                 </div>
                 <button onClick={() => setActiveTab('agendar')} className="bg-tea-800 text-white px-12 py-5 rounded-full font-bold text-[10px] uppercase tracking-widest shadow-2xl active:scale-95 transition-all">Escolher procedimento</button>
+              </div>
+            )}
+
+            {/* Seção de Novidades e Promoções */}
+            {activePromotions.length > 0 && customer.receivesNotifications && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between px-2">
+                  <h4 className="text-[11px] font-bold text-tea-900 uppercase tracking-widest">Especial para você</h4>
+                  <span className="w-2 h-2 bg-tea-500 rounded-full animate-pulse"></span>
+                </div>
+                <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4 -mx-2 px-2">
+                  {activePromotions.map(promo => (
+                    <div key={promo.id} className="min-w-[280px] max-w-[280px] bg-white p-8 rounded-[3rem] shadow-xl border border-tea-50 space-y-4 flex-shrink-0 relative overflow-hidden group">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-tea-50 rounded-full -mr-10 -mt-10 opacity-40"></div>
+                      <span className={`px-3 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest inline-block ${promo.type === 'promotion' ? 'bg-orange-50 text-orange-700' : 'bg-tea-50 text-tea-800'}`}>
+                        {promo.type === 'promotion' ? 'Oferta Exclusiva' : 'Dica do Studio'}
+                      </span>
+                      <h5 className="font-bold text-tea-950 text-base italic font-serif leading-tight">{promo.title}</h5>
+                      <p className="text-[10px] text-gray-500 leading-relaxed line-clamp-3 italic font-light">
+                        {promo.content}
+                      </p>
+                      <div className="pt-2">
+                         <button onClick={() => setActiveTab('agendar')} className="text-[8px] font-bold text-tea-900 uppercase tracking-widest flex items-center gap-2 group-hover:gap-3 transition-all">
+                            Ver mais <span className="text-xs">→</span>
+                         </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -733,11 +769,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               onChange={(e) => setComment(e.target.value)}
             />
 
-            {/* Upload de Foto Opcional */}
-            <div className="mb-6">
-              <label className="block text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-3">
-                Foto do resultado (opcional)
-              </label>
+            {/* Upload de Foto Opcional na Avaliação com Aviso */}
+            <div className="mb-6 space-y-3">
+              <div className="p-3 bg-tea-50 rounded-xl border border-tea-100">
+                <p className="text-[8px] font-bold text-tea-800 uppercase tracking-widest text-center">
+                   📸 A foto é opcional, mas adoraríamos ver seu resultado!
+                </p>
+              </div>
               {reviewPhoto ? (
                 <div className="relative w-full h-32 rounded-2xl overflow-hidden group border-2 border-tea-100">
                   <img src={reviewPhoto} className="w-full h-full object-cover" alt="Review preview" />
