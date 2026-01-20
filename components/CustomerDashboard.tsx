@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry } from '../types';
 import { GoogleGenAI } from '@google/genai';
+import { db } from '../firebase.ts';
+import { doc, updateDoc } from "firebase/firestore";
 
 interface CustomerDashboardProps {
   customer: Customer;
@@ -34,6 +36,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [careTips, setCareTips] = useState<string>('');
   const [isLoadingTips, setIsLoadingTips] = useState(false);
   
+  // Estados de Agendamento
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -41,11 +44,31 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedProId, setSelectedProId] = useState<string>('');
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
 
+  // Estados de Avaliação
+  const [reviewModal, setReviewModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Estados de Troca de Senha
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [pwdData, setPwdData] = useState({ current: '', new: '', confirm: '' });
+  const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
+
   const myBookings = useMemo(() => 
     bookings.filter(b => b.customerId === customer.id && b.status !== 'cancelled')
       .sort((a, b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()),
     [bookings, customer.id]
   );
+
+  // Verificar se há agendamentos finalizados sem avaliação ao carregar
+  useEffect(() => {
+    const unreviewed = myBookings.find(b => b.status === 'completed' && !b.rating);
+    if (unreviewed) {
+      setReviewModal({ open: true, booking: unreviewed });
+    }
+  }, [myBookings]);
 
   const nextBooking = useMemo(() => 
     myBookings.find(b => b.status === 'scheduled' || b.status === 'pending'),
@@ -109,6 +132,58 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     if (confirm("ATENÇÃO: O cancelamento deste agendamento implica na PERDA INTEGRAL do valor pago como sinal/reserva. Deseja prosseguir com o cancelamento?")) {
       onCancelBooking(bookingId);
       alert("Agendamento cancelado. Conforme nossa política, o sinal não será reembolsado.");
+    }
+  };
+
+  const submitReview = async () => {
+    if (!reviewModal.booking || rating === 0) return;
+    setIsSubmittingReview(true);
+    try {
+      const bookingRef = doc(db, "bookings", reviewModal.booking.id);
+      await updateDoc(bookingRef, {
+        rating,
+        reviewComment: comment,
+        reviewedAt: new Date().toISOString()
+      });
+      setReviewModal({ open: false, booking: null });
+      setRating(0);
+      setComment('');
+      alert("Obrigada pelo carinho! Sua avaliação é muito importante para nós.");
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao salvar avaliação. Tente novamente.");
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwdData.current !== customer.password) {
+      alert("Senha atual incorreta.");
+      return;
+    }
+    if (pwdData.new !== pwdData.confirm) {
+      alert("As novas senhas não coincidem.");
+      return;
+    }
+    if (pwdData.new.length < 6) {
+      alert("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+
+    setIsUpdatingPwd(true);
+    try {
+      const customerRef = doc(db, "customers", customer.id);
+      await updateDoc(customerRef, { password: pwdData.new });
+      alert("Senha atualizada com sucesso!");
+      setShowPasswordForm(false);
+      setPwdData({ current: '', new: '', confirm: '' });
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao atualizar senha.");
+    } finally {
+      setIsUpdatingPwd(false);
     }
   };
 
@@ -376,7 +451,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
                   {selectedTime && (
                     <div className="space-y-4 animate-fade-in pt-4">
-                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Profissional</label>
+                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking widest ml-2">Profissional</label>
                        <div className="space-y-3">
                           {currentSlotsAvailability[selectedTime]?.map(pro => (
                             <button 
@@ -533,7 +608,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {/* Aba PERFIL */}
         {activeTab === 'perfil' && (
           <div className="space-y-8 animate-slide-up">
-             <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-100 space-y-10">
+             <div className="bg-white p-12 rounded-[4rem] shadow-sm border border-gray-100 space-y-8">
                 <div className="space-y-6">
                   <div className="space-y-2">
                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-3">Nome</label>
@@ -543,7 +618,61 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-3">WhatsApp</label>
                      <div className="p-6 bg-gray-50 rounded-[2rem] font-bold text-tea-950 text-sm shadow-inner">{customer.whatsapp}</div>
                   </div>
+                  
+                  {/* Sessão de Troca de Senha */}
+                  <div className="pt-4">
+                    <button 
+                      onClick={() => setShowPasswordForm(!showPasswordForm)}
+                      className="w-full flex justify-between items-center p-6 bg-white border border-gray-100 rounded-3xl text-sm font-bold text-tea-900 shadow-sm"
+                    >
+                      <span>🔐 Segurança e Senha</span>
+                      <span>{showPasswordForm ? '▲' : '▼'}</span>
+                    </button>
+                    
+                    {showPasswordForm && (
+                      <form onSubmit={handlePasswordUpdate} className="mt-4 p-8 bg-gray-50 rounded-[3rem] border border-gray-100 space-y-6 animate-slide-up">
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Senha Atual</label>
+                          <input 
+                            type="password" 
+                            required
+                            className="w-full p-4 rounded-2xl bg-white border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100"
+                            value={pwdData.current}
+                            onChange={(e) => setPwdData({...pwdData, current: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Nova Senha</label>
+                          <input 
+                            type="password" 
+                            required
+                            className="w-full p-4 rounded-2xl bg-white border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100"
+                            value={pwdData.new}
+                            onChange={(e) => setPwdData({...pwdData, new: e.target.value})}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Confirmar Nova Senha</label>
+                          <input 
+                            type="password" 
+                            required
+                            className="w-full p-4 rounded-2xl bg-white border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100"
+                            value={pwdData.confirm}
+                            onChange={(e) => setPwdData({...pwdData, confirm: e.target.value})}
+                          />
+                        </div>
+                        <button 
+                          type="submit"
+                          disabled={isUpdatingPwd}
+                          className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[9px] shadow-lg disabled:bg-gray-200"
+                        >
+                          {isUpdatingPwd ? "Atualizando..." : "Atualizar Senha"}
+                        </button>
+                      </form>
+                    )}
+                  </div>
                 </div>
+                
                 <button onClick={onLogout} className="w-full py-6 bg-red-50 text-red-500 rounded-[2rem] font-bold text-[10px] uppercase tracking-[0.2em] border border-red-100 active:scale-95 transition-all">Sair da Conta</button>
              </div>
              
@@ -556,6 +685,60 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
         )}
       </main>
+
+      {/* Pop-up de Avaliação */}
+      {reviewModal.open && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-3xl animate-slide-up text-center relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-tea-600"></div>
+            <div className="w-20 h-20 bg-tea-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">💖</div>
+            
+            <h3 className="text-2xl font-serif text-tea-950 font-bold italic mb-2">Como foi seu atendimento?</h3>
+            <p className="text-gray-500 text-[11px] font-light mb-8 leading-relaxed px-4">
+              Olá {customer.name.split(' ')[0]}, ficamos muito felizes em atendê-la para o procedimento de <strong>{reviewModal.booking?.serviceName}</strong>. Conte-nos o que achou!
+            </p>
+
+            <div className="flex justify-center gap-2 mb-8">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  onClick={() => setRating(star)}
+                  className="text-3xl transition-transform hover:scale-125 focus:outline-none"
+                >
+                  <span className={(hoverRating || rating) >= star ? "text-yellow-400" : "text-gray-200"}>
+                    ★
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              className="w-full p-5 bg-gray-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-tea-100 text-xs mb-8 h-24 resize-none placeholder-gray-300"
+              placeholder="Deixe um comentário carinhoso sobre o resultado ou o atendimento... (opcional)"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+
+            <div className="flex flex-col gap-3">
+              <button
+                disabled={rating === 0 || isSubmittingReview}
+                onClick={submitReview}
+                className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all disabled:bg-gray-100 disabled:text-gray-300"
+              >
+                {isSubmittingReview ? "Enviando..." : "Enviar Avaliação"}
+              </button>
+              <button
+                onClick={() => setReviewModal({ open: false, booking: null })}
+                className="text-[9px] text-gray-400 font-bold uppercase tracking-widest hover:text-gray-600 transition-all"
+              >
+                Avaliar depois
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-3xl border-t border-gray-100 px-10 py-8 flex justify-between items-center z-[100] shadow-[0_-20px_60px_rgba(0,0,0,0.08)] rounded-t-[4rem]">
          {[

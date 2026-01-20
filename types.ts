@@ -66,6 +66,9 @@ export interface Booking {
   policyAgreedAt: string;
   ipAddress?: string; // Opcional, para rastro digital
   cancelledAt?: string;
+  // Feedback do Cliente
+  rating?: number;
+  reviewComment?: string;
 }
 
 export interface WaitlistEntry {
