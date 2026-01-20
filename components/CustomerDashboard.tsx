@@ -49,7 +49,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const activeTips = useMemo(() => 
     allMyPromotions.filter(p => p.type === 'tip' && p.isActive), [allMyPromotions]);
 
-  // Serviços em Destaque (Vindos da Home para o Dashboard)
+  // Procedimentos em Destaque (Exclusivo Dashboard com Valores)
   const highlightedServices = useMemo(() => 
     services.filter(s => s.isVisible && s.isHighlighted), [services]);
 
@@ -166,14 +166,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                <button onClick={() => setActiveTab('agendar')} className="w-full py-5 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-xl hover:bg-tea-950 transition-all">Novo Agendamento</button>
             </div>
 
-            {/* Promoções e Dicas */}
+            {/* 1. Promoções e Dicas */}
             {(activePromotions.length > 0 || activeTips.length > 0) && (
               <section className="space-y-4">
                 <div className="flex justify-between items-center px-4">
                   <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Para Você ✨</h4>
                   <button onClick={() => setActiveTab('ofertas')} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">Ver Tudo</button>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
                   {activePromotions.map(p => (
                     <div key={p.id} onClick={() => { setViewingPromo(p); setActiveTab('ofertas'); }} className="min-w-[260px] cursor-pointer bg-tea-900 p-8 rounded-[3rem] text-white shadow-lg space-y-4 transform hover:scale-[1.02] transition-all relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-3 opacity-10 text-4xl">🎁</div>
@@ -182,7 +182,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         <span className="bg-white/20 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">OFF</span>
                       </div>
                       <h5 className="font-bold text-sm leading-tight line-clamp-2">{p.title}</h5>
-                      <p className="text-[9px] text-tea-300 font-bold uppercase tracking-widest">Expira em {new Date(p.endDate).toLocaleDateString()}</p>
+                      <p className="text-[9px] text-tea-300 font-bold uppercase tracking-widest">Até {new Date(p.endDate).toLocaleDateString()}</p>
                     </div>
                   ))}
                   {activeTips.map(p => (
@@ -197,13 +197,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               </section>
             )}
 
-            {/* Especialidades Moriá (Destaques) */}
+            {/* 2. Procedimentos em Destaque (Com Preços Liberados) */}
             {highlightedServices.length > 0 && (
               <section className="space-y-4">
                 <div className="px-4">
-                  <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Especialidades Moriá ⭐</h4>
+                  <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Procedimentos em Destaque ⭐</h4>
                 </div>
-                <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar">
+                <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar scroll-smooth">
                   {highlightedServices.map(service => (
                     <div 
                       key={service.id} 
@@ -211,7 +211,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     >
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
-                          <span className="bg-orange-400 text-white px-3 py-1 rounded-full text-[7px] font-bold uppercase tracking-widest">Favorito</span>
+                          <span className="bg-orange-400 text-white px-3 py-1 rounded-full text-[7px] font-bold uppercase tracking-widest">Em Alta</span>
                           <span className="text-tea-900 font-serif font-bold text-sm italic">R$ {service.price.toFixed(2)}</span>
                         </div>
                         <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">{service.name}</h3>
@@ -257,6 +257,11 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 )}
               </div>
             ))}
+            {allMyPromotions.length === 0 && (
+               <div className="text-center py-20 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
+                  <p className="text-gray-400 font-serif italic">Nenhuma novidade no momento.</p>
+               </div>
+            )}
           </div>
         )}
 
@@ -268,7 +273,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-lg">🔍</span>
                   <input 
                     type="text" 
-                    placeholder="O que deseja realizar hoje?" 
+                    placeholder="Qual procedimento deseja?" 
                     value={serviceSearch}
                     onChange={e => setServiceSearch(e.target.value)}
                     className="w-full p-5 pl-14 bg-white rounded-3xl shadow-sm border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100 transition-all font-medium"
@@ -301,12 +306,12 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                    <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-tea-900 font-bold hover:bg-tea-100 transition-all">←</button>
                    <div>
                       <h3 className="font-bold text-tea-950 text-lg font-serif italic">{selectedService.name}</h3>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Finalizando Reserva</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Confirmando Reserva</p>
                    </div>
                 </div>
                 <div className="space-y-8">
                    <div className="space-y-3">
-                      <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Escolha a Data</label>
+                      <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Data do Atendimento</label>
                       <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" />
                    </div>
                    <div className="space-y-3">
@@ -324,14 +329,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                      <div className="space-y-3 animate-fade-in">
                         <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Profissional Responsável</label>
                         <select value={selectedProId} onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none appearance-none shadow-inner">
-                           <option value="">Selecione a profissional...</option>
+                           <option value="">Selecione...</option>
                            {currentSlotsAvailability[selectedTime]?.map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
                         </select>
                      </div>
                    )}
                    <label className="flex items-start gap-4 p-6 bg-red-50/50 rounded-[2.5rem] cursor-pointer border border-red-100">
                       <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="mt-1 w-5 h-5 accent-red-600" />
-                      <span className="text-[10px] font-bold text-red-900 uppercase leading-relaxed tracking-wider">Concordo com a taxa de reserva de 30%.</span>
+                      <span className="text-[10px] font-bold text-red-900 uppercase leading-relaxed tracking-wider">Aceito a taxa de reserva de 30% (não reembolsável).</span>
                    </label>
                 </div>
                 <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={handleBookSubmit} className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.3em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all">Solicitar Agendamento</button>
@@ -342,10 +347,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               <div className="bg-white rounded-[4rem] p-16 shadow-2xl border border-tea-100 text-center space-y-8 animate-slide-up">
                  <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner">✓</div>
                  <div>
-                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-3">Solicitado com Sucesso!</h3>
-                    <p className="text-gray-500 text-sm leading-relaxed">Sua reserva foi enviada para a equipe Moriá. Você receberá uma confirmação via WhatsApp assim que aprovado.</p>
+                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-3">Solicitação Enviada!</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">Sua reserva está em análise pela equipe Moriá. Você receberá um WhatsApp com a confirmação em breve.</p>
                  </div>
-                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Ver Meus Pedidos</button>
+                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Ver Meus Agendamentos</button>
               </div>
             )}
           </div>
@@ -367,17 +372,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                      b.status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
                      'bg-orange-50 text-orange-700'
                    }`}>
-                     {b.status === 'pending' ? 'Pendente' : b.status === 'scheduled' ? 'Confirmado' : b.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
+                     {b.status === 'pending' ? 'Em Análise' : b.status === 'scheduled' ? 'Confirmado' : b.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
                    </span>
-                </div>
-                <div className="flex items-center gap-3 pt-4 border-t border-gray-50 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
-                   <span>Profissional: {b.teamMemberName || 'Padrão'}</span>
                 </div>
               </div>
             ))}
             {myBookings.length === 0 && (
               <div className="text-center py-20 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
-                <p className="text-gray-400 font-serif italic">Você ainda não tem agendamentos registrados.</p>
+                <p className="text-gray-400 font-serif italic">Você ainda não possui agendamentos.</p>
               </div>
             )}
           </div>
@@ -405,7 +407,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         )}
       </main>
 
-      {/* Navegação Inferior (Mobile-first Floating) */}
+      {/* Navegação Inferior (Fixa) */}
       <nav className="fixed bottom-6 left-6 right-6 bg-white/90 backdrop-blur-xl border border-gray-100 p-6 flex justify-between rounded-[3rem] z-50 shadow-[0_40px_80px_rgba(0,0,0,0.15)] max-w-md mx-auto">
          {[
            { id: 'home', icon: '🏠', label: 'Início' },
