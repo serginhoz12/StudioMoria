@@ -34,6 +34,7 @@ export interface Service {
   duration: number;
   description: string;
   isVisible: boolean;
+  isHighlighted?: boolean;
 }
 
 export interface BusinessHours {

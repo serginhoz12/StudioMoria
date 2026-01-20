@@ -2,10 +2,10 @@
 import { Service, SalonSettings } from './types';
 
 export const INITIAL_SERVICES: Service[] = [
-  { id: '1', name: 'Design de Sobrancelha', price: 45, duration: 30, description: 'Modelagem profissional utilizando técnicas de visagismo para um olhar harmonioso.', isVisible: true },
-  { id: '2', name: 'Limpeza de Pele', price: 120, duration: 60, description: 'Protocolo revitalizante com extração profunda e máscaras calmantes de alta performance.', isVisible: true },
-  { id: '3', name: 'Manicure & Pedicure', price: 65, duration: 90, description: 'Cuidado completo das unhas com esmaltação premium e hidratação profunda.', isVisible: true },
-  { id: '4', name: 'Drenagem Linfática', price: 150, duration: 60, description: 'Massagem manual suave para redução de edema e desintoxicação corporal.', isVisible: true },
+  { id: '1', name: 'Design de Sobrancelha', price: 45, duration: 30, description: 'Modelagem profissional utilizando técnicas de visagismo para um olhar harmonioso.', isVisible: true, isHighlighted: false },
+  { id: '2', name: 'Limpeza de Pele', price: 120, duration: 60, description: 'Protocolo revitalizante com extração profunda e máscaras calmantes de alta performance.', isVisible: true, isHighlighted: false },
+  { id: '3', name: 'Manicure & Pedicure', price: 65, duration: 90, description: 'Cuidado completo das unhas com esmaltação premium e hidratação profunda.', isVisible: true, isHighlighted: false },
+  { id: '4', name: 'Drenagem Linfática', price: 150, duration: 60, description: 'Massagem manual suave para redução de edema e desintoxicação corporal.', isVisible: true, isHighlighted: false },
 ];
 
 const defaultAgendaDate = new Date();
