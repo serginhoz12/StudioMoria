@@ -29,7 +29,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'ofertas' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [selectedDate, setSelectedDate] = useState(todayStr);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedProId, setSelectedProId] = useState<string>('');
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
@@ -99,13 +101,27 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       const slotStartMin = (h:string)=>parseInt(h.split(':')[0])*60+parseInt(h.split(':')[1]);
       const sStartMin = slotStartMin(slot);
       const sEndMin = sStartMin + selectedService.duration;
+      
       const freePros = pros.filter(pro => {
+        // 1. Verifica se é dia de folga do profissional
         if (pro.offDays?.includes(dayOfWeek)) return false;
+        
+        // 2. Verifica se o horário pretendido está dentro do turno desse profissional
         const pStartMin = slotStartMin(pro.businessHours?.start || settings.businessHours.start);
         const pEndMin = slotStartMin(pro.businessHours?.end || settings.businessHours.end);
         if (sStartMin < pStartMin || sEndMin > pEndMin) return false;
-        return !bookings.some(b => b.teamMemberId === pro.id && b.status !== 'cancelled' && b.dateTime === `${selectedDate} ${slot}`);
+        
+        // 3. Verifica se já existe um agendamento ou BLOQUEIO para este profissional neste horário
+        // Consideramos 'scheduled', 'pending', 'completed' e 'blocked' como ocupados.
+        const isOccupied = bookings.some(b => 
+          b.teamMemberId === pro.id && 
+          b.status !== 'cancelled' && 
+          b.dateTime === `${selectedDate} ${slot}`
+        );
+        
+        return !isOccupied;
       });
+      
       if (freePros.length > 0) availability[slot] = freePros;
     });
     return availability;
@@ -200,7 +216,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               </section>
             )}
 
-            {/* Procedimentos em Destaque (Carrossel no Dashboard) */}
+            {/* Procedimentos em Destaque */}
             {highlightedServices.length > 0 && (
               <section className="space-y-4">
                 <div className="px-4">
@@ -233,7 +249,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {/* Modal de Detalhes do Serviço (Dashboard) */}
         {viewingServiceDetail && (
           <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
-            <div className="bg-white w-full max-w-sm rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
+            <div className="bg-white w-full max-sm:w-full max-w-sm rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
               <div className="p-10 overflow-y-auto custom-scroll space-y-8">
                 <div className="flex justify-between items-start">
                    <h3 className="text-2xl font-serif text-tea-950 font-bold italic leading-tight">{viewingServiceDetail.name}</h3>
@@ -361,7 +377,17 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 <div className="space-y-8">
                    <div className="space-y-3">
                       <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Data da Sessão</label>
-                      <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" />
+                      <input 
+                        type="date" 
+                        min={todayStr}
+                        max={settings.agendaOpenUntil}
+                        value={selectedDate} 
+                        onChange={e => setSelectedDate(e.target.value)} 
+                        className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" 
+                      />
+                      {settings.agendaOpenUntil && (
+                        <p className="text-[9px] text-gray-400 uppercase tracking-widest text-center">Agenda aberta até {new Date(settings.agendaOpenUntil + 'T12:00:00').toLocaleDateString()}</p>
+                      )}
                    </div>
                    <div className="space-y-3">
                       <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Horários Disponíveis</label>
@@ -369,10 +395,24 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         {allPossibleSlots.map(slot => {
                            const available = !!currentSlotsAvailability[slot];
                            return (
-                             <button key={slot} disabled={!available} onClick={() => setSelectedTime(slot)} className={`p-5 rounded-2xl text-[11px] font-bold border-2 transition-all ${selectedTime === slot ? 'bg-tea-900 text-white border-tea-900 shadow-xl scale-105' : available ? 'bg-white border-tea-100 text-tea-900 hover:bg-tea-50' : 'bg-gray-100 text-gray-300 border-transparent opacity-50 cursor-not-allowed'}`}>{slot}</button>
+                             <button 
+                               key={slot} 
+                               disabled={!available} 
+                               onClick={() => setSelectedTime(slot)} 
+                               className={`p-5 rounded-2xl text-[11px] font-bold border-2 transition-all ${
+                                 selectedTime === slot ? 'bg-tea-900 text-white border-tea-900 shadow-xl scale-105' : 
+                                 available ? 'bg-white border-tea-100 text-tea-900 hover:bg-tea-50' : 
+                                 'bg-gray-100 text-gray-300 border-transparent opacity-40 cursor-not-allowed grayscale'
+                               }`}
+                             >
+                               {slot}
+                             </button>
                            );
                         })}
                       </div>
+                      {!Object.keys(currentSlotsAvailability).length && (
+                        <p className="text-center py-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest border border-red-100">🚫 Sem horários para esta data</p>
+                      )}
                    </div>
                    {selectedTime && (
                      <div className="space-y-3 animate-fade-in">
