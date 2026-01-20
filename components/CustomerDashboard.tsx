@@ -35,23 +35,34 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
 
-  // Filtros de Marketing
+  // Filtros de Marketing (Apenas ativas e destinadas a esta cliente)
   const myPromotions = useMemo(() => 
-    promotions.filter(p => p.type === 'promotion' && p.targetCustomerIds.includes(customer.id) && p.isActive),
+    promotions.filter(p => p.type === 'promotion' && (p.targetCustomerIds || []).includes(customer.id) && p.isActive),
     [promotions, customer.id]);
 
   const myTips = useMemo(() => 
-    promotions.filter(p => p.type === 'tip' && p.targetCustomerIds.includes(customer.id)),
+    promotions.filter(p => p.type === 'tip' && (p.targetCustomerIds || []).includes(customer.id)),
     [promotions, customer.id]);
 
   // Lógica de Promoção Ativa ao Selecionar Serviço
   const activePromoForService = useMemo(() => {
     if (!selectedService) return null;
     const today = new Date().toISOString().split('T')[0];
-    return myPromotions.find(p => 
-      today >= p.startDate && today <= p.endDate &&
-      (p.applicableServiceIds.length === 0 || p.applicableServiceIds.includes(selectedService.id))
-    );
+    
+    // Encontra a primeira promoção válida para este serviço
+    return myPromotions.find(p => {
+      const isDateValid = today >= p.startDate && today <= p.endDate;
+      if (!isDateValid) return false;
+
+      // Regra 1: Se houver um procedimento específico vinculado, ele deve coincidir com o selecionado
+      if (p.linkedServiceId) {
+        return p.linkedServiceId === selectedService.id;
+      }
+      
+      // Regra 2: Se não houver procedimento vinculado, a promoção é global (vale para qualquer serviço)
+      // Ou se estiver na lista de aplicáveis (mantendo compatibilidade com filtros antigos)
+      return p.applicableServiceIds.length === 0 || p.applicableServiceIds.includes(selectedService.id);
+    });
   }, [selectedService, myPromotions]);
 
   const priceInfo = useMemo(() => {
@@ -59,7 +70,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     const original = selectedService.price;
     const discountPercent = activePromoForService?.discountPercentage || 0;
     const discountVal = (original * discountPercent) / 100;
-    return { original, final: original - discountVal, discount: discountVal };
+    return { original, final: Math.max(0, original - discountVal), discount: discountVal };
   }, [selectedService, activePromoForService]);
 
   const allPossibleSlots = useMemo(() => {
@@ -168,7 +179,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   {myPromotions.map(p => (
                     <div key={p.id} className="min-w-[240px] bg-tea-900 p-6 rounded-[2.5rem] text-white shadow-lg space-y-3">
                       <div className="flex justify-between items-start">
-                        <span className="text-3xl font-bold">{p.discountPercentage}%</span>
+                        <span className="text-3xl font-bold">{p.discountPercentage === 100 ? 'FREE' : `${p.discountPercentage}%`}</span>
                         <span className="bg-white/20 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">OFF</span>
                       </div>
                       <h5 className="font-bold text-sm leading-tight">{p.title}</h5>
@@ -202,16 +213,25 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <div className="space-y-6 animate-slide-up">
              {bookingStep === 1 && (
               <div className="space-y-4">
-                {services.filter(s => s.isVisible).map(service => (
-                  <div key={service.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm hover:border-tea-200 transition-all flex flex-col h-full">
-                    <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
-                    <p className="text-gray-400 text-xs mb-6 line-clamp-2">{service.description}</p>
-                    <div className="flex justify-between items-center mt-auto">
-                       <div className="text-tea-800 font-bold">R$ {service.price.toFixed(2)}</div>
-                       <button onClick={() => { setSelectedService(service); setBookingStep(2); }} className="px-8 py-3 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Selecionar</button>
+                {services.filter(s => s.isVisible).map(service => {
+                  // Verificação visual rápida de promo vinculada na lista
+                  const hasLinkedPromo = myPromotions.some(p => p.linkedServiceId === service.id);
+                  return (
+                    <div key={service.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm hover:border-tea-200 transition-all flex flex-col h-full relative overflow-hidden">
+                      {hasLinkedPromo && (
+                        <div className="absolute top-0 right-0 bg-orange-400 text-white px-4 py-1 rounded-bl-2xl text-[8px] font-bold uppercase tracking-widest animate-pulse">
+                          Oferta ✨
+                        </div>
+                      )}
+                      <h4 className="font-bold text-tea-950 text-xl mb-1">{service.name}</h4>
+                      <p className="text-gray-400 text-xs mb-6 line-clamp-2">{service.description}</p>
+                      <div className="flex justify-between items-center mt-auto">
+                         <div className="text-tea-800 font-bold">R$ {service.price.toFixed(2)}</div>
+                         <button onClick={() => { setSelectedService(service); setBookingStep(2); }} className="px-8 py-3 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Selecionar</button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
@@ -230,7 +250,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   {activePromoForService && (
                     <div className="flex justify-between items-center pt-2 border-t border-tea-100">
                        <span className="text-[9px] font-bold text-tea-900 uppercase tracking-widest">Bônus: {activePromoForService.title}</span>
-                       <span className="text-2xl font-serif font-bold text-tea-900">R$ {priceInfo.final.toFixed(2)}</span>
+                       <span className="text-2xl font-serif font-bold text-tea-900">
+                         {priceInfo.final === 0 ? 'GRÁTIS' : `R$ ${priceInfo.final.toFixed(2)}`}
+                       </span>
                     </div>
                   )}
                 </div>
@@ -282,7 +304,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 <p className="text-xs text-gray-400 font-light leading-relaxed">Seu agendamento para <strong>{selectedService?.name}</strong> está em análise. Envie o comprovante de sinal para confirmarmos.</p>
                 <div className="bg-gray-50 p-6 rounded-3xl">
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Valor do Sinal (30%)</p>
-                   <p className="text-2xl font-bold text-tea-950">R$ {(priceInfo.final * 0.3).toFixed(2)}</p>
+                   <p className="text-2xl font-bold text-tea-950">
+                     {priceInfo.final === 0 ? 'R$ 0.00' : `R$ ${(priceInfo.final * 0.3).toFixed(2)}`}
+                   </p>
                 </div>
                 <button onClick={() => {
                   const msg = `Olá Moriá! Solicitei ${selectedService?.name} para o dia ${new Date(selectedDate).toLocaleDateString()} às ${selectedTime}. Segue o comprovante de sinal.`;
