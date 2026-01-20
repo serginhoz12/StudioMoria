@@ -49,6 +49,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [rating, setRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState('');
+  const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // Estados de Troca de Senha
@@ -143,17 +144,28 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       await updateDoc(bookingRef, {
         rating,
         reviewComment: comment,
+        reviewPhoto: reviewPhoto,
         reviewedAt: new Date().toISOString()
       });
       setReviewModal({ open: false, booking: null });
       setRating(0);
       setComment('');
+      setReviewPhoto(null);
       alert("Obrigada pelo carinho! Sua avaliação é muito importante para nós.");
     } catch (e) {
       console.error(e);
       alert("Erro ao salvar avaliação. Tente novamente.");
     } finally {
       setIsSubmittingReview(false);
+    }
+  };
+
+  const handleReviewPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => setReviewPhoto(reader.result as string);
+      reader.readAsDataURL(file);
     }
   };
 
@@ -688,17 +700,17 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
       {/* Pop-up de Avaliação */}
       {reviewModal.open && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-          <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-3xl animate-slide-up text-center relative overflow-hidden">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-3xl animate-slide-up text-center relative overflow-hidden my-auto">
             <div className="absolute top-0 left-0 w-full h-2 bg-tea-600"></div>
-            <div className="w-20 h-20 bg-tea-50 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">💖</div>
+            <div className="w-16 h-16 bg-tea-50 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">💖</div>
             
-            <h3 className="text-2xl font-serif text-tea-950 font-bold italic mb-2">Como foi seu atendimento?</h3>
-            <p className="text-gray-500 text-[11px] font-light mb-8 leading-relaxed px-4">
-              Olá {customer.name.split(' ')[0]}, ficamos muito felizes em atendê-la para o procedimento de <strong>{reviewModal.booking?.serviceName}</strong>. Conte-nos o que achou!
+            <h3 className="text-xl font-serif text-tea-950 font-bold italic mb-1">Como foi seu atendimento?</h3>
+            <p className="text-gray-500 text-[10px] font-light mb-6 leading-relaxed px-4">
+              Olá {customer.name.split(' ')[0]}, conte-nos o que achou do seu procedimento de <strong>{reviewModal.booking?.serviceName}</strong>.
             </p>
 
-            <div className="flex justify-center gap-2 mb-8">
+            <div className="flex justify-center gap-2 mb-6">
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -715,22 +727,48 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             </div>
 
             <textarea
-              className="w-full p-5 bg-gray-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-tea-100 text-xs mb-8 h-24 resize-none placeholder-gray-300"
-              placeholder="Deixe um comentário carinhoso sobre o resultado ou o atendimento... (opcional)"
+              className="w-full p-4 bg-gray-50 rounded-2xl border-none outline-none focus:ring-2 focus:ring-tea-100 text-[11px] mb-4 h-20 resize-none placeholder-gray-300 shadow-inner"
+              placeholder="O que você mais gostou? (opcional)"
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
+
+            {/* Upload de Foto Opcional */}
+            <div className="mb-6">
+              <label className="block text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-3">
+                Foto do resultado (opcional)
+              </label>
+              {reviewPhoto ? (
+                <div className="relative w-full h-32 rounded-2xl overflow-hidden group border-2 border-tea-100">
+                  <img src={reviewPhoto} className="w-full h-full object-cover" alt="Review preview" />
+                  <button 
+                    onClick={() => setReviewPhoto(null)}
+                    className="absolute top-2 right-2 bg-red-500 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center shadow-lg"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 cursor-pointer hover:bg-tea-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center pt-2">
+                    <span className="text-2xl mb-1">📷</span>
+                    <p className="text-[8px] text-gray-400 uppercase tracking-widest font-bold">Tirar ou escolher foto</p>
+                  </div>
+                  <input type="file" className="hidden" accept="image/*" capture="camera" onChange={handleReviewPhotoUpload} />
+                </label>
+              )}
+            </div>
 
             <div className="flex flex-col gap-3">
               <button
                 disabled={rating === 0 || isSubmittingReview}
                 onClick={submitReview}
-                className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all disabled:bg-gray-100 disabled:text-gray-300"
+                className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all disabled:bg-gray-100 disabled:text-gray-300"
               >
                 {isSubmittingReview ? "Enviando..." : "Enviar Avaliação"}
               </button>
               <button
-                onClick={() => setReviewModal({ open: false, booking: null })}
+                onClick={() => { setReviewModal({ open: false, booking: null }); setReviewPhoto(null); }}
                 className="text-[9px] text-gray-400 font-bold uppercase tracking-widest hover:text-gray-600 transition-all"
               >
                 Avaliar depois

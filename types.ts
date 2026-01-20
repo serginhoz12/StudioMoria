@@ -69,6 +69,7 @@ export interface Booking {
   // Feedback do Cliente
   rating?: number;
   reviewComment?: string;
+  reviewPhoto?: string;
 }
 
 export interface WaitlistEntry {
