@@ -10,7 +10,8 @@ import {
   setDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc
+  deleteDoc,
+  increment
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -50,6 +51,13 @@ const App: React.FC = () => {
         setDoc(doc.ref, DEFAULT_SETTINGS);
       }
     });
+
+    // Incrementar contador de visitas ao carregar a página
+    if (currentView === View.CUSTOMER_HOME) {
+      updateDoc(doc(db, "settings", "main"), {
+        visitCount: increment(1)
+      }).catch(() => {});
+    }
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
@@ -215,7 +223,7 @@ const App: React.FC = () => {
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={handleAddTransaction} onUpdate={handleUpdateTransaction} onDelete={handleDeleteTransaction} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} />;
-        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} />;
+        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} />;
       }
     }
 

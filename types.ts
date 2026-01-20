@@ -118,6 +118,7 @@ export interface SalonSettings {
   address?: string;
   googleMapsLink?: string;
   lastUpdated: number;
+  visitCount?: number; // Contador de BI
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
   agendaOpenUntil?: string;
