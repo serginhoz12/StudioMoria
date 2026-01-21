@@ -33,6 +33,7 @@ export interface Service {
   price: number;
   duration: number;
   description: string;
+  category: string; 
   isVisible: boolean;
   isHighlighted?: boolean;
 }
@@ -65,9 +66,8 @@ export interface Booking {
   rescheduledCount?: number; 
   agreedToCancellationPolicy: boolean;
   policyAgreedAt: string;
-  policyAgreedText: string; // Texto exato aceito para auditoria
+  policyAgreedText: string; 
   cancelledAt?: string;
-  // Inteligência de Promoção
   promotionId?: string;
   promotionTitle?: string;
   originalPrice?: number;
@@ -93,10 +93,10 @@ export interface Promotion {
   title: string;
   content: string;
   type: 'promotion' | 'tip';
-  discountPercentage: number; // 0 a 100
-  applicableServiceIds: string[]; // Vazio = Todos
-  linkedServiceId?: string; // Procedimento específico vinculado
-  targetCustomerIds: string[]; // IDs das clientes autorizadas
+  discountPercentage: number; 
+  applicableServiceIds: string[]; 
+  linkedServiceId?: string; 
+  targetCustomerIds: string[]; 
   startDate: string;
   endDate: string;
   createdAt: string;

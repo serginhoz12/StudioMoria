@@ -16,7 +16,8 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   settings, 
   services = [],
 }) => {
-  const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', isVisible: true, isHighlighted: false });
+  const categories = ['Olhar', 'Rosto', 'Mãos', 'Unhas', 'Corpo', 'Outros'];
+  const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false });
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
 
@@ -31,7 +32,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         name: newMemberName.trim(),
         assignedServiceIds: [],
         businessHours: { start: settings.businessHours.start, end: settings.businessHours.end },
-        offDays: [0] // Domingo como folga padrão
+        offDays: [0] 
       };
       const updated = { ...settings, teamMembers: [...settings.teamMembers, newMember] };
       updateGlobalSettings(updated);
@@ -81,7 +82,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     if (newService.name && newService.price > 0) {
       const id = Math.random().toString(36).substr(2, 9);
       await setDoc(doc(db, "services", id), { ...newService, id });
-      setNewService({ name: '', price: 0, duration: 30, description: '', isVisible: true, isHighlighted: false });
+      setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false });
     }
   };
 
@@ -92,7 +93,8 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         name: editingService.name,
         price: editingService.price,
         duration: editingService.duration,
-        description: editingService.description
+        description: editingService.description,
+        category: editingService.category
       });
       setEditingService(null);
     }
@@ -228,8 +230,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         
         <div className="bg-tea-50/50 p-8 rounded-3xl mb-10 border border-tea-100">
            <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-6 ml-1">Adicionar Novo Procedimento</h4>
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
               <input placeholder="Nome do Procedimento" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
+              <select className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.category} onChange={e => setNewService({...newService, category: e.target.value})}>
+                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
               <input type="number" placeholder="Preço R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
               <input type="number" placeholder="Duração (minutos)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
            </div>
@@ -250,7 +255,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-lg text-tea-950">{s.name}</p>
-                    {s.isHighlighted && <span className="text-[7px] bg-orange-400 text-white px-2 py-0.5 rounded-full font-bold uppercase tracking-[0.2em]">VIP</span>}
+                    <span className="text-[8px] bg-tea-100 text-tea-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{s.category}</span>
                   </div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase">R$ {s.price.toFixed(2)} • {s.duration} min</p>
                 </div>
@@ -274,10 +279,25 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             <div className="space-y-6">
               <input className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none font-bold shadow-inner" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} />
               <div className="grid grid-cols-2 gap-4">
-                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
+                 <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Categoria</label>
+                    <select className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none font-bold shadow-inner" value={editingService.category} onChange={e => setEditingService({...editingService, category: e.target.value})}>
+                       {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Preço R$</label>
+                    <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
+                 </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Duração (min)</label>
                 <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: parseInt(e.target.value)})} />
               </div>
-              <textarea className="w-full p-4 rounded-2xl bg-gray-50 outline-none h-24 shadow-inner" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Descrição</label>
+                <textarea className="w-full p-4 rounded-2xl bg-gray-50 outline-none h-24 shadow-inner" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
+              </div>
               <div className="flex gap-4 pt-4">
                 <button onClick={() => setEditingService(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
                 <button onClick={saveEditedService} className="flex-[2] bg-tea-800 text-white py-4 rounded-2xl font-bold shadow-xl uppercase text-[10px] tracking-widest">Confirmar Alterações</button>
