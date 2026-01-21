@@ -36,27 +36,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedProId, setSelectedProId] = useState<string>('');
   const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
-  const [viewingPromo, setViewingPromo] = useState<Promotion | null>(null);
+  const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [serviceSearch, setServiceSearch] = useState('');
   
-  // Modal de Detalhes (Descrição Completa)
   const [viewingServiceDetail, setViewingServiceDetail] = useState<Service | null>(null);
 
-  // Filtros de Marketing
-  const allMyPromotions = useMemo(() => 
-    promotions.filter(p => (p.targetCustomerIds || []).includes(customer.id))
-    .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
-    [promotions, customer.id]);
-
-  const activePromotions = useMemo(() => 
-    allMyPromotions.filter(p => p.type === 'promotion' && p.isActive), [allMyPromotions]);
-
-  const activeTips = useMemo(() => 
-    allMyPromotions.filter(p => p.type === 'tip' && p.isActive), [allMyPromotions]);
-
-  // Procedimentos em Destaque
-  const highlightedServices = useMemo(() => 
-    services.filter(s => s.isVisible && s.isHighlighted), [services]);
+  // Textos Legais
+  const POLICY_CHECKBOX_TEXT = "Declaro ciência da taxa de reserva de 30% em caso de falta.";
+  const POLICY_MODAL_TEXT = "Declaro ciência da taxa de reserva de 30%. Em caso de falta, 50% desse valor (no caso 15% do valor do serviço) será retido ao salão.";
 
   const filteredServices = useMemo(() => {
     return services
@@ -64,12 +51,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       .sort((a, b) => (a.isHighlighted ? -1 : 1));
   }, [services, serviceSearch]);
 
+  const activePromotions = useMemo(() => 
+    promotions.filter(p => (p.targetCustomerIds || []).includes(customer.id) && p.type === 'promotion' && p.isActive),
+    [promotions, customer.id]);
+
   const activePromoForService = useMemo(() => {
     if (!selectedService) return null;
-    return activePromotions.find(p => {
-      if (p.linkedServiceId) return p.linkedServiceId === selectedService.id;
-      return p.applicableServiceIds.length === 0 || p.applicableServiceIds.includes(selectedService.id);
-    });
+    return activePromotions.find(p => p.linkedServiceId === selectedService.id || p.applicableServiceIds.includes(selectedService.id));
   }, [selectedService, activePromotions]);
 
   const priceInfo = useMemo(() => {
@@ -103,25 +91,17 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       const sEndMin = sStartMin + selectedService.duration;
       
       const freePros = pros.filter(pro => {
-        // 1. Verifica se é dia de folga do profissional
         if (pro.offDays?.includes(dayOfWeek)) return false;
-        
-        // 2. Verifica se o horário pretendido está dentro do turno desse profissional
         const pStartMin = slotStartMin(pro.businessHours?.start || settings.businessHours.start);
         const pEndMin = slotStartMin(pro.businessHours?.end || settings.businessHours.end);
         if (sStartMin < pStartMin || sEndMin > pEndMin) return false;
         
-        // 3. Verifica se já existe um agendamento ou BLOQUEIO para este profissional neste horário
-        // Consideramos 'scheduled', 'pending', 'completed' e 'blocked' como ocupados.
-        const isOccupied = bookings.some(b => 
+        return !bookings.some(b => 
           b.teamMemberId === pro.id && 
           b.status !== 'cancelled' && 
           b.dateTime === `${selectedDate} ${slot}`
         );
-        
-        return !isOccupied;
       });
-      
       if (freePros.length > 0) availability[slot] = freePros;
     });
     return availability;
@@ -143,12 +123,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         teamMemberName: pro?.name,
         agreedToCancellationPolicy: true,
         policyAgreedAt: new Date().toISOString(),
+        policyAgreedText: POLICY_MODAL_TEXT, // Registro de auditoria solicitado
         promotionId: activePromoForService?.id,
         promotionTitle: activePromoForService?.title,
         originalPrice: priceInfo.original,
         discountApplied: priceInfo.discount,
         finalPrice: priceInfo.final
       });
+      setShowPolicyModal(false);
       setBookingStep(3);
     }
   };
@@ -157,8 +139,36 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in">
+      {/* Pop-up de Confirmação Final de Ciência da Taxa */}
+      {showPolicyModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-lg animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-3xl animate-slide-up space-y-8 text-center border-4 border-tea-100">
+            <div className="w-20 h-20 bg-tea-50 text-tea-900 rounded-full flex items-center justify-center text-4xl mx-auto shadow-inner">📄</div>
+            <div className="space-y-4">
+              <h3 className="text-xl font-serif font-bold text-tea-950 italic">Confirmação de Ciência</h3>
+              <p className="text-gray-600 text-sm leading-relaxed font-medium">
+                {POLICY_MODAL_TEXT}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+               <button 
+                 onClick={handleBookSubmit}
+                 className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
+               >
+                 Estou Ciente e Confirmo
+               </button>
+               <button 
+                 onClick={() => setShowPolicyModal(false)}
+                 className="w-full py-3 text-gray-400 font-bold uppercase text-[9px] tracking-widest"
+               >
+                 Voltar e Ajustar
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="bg-tea-900 pt-12 pb-24 px-8 rounded-b-[4.5rem] shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-tea-800 rounded-full -mr-32 -mt-32 opacity-20"></div>
         <div className="max-w-md mx-auto flex flex-col items-center gap-6 relative z-10 text-white">
           <div className="w-full flex justify-between items-start">
             <button onClick={onLogout} className="p-4 bg-white/10 rounded-2xl hover:bg-white/20 transition-all">🚪</button>
@@ -181,148 +191,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {activeTab === 'home' && (
           <div className="space-y-10 animate-slide-up">
             <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-gray-50 text-center space-y-6">
-               <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Cuidamos de Você</h3>
+               <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Sua Melhor Versão</h3>
                <button onClick={() => setActiveTab('agendar')} className="w-full py-5 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-xl hover:bg-tea-950 transition-all">Novo Agendamento</button>
             </div>
-
-            {/* Promoções e Dicas */}
-            {(activePromotions.length > 0 || activeTips.length > 0) && (
-              <section className="space-y-4">
-                <div className="flex justify-between items-center px-4">
-                  <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Especial Para Você ✨</h4>
-                  <button onClick={() => setActiveTab('ofertas')} className="text-[9px] font-bold text-tea-600 uppercase hover:underline">Ver Todas</button>
-                </div>
-                <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar scroll-smooth">
-                  {activePromotions.map(p => (
-                    <div key={p.id} onClick={() => { setViewingPromo(p); setActiveTab('ofertas'); }} className="min-w-[260px] cursor-pointer bg-tea-900 p-8 rounded-[3rem] text-white shadow-lg space-y-4 transform hover:scale-[1.02] transition-all relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-3 opacity-10 text-4xl">🎁</div>
-                      <div className="flex justify-between items-start">
-                        <span className="text-3xl font-bold">{p.discountPercentage === 100 ? 'FREE' : `${p.discountPercentage}%`}</span>
-                        <span className="bg-white/20 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest">OFF</span>
-                      </div>
-                      <h5 className="font-bold text-sm leading-tight line-clamp-2">{p.title}</h5>
-                      <p className="text-[9px] text-tea-300 font-bold uppercase tracking-widest">Até {new Date(p.endDate).toLocaleDateString()}</p>
-                    </div>
-                  ))}
-                  {activeTips.map(p => (
-                    <div key={p.id} onClick={() => { setViewingPromo(p); setActiveTab('ofertas'); }} className="min-w-[260px] cursor-pointer bg-tea-50 p-8 rounded-[3rem] text-tea-900 border border-tea-100 shadow-sm space-y-4 transform hover:scale-[1.02] transition-all relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-3 opacity-10 text-4xl text-tea-900">✨</div>
-                      <span className="bg-tea-900/10 text-tea-900 px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest inline-block">Dica Moriá</span>
-                      <h5 className="font-bold text-sm leading-tight line-clamp-2">{p.title}</h5>
-                      <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest">Clique para ler</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Procedimentos em Destaque */}
-            {highlightedServices.length > 0 && (
-              <section className="space-y-4">
-                <div className="px-4">
-                  <h4 className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Procedimentos em Destaque ⭐</h4>
-                </div>
-                <div className="flex gap-4 overflow-x-auto pb-6 no-scrollbar scroll-smooth">
-                  {highlightedServices.map(service => (
-                    <div 
-                      key={service.id} 
-                      onClick={() => setViewingServiceDetail(service)}
-                      className="min-w-[280px] bg-white p-8 rounded-[3.5rem] border border-orange-50 shadow-md flex flex-col justify-between relative group hover:border-orange-100 transition-all cursor-pointer"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="bg-orange-400 text-white px-3 py-1 rounded-full text-[7px] font-bold uppercase tracking-widest">Mais Pedido</span>
-                          <span className="text-tea-900 font-serif font-bold text-sm italic">R$ {service.price.toFixed(2)}</span>
-                        </div>
-                        <h3 className="text-lg font-serif font-bold text-gray-900 leading-tight">{service.name}</h3>
-                        <p className="text-gray-400 text-[10px] leading-relaxed line-clamp-2 italic">{service.description}</p>
-                      </div>
-                      <span className="mt-6 text-[8px] font-bold text-tea-600 uppercase tracking-widest text-center">Ver detalhes & Agendar</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-          </div>
-        )}
-
-        {/* Modal de Detalhes do Serviço (Dashboard) */}
-        {viewingServiceDetail && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
-            <div className="bg-white w-full max-sm:w-full max-w-sm rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
-              <div className="p-10 overflow-y-auto custom-scroll space-y-8">
-                <div className="flex justify-between items-start">
-                   <h3 className="text-2xl font-serif text-tea-950 font-bold italic leading-tight">{viewingServiceDetail.name}</h3>
-                   <button onClick={() => setViewingServiceDetail(null)} className="p-3 bg-gray-50 rounded-xl text-gray-300">✕</button>
-                </div>
-                
-                <div className="space-y-4">
-                   <p className="text-gray-500 text-base font-light leading-relaxed whitespace-pre-line italic">
-                     {viewingServiceDetail.description}
-                   </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="p-4 bg-gray-50 rounded-3xl text-center">
-                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Duração</p>
-                      <p className="text-lg font-serif text-tea-900 font-bold">{viewingServiceDetail.duration} min</p>
-                   </div>
-                   <div className="p-4 bg-tea-900 rounded-3xl text-white text-center">
-                      <p className="text-[8px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor</p>
-                      <p className="text-lg font-serif font-bold">R$ {viewingServiceDetail.price.toFixed(2)}</p>
-                   </div>
-                </div>
-              </div>
-              
-              <div className="p-8 bg-gray-50 border-t border-gray-100 flex flex-col gap-3">
-                 <button 
-                   onClick={() => { setSelectedService(viewingServiceDetail); setActiveTab('agendar'); setBookingStep(2); setViewingServiceDetail(null); }} 
-                   className="w-full py-5 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl"
-                 >
-                   Continuar Agendamento
-                 </button>
-                 <button 
-                   onClick={() => setViewingServiceDetail(null)} 
-                   className="w-full py-3 text-gray-400 font-bold uppercase text-[9px] tracking-widest"
-                 >
-                   Voltar
-                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'ofertas' && (
-          <div className="space-y-6 animate-slide-up pb-10">
-            <h3 className="text-center font-serif text-2xl font-bold text-tea-950 italic mb-8">Novidades & Ofertas</h3>
-            {allMyPromotions.map(promo => (
-              <div key={promo.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-4">
-                <div className="flex justify-between items-start">
-                   <span className={`px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest ${promo.type === 'promotion' ? 'bg-tea-900 text-white' : 'bg-tea-50 text-tea-900'}`}>
-                     {promo.type === 'promotion' ? 'Oferta' : 'Dica'}
-                   </span>
-                   <p className="text-[10px] text-gray-400 font-bold uppercase">{new Date(promo.createdAt).toLocaleDateString()}</p>
-                </div>
-                <h4 className="font-bold text-tea-950 text-xl font-serif italic">{promo.title}</h4>
-                <p className="text-sm text-gray-500 leading-relaxed whitespace-pre-line">{promo.content}</p>
-                {promo.type === 'promotion' && promo.linkedServiceId && (
-                  <button 
-                    onClick={() => { 
-                      const s = services.find(x => x.id === promo.linkedServiceId);
-                      if(s) { setSelectedService(s); setActiveTab('agendar'); setBookingStep(2); }
-                    }} 
-                    className="w-full py-4 bg-tea-50 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-100"
-                  >
-                    Aproveitar Desconto
-                  </button>
-                )}
-              </div>
-            ))}
-            {allMyPromotions.length === 0 && (
-               <div className="text-center py-20 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
-                  <p className="text-gray-400 font-serif italic">Nenhuma novidade no momento.</p>
-               </div>
-            )}
           </div>
         )}
 
@@ -332,32 +203,16 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               <div className="space-y-6">
                 <div className="relative">
                   <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-lg">🔍</span>
-                  <input 
-                    type="text" 
-                    placeholder="Qual procedimento deseja?" 
-                    value={serviceSearch}
-                    onChange={e => setServiceSearch(e.target.value)}
-                    className="w-full p-5 pl-14 bg-white rounded-3xl shadow-sm border border-gray-100 outline-none focus:ring-2 focus:ring-tea-100 transition-all font-medium"
-                  />
+                  <input type="text" placeholder="Qual procedimento deseja?" value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} className="w-full p-5 pl-14 bg-white rounded-3xl shadow-sm border border-gray-100 outline-none font-medium" />
                 </div>
-                
                 <div className="space-y-4">
                   {filteredServices.map(service => (
-                    <div 
-                      key={service.id} 
-                      onClick={() => setViewingServiceDetail(service)}
-                      className={`bg-white p-8 rounded-[3rem] border transition-all flex flex-col h-full relative overflow-hidden cursor-pointer ${service.isHighlighted ? 'border-orange-100 bg-orange-50/5' : 'border-gray-50 shadow-sm'}`}
-                    >
-                      {service.isHighlighted && (
-                        <div className="absolute top-0 right-0 bg-orange-400 text-white px-4 py-1.5 rounded-bl-3xl text-[8px] font-bold uppercase tracking-widest">
-                          Destaque ⭐
-                        </div>
-                      )}
+                    <div key={service.id} onClick={() => { setSelectedService(service); setBookingStep(2); }} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm transition-all hover:border-tea-200 cursor-pointer">
                       <h4 className="font-bold text-tea-950 text-xl font-serif italic mb-2">{service.name}</h4>
                       <p className="text-gray-400 text-xs mb-8 line-clamp-2 italic">{service.description}</p>
-                      <div className="flex justify-between items-center mt-auto">
-                         <div className="text-tea-800 font-bold font-serif italic">R$ {service.price.toFixed(2)}</div>
-                         <button onClick={(e) => { e.stopPropagation(); setSelectedService(service); setBookingStep(2); }} className="px-10 py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Agendar</button>
+                      <div className="flex justify-between items-center">
+                         <div className="text-tea-800 font-bold font-serif italic text-lg">R$ {service.price.toFixed(2)}</div>
+                         <button className="px-10 py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Agendar</button>
                       </div>
                     </div>
                   ))}
@@ -368,7 +223,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             {bookingStep === 2 && selectedService && (
               <div className="bg-white rounded-[4rem] p-10 shadow-2xl border border-tea-50 space-y-10 animate-slide-up">
                 <div className="flex items-center gap-5">
-                   <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-tea-900 font-bold hover:bg-tea-100 transition-all">←</button>
+                   <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-tea-900 font-bold">←</button>
                    <div>
                       <h3 className="font-bold text-tea-950 text-lg font-serif italic">{selectedService.name}</h3>
                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Escolha Horário & Profissional</p>
@@ -377,17 +232,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 <div className="space-y-8">
                    <div className="space-y-3">
                       <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Data da Sessão</label>
-                      <input 
-                        type="date" 
-                        min={todayStr}
-                        max={settings.agendaOpenUntil}
-                        value={selectedDate} 
-                        onChange={e => setSelectedDate(e.target.value)} 
-                        className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" 
-                      />
-                      {settings.agendaOpenUntil && (
-                        <p className="text-[9px] text-gray-400 uppercase tracking-widest text-center">Agenda aberta até {new Date(settings.agendaOpenUntil + 'T12:00:00').toLocaleDateString()}</p>
-                      )}
+                      <input type="date" min={todayStr} max={settings.agendaOpenUntil} value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" />
                    </div>
                    <div className="space-y-3">
                       <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Horários Disponíveis</label>
@@ -395,24 +240,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         {allPossibleSlots.map(slot => {
                            const available = !!currentSlotsAvailability[slot];
                            return (
-                             <button 
-                               key={slot} 
-                               disabled={!available} 
-                               onClick={() => setSelectedTime(slot)} 
-                               className={`p-5 rounded-2xl text-[11px] font-bold border-2 transition-all ${
-                                 selectedTime === slot ? 'bg-tea-900 text-white border-tea-900 shadow-xl scale-105' : 
-                                 available ? 'bg-white border-tea-100 text-tea-900 hover:bg-tea-50' : 
-                                 'bg-gray-100 text-gray-300 border-transparent opacity-40 cursor-not-allowed grayscale'
-                               }`}
-                             >
-                               {slot}
-                             </button>
+                             <button key={slot} disabled={!available} onClick={() => setSelectedTime(slot)} className={`p-5 rounded-2xl text-[11px] font-bold border-2 transition-all ${selectedTime === slot ? 'bg-tea-900 text-white border-tea-900 shadow-xl scale-105' : available ? 'bg-white border-tea-100 text-tea-900 hover:bg-tea-50' : 'bg-gray-100 text-gray-300 border-transparent opacity-40 cursor-not-allowed'}`}>{slot}</button>
                            );
                         })}
                       </div>
-                      {!Object.keys(currentSlotsAvailability).length && (
-                        <p className="text-center py-4 bg-red-50 text-red-600 rounded-2xl text-[10px] font-bold uppercase tracking-widest border border-red-100">🚫 Sem horários para esta data</p>
-                      )}
                    </div>
                    {selectedTime && (
                      <div className="space-y-3 animate-fade-in">
@@ -423,12 +254,31 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         </select>
                      </div>
                    )}
-                   <label className="flex items-start gap-4 p-6 bg-red-50/50 rounded-[2.5rem] cursor-pointer border border-red-100">
-                      <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="mt-1 w-5 h-5 accent-red-600" />
-                      <span className="text-[10px] font-bold text-red-900 uppercase leading-relaxed tracking-wider">Declaro ciência da taxa de reserva de 30% em caso de falta.</span>
-                   </label>
+                   
+                   {/* Aviso de Destaque solicitado: Taxa de 30% */}
+                   <div className="p-8 bg-tea-50 rounded-[2.5rem] border-2 border-tea-100 space-y-4">
+                      <div className="flex items-start gap-4">
+                        <div className="mt-1 w-6 h-6 flex-shrink-0 bg-tea-900 text-white rounded-lg flex items-center justify-center text-xs font-bold">!</div>
+                        <p className="text-[10px] font-bold text-tea-900 uppercase leading-relaxed tracking-wider">
+                          Para garantir seu horário, o Studio Moriá requer uma taxa de reserva de 30% do valor do serviço.
+                        </p>
+                      </div>
+                      <label className="flex items-center gap-4 cursor-pointer group pt-2">
+                        <div className="relative">
+                          <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="peer appearance-none w-7 h-7 bg-white border-2 border-tea-200 rounded-xl checked:bg-tea-900 checked:border-tea-900 transition-all cursor-pointer" />
+                          <svg className="absolute top-1.5 left-1.5 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <span className="text-[11px] font-bold text-tea-950 uppercase tracking-widest">{POLICY_CHECKBOX_TEXT}</span>
+                      </label>
+                   </div>
                 </div>
-                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={handleBookSubmit} className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.3em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all">Solicitar Horário</button>
+                <button 
+                  disabled={!selectedTime || !selectedProId || !agreedToCancellation} 
+                  onClick={() => setShowPolicyModal(true)} 
+                  className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.3em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all"
+                >
+                  Solicitar Horário
+                </button>
               </div>
             )}
 
@@ -437,7 +287,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                  <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner">✓</div>
                  <div>
                     <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-3">Enviado com Sucesso!</h3>
-                    <p className="text-gray-500 text-sm leading-relaxed">Sua solicitação de agendamento está em análise pela equipe Moriá. Você receberá um WhatsApp de confirmação.</p>
+                    <p className="text-gray-500 text-sm leading-relaxed">Sua solicitação está em análise. Fique atenta ao seu WhatsApp para a confirmação do sinal.</p>
                  </div>
                  <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Ver Minha Agenda</button>
               </div>
@@ -455,63 +305,37 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                      <h4 className="font-bold text-tea-950 text-xl font-serif italic mb-1">{b.serviceName}</h4>
                      <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} • {b.dateTime.split(' ')[1]}</p>
                    </div>
-                   <span className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                     b.status === 'completed' ? 'bg-green-50 text-green-700' : 
-                     b.status === 'cancelled' ? 'bg-red-50 text-red-700' : 
-                     b.status === 'scheduled' ? 'bg-blue-50 text-blue-700' :
-                     'bg-orange-50 text-orange-700'
-                   }`}>
+                   <span className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${b.status === 'completed' ? 'bg-green-50 text-green-700' : b.status === 'cancelled' ? 'bg-red-50 text-red-700' : b.status === 'scheduled' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>
                      {b.status === 'pending' ? 'Em Análise' : b.status === 'scheduled' ? 'Confirmado' : b.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
                    </span>
                 </div>
               </div>
             ))}
-            {myBookings.length === 0 && (
-              <div className="text-center py-20 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-200">
-                <p className="text-gray-400 font-serif italic">Você ainda não possui procedimentos agendados.</p>
-              </div>
-            )}
           </div>
         )}
 
         {activeTab === 'perfil' && (
           <div className="space-y-8 animate-slide-up pb-10">
              <div className="bg-white p-12 rounded-[4rem] shadow-xl border border-gray-100 text-center relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-tea-50 rounded-full -mr-16 -mt-16 opacity-40"></div>
-                <div className="w-24 h-24 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-4xl font-serif mx-auto mb-6 shadow-2xl">
-                  {customer.name.charAt(0)}
-                </div>
+                <div className="w-24 h-24 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-4xl font-serif mx-auto mb-6 shadow-2xl">{customer.name.charAt(0)}</div>
                 <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-2">{customer.name}</h3>
                 <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-10">CPF: {customer.cpf}</p>
-                
-                <div className="space-y-4">
-                   <div className="flex justify-between items-center p-6 bg-gray-50 rounded-3xl">
-                      <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">WhatsApp</span>
-                      <span className="font-bold text-tea-800">{customer.whatsapp}</span>
-                   </div>
-                   <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-100 transition-all mt-6">Sair da Conta</button>
-                </div>
+                <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-bold uppercase text-[10px] tracking-widest">Sair da Conta</button>
              </div>
           </div>
         )}
       </main>
 
-      {/* Navegação Inferior */}
       <nav className="fixed bottom-6 left-6 right-6 bg-white/90 backdrop-blur-xl border border-gray-100 p-6 flex justify-between rounded-[3rem] z-50 shadow-[0_40px_80px_rgba(0,0,0,0.15)] max-w-md mx-auto">
          {[
            { id: 'home', icon: '🏠', label: 'Início' },
            { id: 'agendar', icon: '✨', label: 'Agendar' },
            { id: 'agenda', icon: '🗓️', label: 'Agenda' },
-           { id: 'ofertas', icon: '🎁', label: 'Ofertas' },
            { id: 'perfil', icon: '👤', label: 'Perfil' }
          ].map(tab => (
-           <button 
-             key={tab.id} 
-             onClick={() => setActiveTab(tab.id as any)} 
-             className={`flex flex-col items-center gap-2 transition-all group ${activeTab === tab.id ? 'text-tea-900' : 'text-gray-300'}`}
-           >
-              <span className={`text-2xl transition-transform duration-300 ${activeTab === tab.id ? 'scale-125 -translate-y-1' : 'group-hover:scale-110'}`}>{tab.icon}</span>
-              <span className={`text-[8px] font-bold uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === tab.id ? 'opacity-100' : 'opacity-0 scale-50'}`}>{tab.label}</span>
+           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center gap-2 transition-all ${activeTab === tab.id ? 'text-tea-900' : 'text-gray-300'}`}>
+              <span className={`text-2xl transition-transform ${activeTab === tab.id ? 'scale-125 -translate-y-1' : ''}`}>{tab.icon}</span>
+              <span className={`text-[8px] font-bold uppercase tracking-[0.2em] ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`}>{tab.label}</span>
            </button>
          ))}
       </nav>

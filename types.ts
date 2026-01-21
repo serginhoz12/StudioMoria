@@ -65,6 +65,7 @@ export interface Booking {
   rescheduledCount?: number; 
   agreedToCancellationPolicy: boolean;
   policyAgreedAt: string;
+  policyAgreedText: string; // Texto exato aceito para auditoria
   cancelledAt?: string;
   // Inteligência de Promoção
   promotionId?: string;
