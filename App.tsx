@@ -46,13 +46,11 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
   useEffect(() => {
-    // Sincronização inicial com o Firebase
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         setSettings(snap.data() as SalonSettings);
         setIsLoading(false);
       } else {
-        // Apenas cria se for a PRIMEIRA vez absoluta
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
       }
     });
@@ -91,7 +89,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Contador de visitas só após carregar settings
   useEffect(() => {
     if (!isLoading && currentView === View.CUSTOMER_HOME) {
       updateDoc(doc(db, "settings", "main"), {
@@ -129,6 +126,11 @@ const App: React.FC = () => {
   }, [currentUser, isAdminAuthenticated]);
 
   const handleRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
+    // Verificação dupla de segurança
+    if (customers.some(c => c.cpf === cpf)) {
+      alert("Este CPF já está cadastrado.");
+      return;
+    }
     const id = Math.random().toString(36).substr(2, 9);
     const newCustomer: Customer = { id, name, whatsapp, cpf, password, receivesNotifications, agreedToTerms: true, history: [] };
     await setDoc(doc(db, "customers", id), newCustomer);
@@ -203,13 +205,19 @@ const App: React.FC = () => {
     });
   };
 
+  // EXCLUSÃO REAL DE CLIENTE
+  const handleDeleteCustomer = async (id: string) => {
+    if (confirm("ATENÇÃO: Isso excluirá PERMANENTEMENTE o cadastro da cliente e seu acesso ao app. Deseja continuar?")) {
+      await deleteDoc(doc(db, "customers", id));
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-tea-950 flex flex-col items-center justify-center space-y-6">
         <div className="w-16 h-16 border-4 border-tea-400 border-t-transparent rounded-full animate-spin"></div>
         <div className="text-center">
-           <p className="text-tea-100 font-serif italic text-xl animate-pulse">Sincronizando com Studio Moriá...</p>
-           <p className="text-[9px] text-tea-400 uppercase tracking-widest mt-2">Carregando dados da nuvem</p>
+           <p className="text-tea-100 font-serif italic text-xl animate-pulse">Sincronizando Studio Moriá...</p>
         </div>
       </div>
     );
@@ -222,7 +230,7 @@ const App: React.FC = () => {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
-        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => updateDoc(doc(db, "customers", id), { status: 'inactive' })} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
+        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={handleDeleteCustomer} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} />;
@@ -249,7 +257,7 @@ const App: React.FC = () => {
     }
 
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleRegister} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 

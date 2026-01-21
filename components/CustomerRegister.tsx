@@ -1,13 +1,15 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Customer } from '../types';
 import TermsModal from './TermsModal';
 
 interface CustomerRegisterProps {
   onRegister: (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => void;
   onBack: () => void;
+  customers: Customer[];
 }
 
-const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack }) => {
+const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack, customers = [] }) => {
   const [name, setName] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [cpf, setCpf] = useState('');
@@ -21,15 +23,26 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
     type: 'terms'
   });
 
+  // Verificação de CPF Duplicado em Tempo Real
+  const isDuplicateCpf = useMemo(() => {
+    const cleanCpf = cpf.replace(/\D/g, '');
+    if (cleanCpf.length < 11) return false;
+    return customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf);
+  }, [cpf, customers]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDuplicateCpf) {
+      alert("Este CPF já possui um cadastro no Studio Moriá.");
+      return;
+    }
     if (name && whatsapp && cpf && password && agreedToTerms) {
       onRegister(name, whatsapp, cpf, password, receivesNotifications);
     } else {
       if (!agreedToTerms) {
-        alert("Para sua segurança, é necessário aceitar os termos de uso e política de privacidade.");
+        alert("Para sua segurança, é necessário aceitar os termos de uso.");
       } else {
-        alert("Por favor, preencha todos os campos do formulário.");
+        alert("Por favor, preencha todos os campos.");
       }
     }
   };
@@ -38,7 +51,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
     setModalConfig({
       open: true,
       type,
-      title: type === 'terms' ? 'Termos de Uso' : 'Política de Privacidade (LGPD)'
+      title: type === 'terms' ? 'Termos de Uso' : 'Privacidade (LGPD)'
     });
   };
 
@@ -47,12 +60,12 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
       <div className="max-w-xl w-full bg-white rounded-[3.5rem] shadow-[0_40px_100px_rgba(0,0,0,0.05)] overflow-hidden p-12 border border-white">
         <button onClick={onBack} className="text-tea-600 text-sm font-bold flex items-center gap-3 mb-12 hover:-translate-x-1 transition-transform group">
           <svg className="w-5 h-5 group-hover:scale-125 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-          Voltar para Início
+          Voltar
         </button>
         
         <div className="mb-12">
-          <h2 className="text-4xl font-serif text-tea-900 mb-4">Sua Conta Moriá</h2>
-          <p className="text-gray-500 font-light text-lg italic">Cadastre-se para acessar seu extrato completo e realizar agendamentos rápidos.</p>
+          <h2 className="text-4xl font-serif text-tea-900 mb-4 italic">Sua Conta Moriá</h2>
+          <p className="text-gray-500 font-light text-lg italic leading-relaxed">Cadastre-se para agendar seus procedimentos e acessar seu histórico de beleza.</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -65,7 +78,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-transparent focus:bg-white focus:border-tea-200 outline-none transition-all placeholder-gray-300 shadow-inner"
-                placeholder="Ex: Maria Clara Santos"
+                placeholder="Ex: Maria Santos"
               />
             </div>
             
@@ -88,9 +101,10 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
                   required
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value)}
-                  className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-transparent focus:bg-white focus:border-tea-200 outline-none transition-all placeholder-gray-300 shadow-inner"
+                  className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all placeholder-gray-300 shadow-inner ${isDuplicateCpf ? 'border-red-300 bg-red-50' : 'border-transparent focus:bg-white focus:border-tea-200'}`}
                   placeholder="000.000.000-00"
                 />
+                {isDuplicateCpf && <p className="text-[10px] text-red-600 font-bold mt-2 ml-2 uppercase animate-pulse">CPF já cadastrado! Tente fazer login.</p>}
               </div>
             </div>
 
@@ -119,8 +133,8 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
                 <svg className="absolute top-1 left-1 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
               </div>
               <div className="flex-1">
-                <span className="text-sm font-bold text-tea-900 block mb-1">Receber notificações via WhatsApp</span>
-                <span className="text-xs text-tea-700/70 font-medium">Avisos de vencimento e horários por mensagem.</span>
+                <span className="text-sm font-bold text-tea-900 block mb-1">Receber lembretes via WhatsApp</span>
+                <span className="text-xs text-tea-700/70 font-medium italic">Avisos de horários e promoções.</span>
               </div>
             </label>
 
@@ -137,7 +151,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
               </div>
               <div className="flex-1">
                 <span className="text-sm text-gray-700 leading-relaxed font-medium">
-                  Aceito os <button type="button" onClick={() => openModal('terms')} className="text-tea-600 font-bold hover:underline">Termos</button> e a <button type="button" onClick={() => openModal('privacy')} className="text-tea-600 font-bold hover:underline">Privacidade (LGPD)</button>.
+                  Aceito os <button type="button" onClick={() => openModal('terms')} className="text-tea-600 font-bold hover:underline">Termos</button> e a <button type="button" onClick={() => openModal('privacy')} className="text-tea-600 font-bold hover:underline">Política de Privacidade</button>.
                 </span>
               </div>
             </label>
@@ -145,9 +159,10 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack 
           
           <button 
             type="submit"
-            className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${agreedToTerms ? 'bg-tea-800 text-white hover:bg-tea-900 shadow-tea-200 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            disabled={isDuplicateCpf || !agreedToTerms}
+            className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${!isDuplicateCpf && agreedToTerms ? 'bg-tea-800 text-white hover:bg-tea-900 shadow-tea-200 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70'}`}
           >
-            Concluir Cadastro
+            {isDuplicateCpf ? 'CPF já em uso' : 'Concluir Cadastro'}
           </button>
         </form>
       </div>
