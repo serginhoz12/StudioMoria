@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, TeamMember, Promotion } from '../types';
+import { Customer, Booking, Service, SalonSettings, TeamMember, Promotion, WaitlistEntry } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc } from "firebase/firestore";
 
@@ -13,8 +13,10 @@ interface CustomerDashboardProps {
   onUpdateProfile: (updated: Partial<Customer>) => void;
   onLogout: () => void;
   onCancelBooking: (id: string) => void;
-  onAddToWaitlist?: (serviceId: string, date: string) => void;
+  onAddToWaitlist: (serviceId: string, date: string) => void;
   promotions?: Promotion[];
+  waitlist: WaitlistEntry[];
+  onRemoveWaitlist: (id: string) => void;
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -23,7 +25,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   services, 
   settings,
   onLogout,
-  promotions = []
+  onAddToWaitlist,
+  onRemoveWaitlist,
+  promotions = [],
+  waitlist = []
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
@@ -33,7 +38,11 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedProId, setSelectedProId] = useState<string>('');
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<string>('Todos');
+  const [waitlistModal, setWaitlistModal] = useState<{ open: boolean; service: Service | null; date: string }>({
+    open: false,
+    service: null,
+    date: new Date().toISOString().split('T')[0]
+  });
 
   const POLICY_MODAL_TEXT = "Declaro ciência da taxa de reserva de 30%. Em caso de falta, 50% desse valor (no caso 15% do valor do serviço) será retido ao salão.";
 
@@ -53,17 +62,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     ).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   }, [promotions, customer.id]);
 
-  // Derived categories from existing services
-  const availableCategories = useMemo(() => {
-    const cats = new Set(services.filter(s => s.isVisible).map(s => s.category));
-    return ['Todos', ...Array.from(cats).sort()];
+  // Lista de todos os serviços visíveis sem filtros de categoria
+  const allVisibleServices = useMemo(() => {
+    return services.filter(s => s.isVisible);
   }, [services]);
-
-  const filteredServices = useMemo(() => {
-    const base = services.filter(s => s.isVisible);
-    if (activeCategory === 'Todos') return base;
-    return base.filter(s => s.category === activeCategory);
-  }, [services, activeCategory]);
 
   const getAvailabilityForDate = (date: string, service: Service) => {
     const slots: Record<string, TeamMember[]> = {};
@@ -160,9 +162,45 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
+  const handleJoinWaitlist = async () => {
+    if (waitlistModal.service) {
+      await onAddToWaitlist(waitlistModal.service.id, waitlistModal.date);
+      setWaitlistModal({ ...waitlistModal, open: false });
+      alert("Você entrou na fila de espera! Avisaremos via WhatsApp se uma vaga surgir.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in font-sans">
       
+      {/* Modal Fila de Espera */}
+      {waitlistModal.open && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-3xl animate-slide-up space-y-8 border border-gray-100">
+             <div className="text-center space-y-2">
+                <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">⏳</div>
+                <h3 className="text-xl font-serif font-bold text-tea-950 italic">Fila de Espera</h3>
+                <p className="text-xs text-gray-500 italic">Informe a data que você gostaria de ser atendida para {waitlistModal.service?.name}</p>
+             </div>
+             
+             <div className="space-y-4">
+                <label className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-1">Data Desejada</label>
+                <input 
+                  type="date" 
+                  value={waitlistModal.date}
+                  onChange={(e) => setWaitlistModal({ ...waitlistModal, date: e.target.value })}
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold text-tea-950 outline-none"
+                />
+             </div>
+
+             <div className="flex flex-col gap-3">
+                <button onClick={handleJoinWaitlist} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all">Entrar na Fila</button>
+                <button onClick={() => setWaitlistModal({ ...waitlistModal, open: false })} className="w-full py-2 text-gray-400 font-bold uppercase text-[9px]">Cancelar</button>
+             </div>
+          </div>
+        </div>
+      )}
+
       {showPolicyModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-xl animate-fade-in">
           <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-3xl animate-slide-up space-y-8 text-center border-4 border-tea-100">
@@ -211,11 +249,11 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             <div className="grid grid-cols-2 gap-4">
                <button onClick={() => setActiveTab('agendar')} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-50 flex flex-col items-center gap-4 group hover:bg-tea-50 transition-all">
                   <div className="w-12 h-12 bg-tea-100 text-tea-900 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">✨</div>
-                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Agendar</span>
+                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Procedimentos</span>
                </button>
                <button onClick={() => setActiveTab('agenda')} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-100 flex flex-col items-center gap-4 group hover:bg-tea-50 transition-all">
                   <div className="w-12 h-12 bg-gray-50 text-tea-800 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🗓️</div>
-                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Agenda</span>
+                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Minha Agenda</span>
                </button>
             </div>
 
@@ -229,14 +267,16 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     {highlightedServices.map(service => (
                       <div 
                         key={service.id} 
-                        onClick={() => { setSelectedService(service); setActiveTab('agendar'); setBookingStep(2); }}
-                        className="min-w-[240px] bg-tea-900 p-8 rounded-[3.5rem] shadow-2xl relative overflow-hidden group cursor-pointer"
+                        className="min-w-[240px] bg-tea-900 p-8 rounded-[3.5rem] shadow-2xl relative overflow-hidden group"
                       >
                          <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -mr-10 -mt-10"></div>
                          <span className="text-[8px] font-bold text-tea-300 uppercase tracking-widest mb-4 block">{service.category}</span>
                          <h4 className="text-xl font-serif font-bold text-white italic mb-2 leading-tight">{service.name}</h4>
                          <p className="text-[10px] text-tea-100 font-bold uppercase tracking-widest mb-8">R$ {service.price.toFixed(2)}</p>
-                         <button className="w-full py-4 bg-white text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Reservar</button>
+                         <div className="flex flex-col gap-2">
+                            <button onClick={() => { setSelectedService(service); setActiveTab('agendar'); setBookingStep(2); }} className="w-full py-4 bg-white text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Agendar</button>
+                            <button onClick={() => setWaitlistModal({ open: true, service, date: new Date().toISOString().split('T')[0] })} className="w-full py-3 bg-white/10 text-white rounded-2xl font-bold uppercase text-[8px] tracking-widest border border-white/20">Fila de Espera</button>
+                         </div>
                       </div>
                     ))}
                  </div>
@@ -277,47 +317,51 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <div className="space-y-8 animate-slide-up">
             <div className="flex items-center justify-between px-2">
                <button onClick={() => { if(bookingStep > 1) setBookingStep(prev => (prev - 1) as any); else setActiveTab('home'); }} className="p-3 bg-white rounded-2xl shadow-sm">←</button>
-               <h3 className="text-xl font-serif font-bold text-tea-950 italic">{bookingStep === 1 ? 'Procedimentos' : bookingStep === 2 ? 'Horário' : 'Confirmado'}</h3>
+               <h3 className="text-xl font-serif font-bold text-tea-950 italic">{bookingStep === 1 ? 'Procedimentos' : bookingStep === 2 ? 'Escolha o Horário' : 'Confirmado'}</h3>
                <div className="w-10"></div>
             </div>
 
             {bookingStep === 1 && (
-              <>
-                {/* Category Filters */}
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-2">
-                  {availableCategories.map(cat => (
-                    <button 
-                      key={cat} 
-                      onClick={() => setActiveCategory(cat)}
-                      className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap border-2 ${activeCategory === cat ? 'bg-tea-900 border-tea-900 text-white shadow-lg' : 'bg-white border-tea-50 text-gray-400'}`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-4">
-                  {filteredServices.map(service => (
-                    <button key={service.id} onClick={() => { setSelectedService(service); setBookingStep(2); }} className="w-full bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 flex justify-between items-center group hover:border-tea-200 transition-all text-left">
-                       <div>
-                          <p className="text-[8px] text-tea-600 font-bold uppercase tracking-widest mb-1">{service.category}</p>
-                          <p className="font-bold text-tea-950 text-lg group-hover:text-tea-800">{service.name}</p>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">R$ {service.price.toFixed(2)} • {service.duration}min</p>
-                       </div>
-                       <div className="w-10 h-10 bg-tea-50 rounded-xl flex items-center justify-center text-tea-900 group-hover:bg-tea-900 group-hover:text-white transition-all">+</div>
-                    </button>
-                  ))}
-                  {filteredServices.length === 0 && <p className="text-center py-20 text-gray-300 italic">Nenhum serviço nesta categoria.</p>}
-                </div>
-              </>
+              <div className="space-y-6">
+                {allVisibleServices.map(service => (
+                  <div key={service.id} className="w-full bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col gap-6 group hover:border-tea-200 transition-all">
+                     <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                           <p className="text-[8px] text-tea-600 font-bold uppercase tracking-widest">{service.category || 'Procedimento'}</p>
+                           <p className="font-bold text-tea-950 text-xl group-hover:text-tea-800 transition-colors">{service.name}</p>
+                           <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">R$ {service.price.toFixed(2)} • {service.duration}min</p>
+                        </div>
+                        <div className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-tea-900 group-hover:bg-tea-900 group-hover:text-white transition-all text-xl">🌿</div>
+                     </div>
+                     
+                     <div className="flex gap-3">
+                        <button 
+                          onClick={() => { setSelectedService(service); setBookingStep(2); }}
+                          className="flex-[2] py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+                        >
+                           Agendar Agora
+                        </button>
+                        <button 
+                          onClick={() => setWaitlistModal({ open: true, service, date: new Date().toISOString().split('T')[0] })}
+                          className="flex-1 py-4 bg-white border-2 border-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-50 transition-all"
+                        >
+                           Fila de Espera
+                        </button>
+                     </div>
+                  </div>
+                ))}
+                {allVisibleServices.length === 0 && (
+                  <div className="text-center py-20 opacity-30 italic text-sm">Nenhum serviço disponível no momento.</div>
+                )}
+              </div>
             )}
 
             {bookingStep === 2 && selectedService && (
               <div className="space-y-8">
                  <div className="p-6 bg-tea-900 rounded-[2.5rem] text-white space-y-2 shadow-xl">
-                    <p className="text-[8px] font-bold text-tea-300 uppercase tracking-widest">Procedimento Selecionado</p>
+                    <p className="text-[8px] font-bold text-tea-300 uppercase tracking-widest">Você selecionou</p>
                     <h4 className="text-xl font-serif italic font-bold">{selectedService.name}</h4>
-                    <p className="text-xs font-bold text-tea-100 uppercase tracking-widest">R$ {selectedService.price.toFixed(2)}</p>
+                    <p className="text-xs font-bold text-tea-100 uppercase tracking-widest">Investimento: R$ {selectedService.price.toFixed(2)}</p>
                  </div>
 
                  <div className="space-y-4">
@@ -351,7 +395,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                        ))}
                        {Object.keys(availableSlotsForDate).length === 0 && (
                          <div className="col-span-4 text-center py-10 bg-gray-50 rounded-3xl border-2 border-dashed border-gray-100">
-                            <p className="text-xs text-gray-400 italic">Sem horários disponíveis para este dia.</p>
+                            <p className="text-xs text-gray-400 italic mb-4">Agenda cheia para este dia.</p>
+                            <button 
+                              onClick={() => setWaitlistModal({ open: true, service: selectedService, date: selectedDate })}
+                              className="text-tea-800 font-bold uppercase text-[9px] tracking-widest underline"
+                            >
+                              Deseja entrar na fila de espera?
+                            </button>
                          </div>
                        )}
                     </div>
@@ -375,7 +425,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         disabled={!agreedToCancellation}
                         className={`w-full py-6 rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-2xl transition-all ${agreedToCancellation ? 'bg-tea-900 text-white hover:bg-black shadow-tea-200' : 'bg-gray-100 text-gray-300'}`}
                       >
-                        Finalizar Reserva
+                        Confirmar Reserva
                       </button>
                    </div>
                  )}
@@ -386,8 +436,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               <div className="text-center py-20 space-y-8 animate-slide-up">
                  <div className="w-32 h-32 bg-tea-50 text-tea-900 rounded-[3rem] flex items-center justify-center text-6xl mx-auto shadow-inner">🎉</div>
                  <div className="space-y-4 px-10">
-                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">Agendamento Realizado!</h3>
-                    <p className="text-gray-500 text-xs leading-relaxed italic">Seu pedido foi enviado para o Studio Moriá. Avisaremos pelo WhatsApp assim que for confirmado.</p>
+                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">Agendamento Enviado!</h3>
+                    <p className="text-gray-500 text-xs leading-relaxed italic">Recebemos seu pedido. Avisaremos você pelo WhatsApp assim que o Studio Moriá confirmar.</p>
                  </div>
                  <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[10px] tracking-widest shadow-xl">Ver Meus Horários</button>
               </div>
@@ -399,9 +449,25 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <div className="space-y-8 animate-slide-up">
              <div className="flex items-center justify-between px-2">
                 <button onClick={() => setActiveTab('home')} className="p-3 bg-white rounded-2xl shadow-sm">←</button>
-                <h3 className="text-xl font-serif font-bold text-tea-950 italic">Meus Horários</h3>
+                <h3 className="text-xl font-serif font-bold text-tea-950 italic">Minha Agenda</h3>
                 <div className="w-10"></div>
              </div>
+
+             {/* Fila de Espera Ativa da Cliente */}
+             {waitlist.length > 0 && (
+                <div className="space-y-4">
+                   <h4 className="text-[9px] font-bold text-tea-600 uppercase tracking-widest ml-4">Minha Fila de Espera</h4>
+                   {waitlist.map(w => (
+                     <div key={w.id} className="p-6 bg-tea-50/50 border border-tea-100 rounded-[2rem] flex justify-between items-center shadow-sm">
+                        <div>
+                           <p className="font-bold text-tea-950 text-sm">{w.serviceName}</p>
+                           <p className="text-[9px] text-tea-700 font-bold uppercase tracking-widest italic">Interesse para: {w.preferredDate}</p>
+                        </div>
+                        <button onClick={() => onRemoveWaitlist(w.id)} className="text-[8px] bg-white text-tea-600 px-4 py-2 rounded-xl font-bold uppercase tracking-widest shadow-sm border border-tea-50">Cancelar</button>
+                     </div>
+                   ))}
+                </div>
+             )}
 
              <div className="space-y-6">
                 {myBookings.map(booking => {
@@ -411,8 +477,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   return (
                     <div key={booking.id} className={`p-8 bg-white rounded-[3rem] border-2 shadow-sm transition-all ${isPast ? 'opacity-50 grayscale border-transparent' : 'border-tea-50 shadow-tea-100/10'}`}>
                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                             <p className="text-[8px] text-tea-600 font-bold uppercase tracking-widest mb-1">Studio Moriá</p>
+                          <div className="space-y-1">
+                             <p className="text-[8px] text-tea-600 font-bold uppercase tracking-widest">Confirmado ✓</p>
                              <h4 className="text-xl font-serif font-bold text-tea-950 italic">{booking.serviceName}</h4>
                           </div>
                           <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${
@@ -421,13 +487,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                             booking.status === 'cancelled' ? 'bg-red-50 text-red-600' :
                             'bg-orange-100 text-orange-700'
                           }`}>
-                            {booking.status === 'scheduled' ? 'Confirmado' : 
-                             booking.status === 'completed' ? 'Concluído' :
+                            {booking.status === 'scheduled' ? 'Agendado' : 
+                             booking.status === 'completed' ? 'Realizado' :
                              booking.status === 'cancelled' ? 'Cancelado' :
-                             'Pendente'}
+                             'Em Análise'}
                           </span>
                        </div>
-                       <div className="flex items-center gap-6 pt-4 border-t border-gray-50">
+                       <div className="flex items-center gap-6 pt-6 border-t border-gray-50">
                           <div className="flex flex-col">
                              <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest">Data</span>
                              <span className="text-sm font-bold text-gray-700">{bDate.toLocaleDateString()}</span>
@@ -440,10 +506,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     </div>
                   );
                 })}
-                {myBookings.length === 0 && (
+                {myBookings.length === 0 && waitlist.length === 0 && (
                   <div className="text-center py-32 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-100">
-                     <p className="text-gray-400 font-serif italic text-lg">Nenhum agendamento ainda.</p>
-                     <button onClick={() => setActiveTab('agendar')} className="text-tea-700 font-bold uppercase text-[9px] tracking-widest mt-4">Agendar Agora</button>
+                     <p className="text-gray-400 font-serif italic text-lg px-10">Você ainda não tem agendamentos ou interesses registrados.</p>
+                     <button onClick={() => setActiveTab('agendar')} className="text-tea-800 font-bold uppercase text-[9px] tracking-widest mt-6 bg-white px-6 py-3 rounded-full shadow-sm">Ver Procedimentos</button>
                   </div>
                 )}
              </div>
@@ -455,7 +521,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
          <div className="max-w-md mx-auto bg-tea-950/80 backdrop-blur-2xl rounded-[3rem] p-3 flex justify-between items-center border border-white/10 shadow-2xl">
             {[
               { id: 'home', label: 'Início', icon: '🏠' },
-              { id: 'agendar', label: 'Agendar', icon: '✨' },
+              { id: 'agendar', label: 'Cuidados', icon: '✨' },
               { id: 'agenda', label: 'Agenda', icon: '🗓️' },
               { id: 'logout', label: 'Sair', icon: '👋' }
             ].map(tab => (
