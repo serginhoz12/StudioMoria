@@ -126,7 +126,6 @@ const App: React.FC = () => {
   }, [currentUser, isAdminAuthenticated]);
 
   const handleRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
-    // Verificação dupla de segurança
     if (customers.some(c => c.cpf === cpf)) {
       alert("Este CPF já está cadastrado.");
       return;
@@ -205,7 +204,6 @@ const App: React.FC = () => {
     });
   };
 
-  // EXCLUSÃO REAL DE CLIENTE
   const handleDeleteCustomer = async (id: string) => {
     if (confirm("ATENÇÃO: Isso excluirá PERMANENTEMENTE o cadastro da cliente e seu acesso ao app. Deseja continuar?")) {
       await deleteDoc(doc(db, "customers", id));
@@ -232,7 +230,7 @@ const App: React.FC = () => {
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={handleDeleteCustomer} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
-        case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} />;
+        case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} />;
       }
     }

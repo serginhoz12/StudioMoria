@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Promotion, Service } from '../types';
+import { Customer, Promotion, Service, Booking } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
@@ -9,16 +9,19 @@ interface AdminMarketingProps {
   customers: Customer[];
   promotions: Promotion[];
   services: Service[];
+  bookings: Booking[];
 }
 
 const AdminMarketing: React.FC<AdminMarketingProps> = ({ 
   customers = [], 
   promotions = [], 
-  services = [] 
+  services = [],
+  bookings = []
 }) => {
   const [activeTab, setActiveTab] = useState<'promotions' | 'tips'>('promotions');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
   
   // Estado do Formulário
   const [title, setTitle] = useState('');
@@ -132,6 +135,104 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setSelectedServices([]); setSelectedCustomerIds(new Set());
   };
 
+  // Lógica de Performance
+  const getPromotionStats = (promo: Promotion) => {
+    // Clientes que receberam a promoção e agendaram
+    const conversions = bookings.filter(b => 
+      b.promotionId === promo.id || 
+      (promo.targetCustomerIds.includes(b.customerId) && 
+       b.serviceId === promo.linkedServiceId && 
+       new Date(b.dateTime.replace(' ', 'T')) >= new Date(promo.startDate))
+    );
+    
+    const uniqueConverteds = new Set(conversions.map(b => b.customerId));
+    const totalAlvos = promo.targetCustomerIds.length;
+    const effectiveness = totalAlvos > 0 ? (uniqueConverteds.size / totalAlvos) * 100 : 0;
+
+    return {
+      totalAlvos,
+      conversionsCount: conversions.length,
+      uniqueConverteds: uniqueConverteds.size,
+      effectiveness
+    };
+  };
+
+  if (selectedPromotion) {
+    const stats = getPromotionStats(selectedPromotion);
+    const alvos = customers.filter(c => selectedPromotion.targetCustomerIds.includes(c.id));
+
+    return (
+      <div className="space-y-8 animate-fade-in pb-20">
+        <button onClick={() => setSelectedPromotion(null)} className="text-tea-700 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2 group">
+          <span className="group-hover:-translate-x-1 transition-transform">←</span> Voltar ao Histórico
+        </button>
+
+        <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-gray-100 flex flex-col md:flex-row gap-10">
+           <div className="flex-1 space-y-4">
+              <div className="flex items-center gap-3">
+                 <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${selectedPromotion.type === 'promotion' ? 'bg-orange-500 text-white' : 'bg-tea-900 text-white'}`}>
+                    {selectedPromotion.type === 'promotion' ? 'Análise de Conversão' : 'Alcance da Dica'}
+                 </span>
+                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Publicada em {new Date(selectedPromotion.createdAt).toLocaleDateString()}</p>
+              </div>
+              <h2 className="text-3xl font-serif text-tea-950 font-bold italic">{selectedPromotion.title}</h2>
+              <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 italic text-gray-600 text-xs leading-relaxed whitespace-pre-line">
+                "{selectedPromotion.content}"
+              </div>
+           </div>
+
+           <div className="w-full md:w-80 space-y-4">
+              <div className="bg-tea-950 p-8 rounded-[2.5rem] text-white space-y-2 relative overflow-hidden">
+                 <div className="absolute top-0 right-0 p-4 opacity-10 text-6xl">📈</div>
+                 <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest">Efetividade Moriá</p>
+                 <p className="text-4xl font-serif font-bold italic">{stats.effectiveness.toFixed(1)}%</p>
+                 <div className="w-full h-1.5 bg-white/10 rounded-full mt-4">
+                    <div className="h-full bg-tea-400 rounded-full transition-all duration-1000" style={{ width: `${stats.effectiveness}%` }}></div>
+                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-white p-6 rounded-3xl border border-gray-100 text-center">
+                    <p className="text-[8px] text-gray-400 font-bold uppercase mb-1">Impactadas</p>
+                    <p className="text-2xl font-serif font-bold text-tea-950">{stats.totalAlvos}</p>
+                 </div>
+                 <div className="bg-white p-6 rounded-3xl border border-gray-100 text-center">
+                    <p className="text-[8px] text-gray-400 font-bold uppercase mb-1">Convertidas</p>
+                    <p className="text-2xl font-serif font-bold text-tea-950">{stats.uniqueConverteds}</p>
+                 </div>
+              </div>
+           </div>
+        </div>
+
+        <section className="space-y-6">
+           <h3 className="text-xl font-serif text-tea-950 italic font-bold ml-4">Monitoramento de Alvos ({alvos.length})</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {alvos.map(c => {
+                const converted = bookings.some(b => b.customerId === c.id && (b.promotionId === selectedPromotion.id || (b.serviceId === selectedPromotion.linkedServiceId && b.status === 'completed')));
+                return (
+                  <div key={c.id} className="bg-white p-6 rounded-[2rem] border border-gray-50 flex items-center justify-between hover:border-tea-200 transition-all">
+                    <div className="flex items-center gap-4">
+                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${converted ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                          {c.name.charAt(0)}
+                       </div>
+                       <div>
+                          <p className="font-bold text-tea-950 text-xs">{c.name}</p>
+                          <p className="text-[9px] text-gray-400 uppercase tracking-widest">{c.whatsapp}</p>
+                       </div>
+                    </div>
+                    {converted ? (
+                      <span className="text-[8px] bg-green-50 text-green-600 px-2 py-1 rounded-full font-bold uppercase tracking-widest">Converteu ✓</span>
+                    ) : (
+                      <span className="text-[8px] bg-gray-50 text-gray-300 px-2 py-1 rounded-full font-bold uppercase tracking-widest italic">Aguardando</span>
+                    )}
+                  </div>
+                );
+              })}
+           </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-fade-in pb-20">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
@@ -244,6 +345,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
             const today = new Date().toISOString().split('T')[0];
             const isPast = (promo.endDate || '') < today;
             const linkedService = services.find(s => s.id === promo.linkedServiceId);
+            const stats = getPromotionStats(promo);
 
             return (
               <div key={promo.id} className={`bg-white p-6 md:p-8 rounded-[2.5rem] border-2 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 transition-all ${isPast ? 'opacity-50' : 'border-tea-50 hover:border-tea-100'}`}>
@@ -251,7 +353,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center text-xl md:text-2xl font-bold ${activeTab === 'promotions' ? 'bg-tea-900 text-white shadow-lg' : 'bg-tea-100 text-tea-900 border border-tea-200'}`}>
                     {activeTab === 'promotions' ? (promo.discountPercentage === 100 ? 'FREE' : `${promo.discountPercentage}%`) : '✨'}
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <h3 className="font-bold text-tea-950 text-lg md:text-xl font-serif">{promo.title}</h3>
                     <div className="flex flex-wrap gap-2 mt-1">
                       <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
@@ -262,10 +364,14 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                            Link: {linkedService.name}
                         </span>
                       )}
+                      <span className="text-[9px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">
+                         Efetividade: {stats.effectiveness.toFixed(0)}%
+                      </span>
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto">
+                   <button onClick={() => setSelectedPromotion(promo)} className="flex-grow md:flex-none px-6 py-3 bg-tea-50 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-100 transition-all">Ver Performance 📊</button>
                    <button onClick={async () => { if(confirm("Remover permanentemente?")) await deleteDoc(doc(db, "promotions", promo.id)); }} className="p-3 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500 transition-colors">🗑️</button>
                 </div>
               </div>
