@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry, Promotion } from '../types';
 import { db } from '../firebase.ts';
-import { doc, updateDoc, collection, addDoc } from "firebase/firestore";
+import { collection, addDoc } from "firebase/firestore";
 
 interface CustomerDashboardProps {
   customer: Customer;
@@ -27,85 +27,46 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onLogout,
   promotions = []
 }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'ofertas' | 'agendar' | 'agenda' | 'perfil'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'perfil'>('home');
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  
-  const todayStr = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [selectedProId, setSelectedProId] = useState<string>('');
-  const [bookingStep, setBookingStep] = useState<1 | 2 | 3>(1);
   const [agreedToCancellation, setAgreedToCancellation] = useState(false);
   const [showPolicyModal, setShowPolicyModal] = useState(false);
-  const [serviceSearch, setServiceSearch] = useState('');
-  
-  const [viewingServiceDetail, setViewingServiceDetail] = useState<Service | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string>('Todos');
 
-  // Textos Legais
-  const POLICY_CHECKBOX_TEXT = "Declaro ciência da taxa de reserva de 30% em caso de falta.";
   const POLICY_MODAL_TEXT = "Declaro ciência da taxa de reserva de 30%. Em caso de falta, 50% desse valor (no caso 15% do valor do serviço) será retido ao salão.";
 
+  // Dados Derivados
+  const myBookings = useMemo(() => 
+    bookings.filter(b => b.customerId === customer.id).sort((a,b) => b.dateTime.localeCompare(a.dateTime)),
+  [bookings, customer.id]);
+
+  const completedCount = useMemo(() => myBookings.filter(b => b.status === 'completed').length, [myBookings]);
+  const loyaltyProgress = (completedCount % 10);
+
+  const categories = ['Todos', 'Olhar', 'Rosto', 'Unhas', 'Corpo'];
+  
+  const highlightedServices = useMemo(() => services.filter(s => s.isVisible && s.isHighlighted), [services]);
+  
+  const activePromosAndTips = useMemo(() => {
+    return promotions.filter(p => 
+      p.isActive && 
+      (p.targetCustomerIds.length === 0 || p.targetCustomerIds.includes(customer.id))
+    ).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+  }, [promotions, customer.id]);
+
   const filteredServices = useMemo(() => {
-    return services
-      .filter(s => s.isVisible && s.name.toLowerCase().includes(serviceSearch.toLowerCase()))
-      .sort((a, b) => (a.isHighlighted ? -1 : 1));
-  }, [services, serviceSearch]);
-
-  const activePromotions = useMemo(() => 
-    promotions.filter(p => (p.targetCustomerIds || []).includes(customer.id) && p.type === 'promotion' && p.isActive),
-    [promotions, customer.id]);
-
-  const activePromoForService = useMemo(() => {
-    if (!selectedService) return null;
-    return activePromotions.find(p => p.linkedServiceId === selectedService.id || p.applicableServiceIds.includes(selectedService.id));
-  }, [selectedService, activePromotions]);
-
-  const priceInfo = useMemo(() => {
-    if (!selectedService) return { original: 0, final: 0, discount: 0 };
-    const original = selectedService.price;
-    const discountPercent = activePromoForService?.discountPercentage || 0;
-    const discountVal = (original * discountPercent) / 100;
-    return { original, final: Math.max(0, original - discountVal), discount: discountVal };
-  }, [selectedService, activePromoForService]);
-
-  const allPossibleSlots = useMemo(() => {
-    const slots: string[] = [];
-    const start = parseInt((settings.businessHours?.start || "08:00").split(':')[0]);
-    const end = parseInt((settings.businessHours?.end || "19:00").split(':')[0]);
-    for (let h = start; h < end; h++) {
-      slots.push(`${h.toString().padStart(2, '0')}:00`, `${h.toString().padStart(2, '0')}:30`);
-    }
-    return slots;
-  }, [settings.businessHours]);
-
-  const currentSlotsAvailability = useMemo(() => {
-    if (!selectedService) return {};
-    const availability: Record<string, TeamMember[]> = {};
-    const dateObj = new Date(selectedDate + 'T12:00:00');
-    const dayOfWeek = dateObj.getDay();
-    const pros = settings.teamMembers.filter(m => m.assignedServiceIds.includes(selectedService.id));
-
-    allPossibleSlots.forEach(slot => {
-      const slotStartMin = (h:string)=>parseInt(h.split(':')[0])*60+parseInt(h.split(':')[1]);
-      const sStartMin = slotStartMin(slot);
-      const sEndMin = sStartMin + selectedService.duration;
-      
-      const freePros = pros.filter(pro => {
-        if (pro.offDays?.includes(dayOfWeek)) return false;
-        const pStartMin = slotStartMin(pro.businessHours?.start || settings.businessHours.start);
-        const pEndMin = slotStartMin(pro.businessHours?.end || settings.businessHours.end);
-        if (sStartMin < pStartMin || sEndMin > pEndMin) return false;
-        
-        return !bookings.some(b => 
-          b.teamMemberId === pro.id && 
-          b.status !== 'cancelled' && 
-          b.dateTime === `${selectedDate} ${slot}`
-        );
-      });
-      if (freePros.length > 0) availability[slot] = freePros;
-    });
-    return availability;
-  }, [selectedService, selectedDate, settings, bookings, allPossibleSlots]);
+    if (activeCategory === 'Todos') return services.filter(s => s.isVisible);
+    // Filtro inteligente baseado na descrição ou nome
+    return services.filter(s => 
+      s.isVisible && 
+      (s.description.toLowerCase().includes(activeCategory.toLowerCase()) || 
+       s.name.toLowerCase().includes(activeCategory.toLowerCase()))
+    );
+  }, [services, activeCategory]);
 
   const handleBookSubmit = async () => {
     if (selectedService && selectedProId && selectedTime && agreedToCancellation) {
@@ -123,219 +84,279 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         teamMemberName: pro?.name,
         agreedToCancellationPolicy: true,
         policyAgreedAt: new Date().toISOString(),
-        policyAgreedText: POLICY_MODAL_TEXT, // Registro de auditoria solicitado
-        promotionId: activePromoForService?.id,
-        promotionTitle: activePromoForService?.title,
-        originalPrice: priceInfo.original,
-        discountApplied: priceInfo.discount,
-        finalPrice: priceInfo.final
+        policyAgreedText: POLICY_MODAL_TEXT,
+        originalPrice: selectedService.price,
+        finalPrice: selectedService.price
       });
       setShowPolicyModal(false);
       setBookingStep(3);
     }
   };
 
-  const myBookings = bookings.filter(b => b.customerId === customer.id).sort((a,b) => b.dateTime.localeCompare(a.dateTime));
-
   return (
-    <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in">
-      {/* Pop-up de Confirmação Final de Ciência da Taxa */}
+    <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in font-sans">
+      
+      {/* Modal de Política Crítica */}
       {showPolicyModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-lg animate-fade-in">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-xl animate-fade-in">
           <div className="bg-white w-full max-w-sm rounded-[3.5rem] p-10 shadow-3xl animate-slide-up space-y-8 text-center border-4 border-tea-100">
-            <div className="w-20 h-20 bg-tea-50 text-tea-900 rounded-full flex items-center justify-center text-4xl mx-auto shadow-inner">📄</div>
+            <div className="w-20 h-20 bg-tea-50 text-tea-900 rounded-full flex items-center justify-center text-4xl mx-auto">📄</div>
             <div className="space-y-4">
-              <h3 className="text-xl font-serif font-bold text-tea-950 italic">Confirmação de Ciência</h3>
-              <p className="text-gray-600 text-sm leading-relaxed font-medium">
-                {POLICY_MODAL_TEXT}
-              </p>
+              <h3 className="text-xl font-serif font-bold text-tea-950 italic">Compromisso Moriá</h3>
+              <p className="text-gray-600 text-sm leading-relaxed">{POLICY_MODAL_TEXT}</p>
             </div>
-            <div className="flex flex-col gap-3">
-               <button 
-                 onClick={handleBookSubmit}
-                 className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
-               >
-                 Estou Ciente e Confirmo
-               </button>
-               <button 
-                 onClick={() => setShowPolicyModal(false)}
-                 className="w-full py-3 text-gray-400 font-bold uppercase text-[9px] tracking-widest"
-               >
-                 Voltar e Ajustar
-               </button>
-            </div>
+            <button onClick={handleBookSubmit} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-black transition-all">Confirmar Agendamento</button>
+            <button onClick={() => setShowPolicyModal(false)} className="w-full py-2 text-gray-400 font-bold uppercase text-[9px]">Cancelar</button>
           </div>
         </div>
       )}
 
-      <header className="bg-tea-900 pt-12 pb-24 px-8 rounded-b-[4.5rem] shadow-2xl relative overflow-hidden">
-        <div className="max-w-md mx-auto flex flex-col items-center gap-6 relative z-10 text-white">
-          <div className="w-full flex justify-between items-start">
-            <button onClick={onLogout} className="p-4 bg-white/10 rounded-2xl hover:bg-white/20 transition-all">🚪</button>
-            <div className="text-right">
-              <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest">Studio Moriá</p>
-              <h2 className="text-xl font-serif font-bold italic">Painel Exclusivo</h2>
-            </div>
-          </div>
-          <div className="flex items-center gap-6 w-full mt-4">
-             <div className="w-20 h-20 bg-white/10 rounded-3xl border border-white/20 flex items-center justify-center text-3xl font-serif shadow-inner">{customer.name.charAt(0)}</div>
-             <div>
-                <p className="text-[10px] font-bold uppercase text-tea-200">Bem-vinda de volta,</p>
-                <h1 className="text-2xl font-serif font-bold italic">{customer.name.split(' ')[0]}</h1>
+      {/* Header Imersivo */}
+      <header className="bg-gradient-to-b from-tea-900 to-tea-950 pt-16 pb-28 px-8 rounded-b-[5rem] shadow-2xl relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-tea-400/10 rounded-full -mr-40 -mt-40 blur-3xl"></div>
+        
+        <div className="max-w-md mx-auto relative z-10 flex flex-col items-center gap-8">
+          <div className="w-full flex justify-between items-center">
+             <div className="w-16 h-16 bg-white/10 rounded-3xl backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+                <span className="text-white text-2xl font-serif italic font-bold">{customer.name.charAt(0)}</span>
              </div>
+             <div className="text-right">
+                <p className="text-[9px] font-bold text-tea-300 uppercase tracking-[0.3em] mb-1">Studio Moriá</p>
+                <h1 className="text-2xl font-serif text-white font-bold italic leading-none">{customer.name.split(' ')[0]}</h1>
+             </div>
+          </div>
+
+          {/* Cartão Fidelidade Visual */}
+          <div className="w-full bg-white/5 backdrop-blur-md rounded-[3rem] p-8 border border-white/10 shadow-2xl space-y-4">
+             <div className="flex justify-between items-center">
+                <span className="text-[9px] font-bold text-tea-200 uppercase tracking-widest">Cartão Fidelidade</span>
+                <span className="text-[10px] text-white font-serif italic">{completedCount} Procedimentos</span>
+             </div>
+             <div className="flex justify-between gap-2">
+                {[...Array(10)].map((_, i) => (
+                  <div key={i} className={`flex-1 h-2 rounded-full transition-all duration-700 ${i < loyaltyProgress ? 'bg-tea-300 shadow-[0_0_10px_rgba(142,201,154,0.6)]' : 'bg-white/10'}`}></div>
+                ))}
+             </div>
+             <p className="text-[10px] text-tea-100 font-medium italic text-center">Complete 10 sessões e ganhe um presente especial ✨</p>
           </div>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-6 -mt-12 relative z-20 pb-20">
+      {/* Main Content */}
+      <main className="max-w-md mx-auto px-6 -mt-16 relative z-20 space-y-12">
+        
         {activeTab === 'home' && (
-          <div className="space-y-10 animate-slide-up">
-            <div className="bg-white p-10 rounded-[3.5rem] shadow-xl border border-gray-50 text-center space-y-6">
-               <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Sua Melhor Versão</h3>
-               <button onClick={() => setActiveTab('agendar')} className="w-full py-5 bg-tea-800 text-white rounded-[2rem] font-bold text-[10px] uppercase tracking-widest shadow-xl hover:bg-tea-950 transition-all">Novo Agendamento</button>
+          <div className="space-y-12 animate-slide-up pb-10">
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 gap-4">
+               <button onClick={() => setActiveTab('agendar')} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-50 flex flex-col items-center gap-4 group hover:bg-tea-50 transition-all">
+                  <div className="w-12 h-12 bg-tea-100 text-tea-900 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">✨</div>
+                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Novo Agendamento</span>
+               </button>
+               <button onClick={() => setActiveTab('agenda')} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-100 flex flex-col items-center gap-4 group hover:bg-tea-50 transition-all">
+                  <div className="w-12 h-12 bg-gray-50 text-tea-800 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🗓️</div>
+                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Minha Agenda</span>
+               </button>
             </div>
+
+            {/* Procedimentos em Destaque */}
+            {highlightedServices.length > 0 && (
+              <section className="space-y-6">
+                 <div className="flex justify-between items-end px-2">
+                    <h3 className="text-2xl font-serif text-tea-950 italic font-bold">Desejos Moriá</h3>
+                    <button onClick={() => setActiveTab('agendar')} className="text-[9px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Ver Todos</button>
+                 </div>
+                 <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+                    {highlightedServices.map(service => (
+                      <div 
+                        key={service.id} 
+                        onClick={() => { setSelectedService(service); setActiveTab('agendar'); setBookingStep(2); }}
+                        className="min-w-[240px] bg-tea-900 p-8 rounded-[3.5rem] shadow-2xl relative overflow-hidden group cursor-pointer"
+                      >
+                         <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -mr-10 -mt-10"></div>
+                         <span className="text-[8px] font-bold text-tea-300 uppercase tracking-widest mb-4 block">Especialidade VIP</span>
+                         <h4 className="text-xl font-serif font-bold text-white italic mb-2 leading-tight">{service.name}</h4>
+                         <p className="text-[10px] text-tea-100 font-bold uppercase tracking-widest mb-8">Investimento: R$ {service.price.toFixed(2)}</p>
+                         <button className="w-full py-4 bg-white text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Reservar Agora</button>
+                      </div>
+                    ))}
+                 </div>
+              </section>
+            )}
+
+            {/* Promoções Ativas & Dicas */}
+            <section className="space-y-6">
+               <h3 className="text-2xl font-serif text-tea-950 italic font-bold px-2">Feed Studio Moriá</h3>
+               <div className="space-y-6">
+                  {activePromosAndTips.length > 0 ? activePromosAndTips.map(promo => (
+                    <div 
+                      key={promo.id} 
+                      className={`p-8 rounded-[3.5rem] border shadow-sm space-y-4 relative overflow-hidden ${promo.type === 'promotion' ? 'bg-orange-50 border-orange-100' : 'bg-white border-gray-100'}`}
+                    >
+                       <div className="flex justify-between items-start">
+                          <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${promo.type === 'promotion' ? 'bg-orange-500 text-white' : 'bg-tea-100 text-tea-900'}`}>
+                             {promo.type === 'promotion' ? 'Oferta Exclusiva' : 'Dica de Especialista'}
+                          </span>
+                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{new Date(promo.createdAt).toLocaleDateString()}</span>
+                       </div>
+                       <h4 className="text-lg font-serif font-bold text-tea-950 italic leading-tight">{promo.title}</h4>
+                       <p className="text-gray-600 text-xs leading-relaxed italic">{promo.content}</p>
+                       {promo.type === 'promotion' && (
+                         <button 
+                           onClick={() => setActiveTab('agendar')}
+                           className="w-full py-4 bg-orange-600 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-lg hover:bg-orange-700 transition-all"
+                         >
+                           Aproveitar Desconto
+                         </button>
+                       )}
+                    </div>
+                  )) : (
+                    <div className="text-center py-16 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
+                       <p className="text-gray-400 font-serif italic text-sm">Nenhuma novidade hoje. Volte logo!</p>
+                    </div>
+                  )}
+               </div>
+            </section>
           </div>
         )}
 
         {activeTab === 'agendar' && (
-          <div className="space-y-6 animate-slide-up pb-10">
-             {bookingStep === 1 && (
-              <div className="space-y-6">
-                <div className="relative">
-                  <span className="absolute left-5 top-1/2 -translate-y-1/2 opacity-30 text-lg">🔍</span>
-                  <input type="text" placeholder="Qual procedimento deseja?" value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} className="w-full p-5 pl-14 bg-white rounded-3xl shadow-sm border border-gray-100 outline-none font-medium" />
-                </div>
-                <div className="space-y-4">
-                  {filteredServices.map(service => (
-                    <div key={service.id} onClick={() => { setSelectedService(service); setBookingStep(2); }} className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm transition-all hover:border-tea-200 cursor-pointer">
-                      <h4 className="font-bold text-tea-950 text-xl font-serif italic mb-2">{service.name}</h4>
-                      <p className="text-gray-400 text-xs mb-8 line-clamp-2 italic">{service.description}</p>
-                      <div className="flex justify-between items-center">
-                         <div className="text-tea-800 font-bold font-serif italic text-lg">R$ {service.price.toFixed(2)}</div>
-                         <button className="px-10 py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Agendar</button>
+          <div className="space-y-8 animate-slide-up pb-10">
+            {bookingStep === 1 && (
+              <div className="space-y-8">
+                 {/* Categories Filter */}
+                 <div className="flex gap-3 overflow-x-auto no-scrollbar py-2">
+                    {categories.map(cat => (
+                      <button 
+                        key={cat} 
+                        onClick={() => setActiveCategory(cat)}
+                        className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${activeCategory === cat ? 'bg-tea-900 text-white shadow-xl' : 'bg-white text-gray-400 border border-gray-100'}`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                 </div>
+
+                 <div className="space-y-4">
+                    {filteredServices.map(service => (
+                      <div key={service.id} onClick={() => { setSelectedService(service); setBookingStep(2); }} className="bg-white p-8 rounded-[3.5rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-tea-200 transition-all cursor-pointer">
+                         <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-serif font-bold text-tea-950 text-xl italic">{service.name}</h4>
+                              {service.isHighlighted && <span className="bg-orange-100 text-orange-600 text-[8px] px-2 py-0.5 rounded-full font-bold uppercase">VIP</span>}
+                            </div>
+                            <p className="text-[10px] text-tea-800 font-bold uppercase tracking-widest">R$ {service.price.toFixed(2)} • {service.duration}min</p>
+                         </div>
+                         <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all">→</div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                 </div>
               </div>
             )}
 
             {bookingStep === 2 && selectedService && (
-              <div className="bg-white rounded-[4rem] p-10 shadow-2xl border border-tea-50 space-y-10 animate-slide-up">
-                <div className="flex items-center gap-5">
-                   <button onClick={() => setBookingStep(1)} className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-tea-900 font-bold">←</button>
-                   <div>
-                      <h3 className="font-bold text-tea-950 text-lg font-serif italic">{selectedService.name}</h3>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Escolha Horário & Profissional</p>
+              <div className="bg-white rounded-[4rem] p-10 shadow-2xl space-y-8 animate-slide-up border border-tea-50">
+                <button onClick={() => setBookingStep(1)} className="text-tea-800 font-bold text-[10px] uppercase tracking-widest">← Voltar</button>
+                <div className="space-y-6">
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data da Sessão</label>
+                      <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none" />
                    </div>
-                </div>
-                <div className="space-y-8">
-                   <div className="space-y-3">
-                      <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Data da Sessão</label>
-                      <input type="date" min={todayStr} max={settings.agendaOpenUntil} value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none border-none shadow-inner" />
-                   </div>
-                   <div className="space-y-3">
-                      <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Horários Disponíveis</label>
-                      <div className="grid grid-cols-3 gap-3">
-                        {allPossibleSlots.map(slot => {
-                           const available = !!currentSlotsAvailability[slot];
-                           return (
-                             <button key={slot} disabled={!available} onClick={() => setSelectedTime(slot)} className={`p-5 rounded-2xl text-[11px] font-bold border-2 transition-all ${selectedTime === slot ? 'bg-tea-900 text-white border-tea-900 shadow-xl scale-105' : available ? 'bg-white border-tea-100 text-tea-900 hover:bg-tea-50' : 'bg-gray-100 text-gray-300 border-transparent opacity-40 cursor-not-allowed'}`}>{slot}</button>
-                           );
-                        })}
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Horário Disponível</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'].map(t => (
+                          <button key={t} onClick={() => setSelectedTime(t)} className={`py-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${selectedTime === t ? 'bg-tea-900 text-white border-tea-900 shadow-lg' : 'bg-white border-gray-100 text-tea-900 hover:bg-tea-50'}`}>{t}</button>
+                        ))}
                       </div>
                    </div>
-                   {selectedTime && (
-                     <div className="space-y-3 animate-fade-in">
-                        <label className="text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] ml-2">Profissional</label>
-                        <select value={selectedProId} onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none appearance-none shadow-inner">
-                           <option value="">Selecione...</option>
-                           {currentSlotsAvailability[selectedTime]?.map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
-                        </select>
-                     </div>
-                   )}
-                   
-                   {/* Aviso de Destaque solicitado: Taxa de 30% */}
-                   <div className="p-8 bg-tea-50 rounded-[2.5rem] border-2 border-tea-100 space-y-4">
-                      <div className="flex items-start gap-4">
-                        <div className="mt-1 w-6 h-6 flex-shrink-0 bg-tea-900 text-white rounded-lg flex items-center justify-center text-xs font-bold">!</div>
-                        <p className="text-[10px] font-bold text-tea-900 uppercase leading-relaxed tracking-wider">
-                          Para garantir seu horário, o Studio Moriá requer uma taxa de reserva de 30% do valor do serviço.
-                        </p>
-                      </div>
-                      <label className="flex items-center gap-4 cursor-pointer group pt-2">
-                        <div className="relative">
-                          <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="peer appearance-none w-7 h-7 bg-white border-2 border-tea-200 rounded-xl checked:bg-tea-900 checked:border-tea-900 transition-all cursor-pointer" />
-                          <svg className="absolute top-1.5 left-1.5 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
-                        </div>
-                        <span className="text-[11px] font-bold text-tea-950 uppercase tracking-widest">{POLICY_CHECKBOX_TEXT}</span>
+                   <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sua Especialista</label>
+                      <select onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none appearance-none shadow-inner">
+                         <option value="">Selecione...</option>
+                         {settings.teamMembers.map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
+                      </select>
+                   </div>
+                   <div className="p-6 bg-red-50 rounded-3xl border-2 border-red-100 space-y-4">
+                      <p className="text-[9px] font-bold text-red-900 uppercase tracking-widest">Atenção: Taxa de reserva de 30% necessária.</p>
+                      <label className="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="w-5 h-5 accent-red-600 rounded" />
+                        <span className="text-[10px] font-bold text-red-800 uppercase leading-tight">Ciente da política de sinal para reserva.</span>
                       </label>
                    </div>
                 </div>
-                <button 
-                  disabled={!selectedTime || !selectedProId || !agreedToCancellation} 
-                  onClick={() => setShowPolicyModal(true)} 
-                  className="w-full py-7 bg-tea-950 text-white rounded-[2.5rem] font-bold uppercase text-[11px] tracking-[0.3em] shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all"
-                >
-                  Solicitar Horário
-                </button>
+                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={() => setShowPolicyModal(true)} className="w-full py-6 bg-tea-950 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all">Solicitar Horário</button>
               </div>
             )}
 
             {bookingStep === 3 && (
-              <div className="bg-white rounded-[4rem] p-16 shadow-2xl border border-tea-100 text-center space-y-8 animate-slide-up">
-                 <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner">✓</div>
-                 <div>
-                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-3">Enviado com Sucesso!</h3>
-                    <p className="text-gray-500 text-sm leading-relaxed">Sua solicitação está em análise. Fique atenta ao seu WhatsApp para a confirmação do sinal.</p>
-                 </div>
-                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Ver Minha Agenda</button>
+              <div className="bg-white rounded-[4rem] p-16 shadow-2xl text-center space-y-8 animate-slide-up border border-tea-100">
+                 <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto">✓</div>
+                 <h3 className="text-3xl font-serif text-tea-950 font-bold italic">Enviado com Sucesso!</h3>
+                 <p className="text-gray-500 text-sm leading-relaxed">Sua solicitação está em análise. Fique atenta ao WhatsApp para confirmar o sinal de 30% e garantir sua vaga.</p>
+                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest">Minha Agenda</button>
               </div>
             )}
           </div>
         )}
 
         {activeTab === 'agenda' && (
-          <div className="space-y-6 animate-slide-up pb-10">
-            <h3 className="text-center font-serif text-2xl font-bold text-tea-950 italic mb-8">Minha Agenda</h3>
-            {myBookings.map(b => (
-              <div key={b.id} className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-6">
+          <div className="space-y-8 animate-slide-up pb-10">
+            <h3 className="text-center font-serif text-2xl font-bold text-tea-950 italic">Seus Cuidados</h3>
+            {myBookings.length > 0 ? myBookings.map(b => (
+              <div key={b.id} className="bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-4">
                 <div className="flex justify-between items-start">
                    <div>
-                     <h4 className="font-bold text-tea-950 text-xl font-serif italic mb-1">{b.serviceName}</h4>
-                     <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} • {b.dateTime.split(' ')[1]}</p>
+                     <h4 className="font-bold text-tea-950 text-xl font-serif italic leading-tight">{b.serviceName}</h4>
+                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} • {b.dateTime.split(' ')[1]}</p>
                    </div>
-                   <span className={`px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest ${b.status === 'completed' ? 'bg-green-50 text-green-700' : b.status === 'cancelled' ? 'bg-red-50 text-red-700' : b.status === 'scheduled' ? 'bg-blue-50 text-blue-700' : 'bg-orange-50 text-orange-700'}`}>
-                     {b.status === 'pending' ? 'Em Análise' : b.status === 'scheduled' ? 'Confirmado' : b.status === 'cancelled' ? 'Cancelado' : 'Concluído'}
+                   <span className={`px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                     b.status === 'completed' ? 'bg-green-50 text-green-700' : 
+                     b.status === 'cancelled' ? 'bg-red-50 text-red-700' : 
+                     'bg-tea-50 text-tea-900 shadow-sm'
+                   }`}>
+                     {b.status === 'pending' ? 'Em Análise' : b.status}
                    </span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="text-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
+                 <p className="text-gray-400 italic">Nenhum agendamento futuro encontrado.</p>
+              </div>
+            )}
           </div>
         )}
 
         {activeTab === 'perfil' && (
           <div className="space-y-8 animate-slide-up pb-10">
              <div className="bg-white p-12 rounded-[4rem] shadow-xl border border-gray-100 text-center relative overflow-hidden">
-                <div className="w-24 h-24 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-4xl font-serif mx-auto mb-6 shadow-2xl">{customer.name.charAt(0)}</div>
+                <div className="w-24 h-24 bg-tea-900 text-white rounded-3xl flex items-center justify-center text-4xl font-serif mx-auto mb-6 shadow-2xl">{customer.name.charAt(0)}</div>
                 <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-2">{customer.name}</h3>
-                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mb-10">CPF: {customer.cpf}</p>
-                <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-bold uppercase text-[10px] tracking-widest">Sair da Conta</button>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-10">CPF: {customer.cpf}</p>
+                <div className="space-y-3">
+                   <button className="w-full py-5 bg-gray-50 text-tea-900 rounded-3xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-50 transition-all">Meus Dados</button>
+                   <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-bold uppercase text-[9px] tracking-widest hover:bg-red-100 transition-all">Sair da Conta</button>
+                </div>
              </div>
           </div>
         )}
+
       </main>
 
-      <nav className="fixed bottom-6 left-6 right-6 bg-white/90 backdrop-blur-xl border border-gray-100 p-6 flex justify-between rounded-[3rem] z-50 shadow-[0_40px_80px_rgba(0,0,0,0.15)] max-w-md mx-auto">
+      {/* Floating Bottom Nav - Removida a aba Inspirações */}
+      <nav className="fixed bottom-8 left-6 right-6 bg-tea-950/90 backdrop-blur-2xl border border-white/10 p-6 flex justify-around rounded-[3rem] z-50 shadow-[0_25px_50px_rgba(0,0,0,0.5)] max-w-md mx-auto">
          {[
-           { id: 'home', icon: '🏠', label: 'Início' },
-           { id: 'agendar', icon: '✨', label: 'Agendar' },
-           { id: 'agenda', icon: '🗓️', label: 'Agenda' },
-           { id: 'perfil', icon: '👤', label: 'Perfil' }
+           { id: 'home', icon: '🏠' },
+           { id: 'agendar', icon: '✨' },
+           { id: 'agenda', icon: '🗓️' },
+           { id: 'perfil', icon: '👤' }
          ].map(tab => (
-           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center gap-2 transition-all ${activeTab === tab.id ? 'text-tea-900' : 'text-gray-300'}`}>
-              <span className={`text-2xl transition-transform ${activeTab === tab.id ? 'scale-125 -translate-y-1' : ''}`}>{tab.icon}</span>
-              <span className={`text-[8px] font-bold uppercase tracking-[0.2em] ${activeTab === tab.id ? 'opacity-100' : 'opacity-0'}`}>{tab.label}</span>
+           <button 
+             key={tab.id} 
+             onClick={() => setActiveTab(tab.id as any)} 
+             className={`p-3 rounded-2xl transition-all duration-500 ${activeTab === tab.id ? 'bg-white text-tea-950 scale-110 shadow-lg' : 'text-white/40 hover:text-white'}`}
+           >
+              <span className="text-2xl">{tab.icon}</span>
            </button>
          ))}
       </nav>
