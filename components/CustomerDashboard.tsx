@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, TeamMember, WaitlistEntry, Promotion } from '../types';
+import { Customer, Booking, Service, SalonSettings, TeamMember, Promotion } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc } from "firebase/firestore";
 
@@ -14,8 +14,6 @@ interface CustomerDashboardProps {
   onLogout: () => void;
   onCancelBooking: (id: string) => void;
   onAddToWaitlist?: (serviceId: string, date: string) => void;
-  waitlist?: WaitlistEntry[];
-  onRemoveWaitlist?: (id: string) => void;
   promotions?: Promotion[];
 }
 
@@ -47,8 +45,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const completedCount = useMemo(() => myBookings.filter(b => b.status === 'completed').length, [myBookings]);
   const loyaltyProgress = (completedCount % 10);
 
-  const categories = ['Todos', 'Olhar', 'Rosto', 'Unhas', 'Corpo'];
-  
   const highlightedServices = useMemo(() => services.filter(s => s.isVisible && s.isHighlighted), [services]);
   
   const activePromosAndTips = useMemo(() => {
@@ -60,13 +56,61 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   const filteredServices = useMemo(() => {
     if (activeCategory === 'Todos') return services.filter(s => s.isVisible);
-    // Filtro inteligente baseado na descrição ou nome
     return services.filter(s => 
       s.isVisible && 
       (s.description.toLowerCase().includes(activeCategory.toLowerCase()) || 
        s.name.toLowerCase().includes(activeCategory.toLowerCase()))
     );
   }, [services, activeCategory]);
+
+  // Lógica Avançada de Disponibilidade (Corrige erro de agendar em horário bloqueado)
+  const availableSlotsForDate = useMemo(() => {
+    if (!selectedService) return {};
+    
+    const slots: Record<string, TeamMember[]> = {};
+    const startH = parseInt(settings.businessHours.start.split(':')[0]);
+    const endH = parseInt(settings.businessHours.end.split(':')[0]);
+
+    const timeToMin = (t: string) => {
+      const [h, m] = t.split(':').map(Number);
+      return h * 60 + m;
+    };
+
+    // Gerar todos os slots de 30min
+    const possibleTimes: string[] = [];
+    for (let h = startH; h < endH; h++) {
+      possibleTimes.push(`${h.toString().padStart(2, '0')}:00`, `${h.toString().padStart(2, '0')}:30`);
+    }
+
+    possibleTimes.forEach(time => {
+      const sStart = timeToMin(time);
+      const sEnd = sStart + selectedService.duration;
+
+      const pros = settings.teamMembers.filter(pro => {
+        // Verifica se o profissional faz o serviço e se não é folga
+        if (!pro.assignedServiceIds.includes(selectedService.id)) return false;
+        const dayOfWeek = new Date(selectedDate + 'T12:00:00').getDay();
+        if (pro.offDays?.includes(dayOfWeek)) return false;
+
+        // Verifica se o horário pretendido [sStart, sEnd] conflita com QUALQUER booking existente
+        const hasConflict = bookings.some(b => {
+          if (b.teamMemberId !== pro.id || b.status === 'cancelled' || !b.dateTime.startsWith(selectedDate)) return false;
+          
+          const bStart = timeToMin(b.dateTime.split(' ')[1]);
+          const bEnd = bStart + (b.duration || 30);
+          
+          // Lógica de Overlap: (InicioA < FimB) && (FimA > InicioB)
+          return (sStart < bEnd && sEnd > bStart);
+        });
+
+        return !hasConflict;
+      });
+
+      if (pros.length > 0) slots[time] = pros;
+    });
+
+    return slots;
+  }, [selectedService, selectedDate, bookings, settings]);
 
   const handleBookSubmit = async () => {
     if (selectedService && selectedProId && selectedTime && agreedToCancellation) {
@@ -111,33 +155,30 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         </div>
       )}
 
-      {/* Header Imersivo */}
+      {/* Header com Cartão Fidelidade */}
       <header className="bg-gradient-to-b from-tea-900 to-tea-950 pt-16 pb-28 px-8 rounded-b-[5rem] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-tea-400/10 rounded-full -mr-40 -mt-40 blur-3xl"></div>
-        
-        <div className="max-w-md mx-auto relative z-10 flex flex-col items-center gap-8">
+        <div className="max-w-md mx-auto relative z-10 space-y-8">
           <div className="w-full flex justify-between items-center">
-             <div className="w-16 h-16 bg-white/10 rounded-3xl backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner">
+             <div className="w-16 h-16 bg-white/10 rounded-3xl backdrop-blur-md flex items-center justify-center border border-white/20">
                 <span className="text-white text-2xl font-serif italic font-bold">{customer.name.charAt(0)}</span>
              </div>
              <div className="text-right">
                 <p className="text-[9px] font-bold text-tea-300 uppercase tracking-[0.3em] mb-1">Studio Moriá</p>
-                <h1 className="text-2xl font-serif text-white font-bold italic leading-none">{customer.name.split(' ')[0]}</h1>
+                <h1 className="text-2xl font-serif text-white font-bold italic">{customer.name.split(' ')[0]}</h1>
              </div>
           </div>
-
-          {/* Cartão Fidelidade Visual */}
           <div className="w-full bg-white/5 backdrop-blur-md rounded-[3rem] p-8 border border-white/10 shadow-2xl space-y-4">
              <div className="flex justify-between items-center">
-                <span className="text-[9px] font-bold text-tea-200 uppercase tracking-widest">Cartão Fidelidade</span>
-                <span className="text-[10px] text-white font-serif italic">{completedCount} Procedimentos</span>
+                <span className="text-[9px] font-bold text-tea-200 uppercase tracking-widest">Fidelidade</span>
+                <span className="text-[10px] text-white font-serif italic">{completedCount} Visitas</span>
              </div>
              <div className="flex justify-between gap-2">
                 {[...Array(10)].map((_, i) => (
                   <div key={i} className={`flex-1 h-2 rounded-full transition-all duration-700 ${i < loyaltyProgress ? 'bg-tea-300 shadow-[0_0_10px_rgba(142,201,154,0.6)]' : 'bg-white/10'}`}></div>
                 ))}
              </div>
-             <p className="text-[10px] text-tea-100 font-medium italic text-center">Complete 10 sessões e ganhe um presente especial ✨</p>
+             <p className="text-[10px] text-tea-100 font-medium italic text-center">Complete 10 e ganhe um presente ✨</p>
           </div>
         </div>
       </header>
@@ -147,25 +188,22 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         
         {activeTab === 'home' && (
           <div className="space-y-12 animate-slide-up pb-10">
-            {/* Quick Actions Grid */}
+            {/* Quick Actions */}
             <div className="grid grid-cols-2 gap-4">
                <button onClick={() => setActiveTab('agendar')} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-50 flex flex-col items-center gap-4 group hover:bg-tea-50 transition-all">
                   <div className="w-12 h-12 bg-tea-100 text-tea-900 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">✨</div>
-                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Novo Agendamento</span>
+                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Agendar</span>
                </button>
                <button onClick={() => setActiveTab('agenda')} className="bg-white p-8 rounded-[3rem] shadow-xl border border-gray-100 flex flex-col items-center gap-4 group hover:bg-tea-50 transition-all">
                   <div className="w-12 h-12 bg-gray-50 text-tea-800 rounded-2xl flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">🗓️</div>
-                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Minha Agenda</span>
+                  <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Agenda</span>
                </button>
             </div>
 
-            {/* Procedimentos em Destaque */}
+            {/* Procedimentos em Destaque (Desejos Moriá) */}
             {highlightedServices.length > 0 && (
               <section className="space-y-6">
-                 <div className="flex justify-between items-end px-2">
-                    <h3 className="text-2xl font-serif text-tea-950 italic font-bold">Desejos Moriá</h3>
-                    <button onClick={() => setActiveTab('agendar')} className="text-[9px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Ver Todos</button>
-                 </div>
+                 <h3 className="text-2xl font-serif text-tea-950 italic font-bold px-2">Destaques Moriá</h3>
                  <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
                     {highlightedServices.map(service => (
                       <div 
@@ -176,15 +214,15 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                          <div className="absolute top-0 right-0 w-20 h-20 bg-white/5 rounded-full -mr-10 -mt-10"></div>
                          <span className="text-[8px] font-bold text-tea-300 uppercase tracking-widest mb-4 block">Especialidade VIP</span>
                          <h4 className="text-xl font-serif font-bold text-white italic mb-2 leading-tight">{service.name}</h4>
-                         <p className="text-[10px] text-tea-100 font-bold uppercase tracking-widest mb-8">Investimento: R$ {service.price.toFixed(2)}</p>
-                         <button className="w-full py-4 bg-white text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Reservar Agora</button>
+                         <p className="text-[10px] text-tea-100 font-bold uppercase tracking-widest mb-8">R$ {service.price.toFixed(2)}</p>
+                         <button className="w-full py-4 bg-white text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-xl">Reservar</button>
                       </div>
                     ))}
                  </div>
               </section>
             )}
 
-            {/* Promoções Ativas & Dicas */}
+            {/* Promoções e Dicas Feed */}
             <section className="space-y-6">
                <h3 className="text-2xl font-serif text-tea-950 italic font-bold px-2">Feed Studio Moriá</h3>
                <div className="space-y-6">
@@ -195,24 +233,18 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     >
                        <div className="flex justify-between items-start">
                           <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${promo.type === 'promotion' ? 'bg-orange-500 text-white' : 'bg-tea-100 text-tea-900'}`}>
-                             {promo.type === 'promotion' ? 'Oferta Exclusiva' : 'Dica de Especialista'}
+                             {promo.type === 'promotion' ? 'Oferta' : 'Dica ✨'}
                           </span>
-                          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{new Date(promo.createdAt).toLocaleDateString()}</span>
                        </div>
                        <h4 className="text-lg font-serif font-bold text-tea-950 italic leading-tight">{promo.title}</h4>
                        <p className="text-gray-600 text-xs leading-relaxed italic">{promo.content}</p>
                        {promo.type === 'promotion' && (
-                         <button 
-                           onClick={() => setActiveTab('agendar')}
-                           className="w-full py-4 bg-orange-600 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-lg hover:bg-orange-700 transition-all"
-                         >
-                           Aproveitar Desconto
-                         </button>
+                         <button onClick={() => setActiveTab('agendar')} className="w-full py-4 bg-orange-600 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest">Aproveitar</button>
                        )}
                     </div>
                   )) : (
                     <div className="text-center py-16 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-                       <p className="text-gray-400 font-serif italic text-sm">Nenhuma novidade hoje. Volte logo!</p>
+                       <p className="text-gray-400 font-serif italic text-sm">Novidades em breve...</p>
                     </div>
                   )}
                </div>
@@ -224,27 +256,16 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <div className="space-y-8 animate-slide-up pb-10">
             {bookingStep === 1 && (
               <div className="space-y-8">
-                 {/* Categories Filter */}
                  <div className="flex gap-3 overflow-x-auto no-scrollbar py-2">
-                    {categories.map(cat => (
-                      <button 
-                        key={cat} 
-                        onClick={() => setActiveCategory(cat)}
-                        className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${activeCategory === cat ? 'bg-tea-900 text-white shadow-xl' : 'bg-white text-gray-400 border border-gray-100'}`}
-                      >
-                        {cat}
-                      </button>
+                    {['Todos', 'Olhar', 'Rosto', 'Unhas', 'Corpo'].map(cat => (
+                      <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${activeCategory === cat ? 'bg-tea-900 text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>{cat}</button>
                     ))}
                  </div>
-
                  <div className="space-y-4">
                     {filteredServices.map(service => (
                       <div key={service.id} onClick={() => { setSelectedService(service); setBookingStep(2); }} className="bg-white p-8 rounded-[3.5rem] border border-gray-50 shadow-sm flex items-center justify-between group hover:border-tea-200 transition-all cursor-pointer">
-                         <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <h4 className="font-serif font-bold text-tea-950 text-xl italic">{service.name}</h4>
-                              {service.isHighlighted && <span className="bg-orange-100 text-orange-600 text-[8px] px-2 py-0.5 rounded-full font-bold uppercase">VIP</span>}
-                            </div>
+                         <div>
+                            <h4 className="font-serif font-bold text-tea-950 text-xl italic">{service.name}</h4>
                             <p className="text-[10px] text-tea-800 font-bold uppercase tracking-widest">R$ {service.price.toFixed(2)} • {service.duration}min</p>
                          </div>
                          <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all">→</div>
@@ -259,103 +280,94 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 <button onClick={() => setBookingStep(1)} className="text-tea-800 font-bold text-[10px] uppercase tracking-widest">← Voltar</button>
                 <div className="space-y-6">
                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data da Sessão</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data</label>
                       <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none" />
                    </div>
                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Horário Disponível</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Horário (Duração: {selectedService.duration}min)</label>
                       <div className="grid grid-cols-3 gap-2">
-                        {['09:00', '10:00', '11:00', '14:00', '15:00', '16:00'].map(t => (
-                          <button key={t} onClick={() => setSelectedTime(t)} className={`py-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${selectedTime === t ? 'bg-tea-900 text-white border-tea-900 shadow-lg' : 'bg-white border-gray-100 text-tea-900 hover:bg-tea-50'}`}>{t}</button>
+                        {Object.keys(availableSlotsForDate).sort().map(t => (
+                          <button key={t} onClick={() => setSelectedTime(t)} className={`py-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${selectedTime === t ? 'bg-tea-900 text-white border-tea-900' : 'bg-white border-gray-100 text-tea-900'}`}>{t}</button>
                         ))}
                       </div>
+                      {Object.keys(availableSlotsForDate).length === 0 && <p className="text-[9px] text-red-500 font-bold text-center">Nenhum horário disponível para esta data.</p>}
                    </div>
                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sua Especialista</label>
-                      <select onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none appearance-none shadow-inner">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Profissional</label>
+                      <select value={selectedProId} onChange={e => setSelectedProId(e.target.value)} className="w-full p-5 bg-gray-50 rounded-3xl font-bold outline-none appearance-none">
                          <option value="">Selecione...</option>
-                         {settings.teamMembers.map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
+                         {(availableSlotsForDate[selectedTime] || []).map(pro => <option key={pro.id} value={pro.id}>{pro.name}</option>)}
                       </select>
                    </div>
                    <div className="p-6 bg-red-50 rounded-3xl border-2 border-red-100 space-y-4">
-                      <p className="text-[9px] font-bold text-red-900 uppercase tracking-widest">Atenção: Taxa de reserva de 30% necessária.</p>
+                      <p className="text-[9px] font-bold text-red-900 uppercase tracking-widest">Taxa de reserva de 30% necessária.</p>
                       <label className="flex items-center gap-3 cursor-pointer">
                         <input type="checkbox" checked={agreedToCancellation} onChange={e => setAgreedToCancellation(e.target.checked)} className="w-5 h-5 accent-red-600 rounded" />
-                        <span className="text-[10px] font-bold text-red-800 uppercase leading-tight">Ciente da política de sinal para reserva.</span>
+                        <span className="text-[10px] font-bold text-red-800 uppercase leading-tight">Ciente do sinal para reserva.</span>
                       </label>
                    </div>
                 </div>
-                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={() => setShowPolicyModal(true)} className="w-full py-6 bg-tea-950 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-2xl disabled:bg-gray-100 disabled:text-gray-400 transition-all">Solicitar Horário</button>
+                <button disabled={!selectedTime || !selectedProId || !agreedToCancellation} onClick={() => setShowPolicyModal(true)} className="w-full py-6 bg-tea-950 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-2xl disabled:bg-gray-100 disabled:text-gray-400">Solicitar Horário</button>
               </div>
             )}
 
             {bookingStep === 3 && (
               <div className="bg-white rounded-[4rem] p-16 shadow-2xl text-center space-y-8 animate-slide-up border border-tea-100">
-                 <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto">✓</div>
-                 <h3 className="text-3xl font-serif text-tea-950 font-bold italic">Enviado com Sucesso!</h3>
-                 <p className="text-gray-500 text-sm leading-relaxed">Sua solicitação está em análise. Fique atenta ao WhatsApp para confirmar o sinal de 30% e garantir sua vaga.</p>
-                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest">Minha Agenda</button>
+                 <div className="w-24 h-24 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-5xl mx-auto shadow-inner">✓</div>
+                 <h3 className="text-3xl font-serif text-tea-950 font-bold italic">Sucesso!</h3>
+                 <p className="text-gray-500 text-sm leading-relaxed">Confirme o sinal de 30% via WhatsApp para garantir sua vaga.</p>
+                 <button onClick={() => { setActiveTab('agenda'); setBookingStep(1); }} className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase text-[11px] tracking-widest shadow-xl">Minha Agenda</button>
               </div>
             )}
           </div>
         )}
 
+        {/* ... Abas Agenda e Perfil ... */}
         {activeTab === 'agenda' && (
           <div className="space-y-8 animate-slide-up pb-10">
-            <h3 className="text-center font-serif text-2xl font-bold text-tea-950 italic">Seus Cuidados</h3>
-            {myBookings.length > 0 ? myBookings.map(b => (
+            <h3 className="text-center font-serif text-2xl font-bold text-tea-950 italic">Suas Sessões</h3>
+            {myBookings.map(b => (
               <div key={b.id} className="bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-4">
                 <div className="flex justify-between items-start">
                    <div>
-                     <h4 className="font-bold text-tea-950 text-xl font-serif italic leading-tight">{b.serviceName}</h4>
+                     <h4 className="font-bold text-tea-950 text-xl font-serif italic">{b.serviceName}</h4>
                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} • {b.dateTime.split(' ')[1]}</p>
                    </div>
                    <span className={`px-4 py-2 rounded-full text-[8px] font-bold uppercase tracking-widest ${
                      b.status === 'completed' ? 'bg-green-50 text-green-700' : 
                      b.status === 'cancelled' ? 'bg-red-50 text-red-700' : 
-                     'bg-tea-50 text-tea-900 shadow-sm'
+                     'bg-tea-50 text-tea-900'
                    }`}>
                      {b.status === 'pending' ? 'Em Análise' : b.status}
                    </span>
                 </div>
               </div>
-            )) : (
-              <div className="text-center py-20 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200">
-                 <p className="text-gray-400 italic">Nenhum agendamento futuro encontrado.</p>
-              </div>
-            )}
+            ))}
           </div>
         )}
 
         {activeTab === 'perfil' && (
           <div className="space-y-8 animate-slide-up pb-10">
-             <div className="bg-white p-12 rounded-[4rem] shadow-xl border border-gray-100 text-center relative overflow-hidden">
+             <div className="bg-white p-12 rounded-[4rem] shadow-xl border border-gray-100 text-center">
                 <div className="w-24 h-24 bg-tea-900 text-white rounded-3xl flex items-center justify-center text-4xl font-serif mx-auto mb-6 shadow-2xl">{customer.name.charAt(0)}</div>
                 <h3 className="text-3xl font-serif text-tea-950 font-bold italic mb-2">{customer.name}</h3>
                 <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-10">CPF: {customer.cpf}</p>
-                <div className="space-y-3">
-                   <button className="w-full py-5 bg-gray-50 text-tea-900 rounded-3xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-50 transition-all">Meus Dados</button>
-                   <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-bold uppercase text-[9px] tracking-widest hover:bg-red-100 transition-all">Sair da Conta</button>
-                </div>
+                <button onClick={onLogout} className="w-full py-5 bg-red-50 text-red-600 rounded-3xl font-bold uppercase text-[9px] tracking-widest">Sair da Conta</button>
              </div>
           </div>
         )}
 
       </main>
 
-      {/* Floating Bottom Nav - Removida a aba Inspirações */}
-      <nav className="fixed bottom-8 left-6 right-6 bg-tea-950/90 backdrop-blur-2xl border border-white/10 p-6 flex justify-around rounded-[3rem] z-50 shadow-[0_25px_50px_rgba(0,0,0,0.5)] max-w-md mx-auto">
+      {/* Nav */}
+      <nav className="fixed bottom-8 left-6 right-6 bg-tea-950/90 backdrop-blur-2xl border border-white/10 p-6 flex justify-around rounded-[3rem] z-50 shadow-2xl max-w-md mx-auto">
          {[
            { id: 'home', icon: '🏠' },
            { id: 'agendar', icon: '✨' },
            { id: 'agenda', icon: '🗓️' },
            { id: 'perfil', icon: '👤' }
          ].map(tab => (
-           <button 
-             key={tab.id} 
-             onClick={() => setActiveTab(tab.id as any)} 
-             className={`p-3 rounded-2xl transition-all duration-500 ${activeTab === tab.id ? 'bg-white text-tea-950 scale-110 shadow-lg' : 'text-white/40 hover:text-white'}`}
-           >
+           <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`p-3 rounded-2xl transition-all duration-500 ${activeTab === tab.id ? 'bg-white text-tea-950 scale-110 shadow-lg' : 'text-white/40 hover:text-white'}`}>
               <span className="text-2xl">{tab.icon}</span>
            </button>
          ))}
