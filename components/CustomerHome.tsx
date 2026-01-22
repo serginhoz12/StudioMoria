@@ -44,51 +44,47 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
         <span className="absolute right-full mr-4 bg-tea-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Fale com a Moriá</span>
       </button>
 
-      {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex flex-col items-center justify-center bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem]">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60vh] bg-tea-400/10 rounded-full blur-[120px] pointer-events-none"></div>
+      {/* Hero Section - Padding reduzido para subir os itens */}
+      <section className="relative min-h-[85vh] flex flex-col items-center justify-start bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem] pt-8 md:pt-12">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-tea-400/10 rounded-full blur-[100px] pointer-events-none"></div>
         
-        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center text-center py-12">
+        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center text-center">
           
-          {/* Aviso de Retorno */}
-          <div className="mb-8 animate-pulse">
-            <span className="bg-orange-100 text-orange-800 px-8 py-3 rounded-full text-[11px] md:text-xs font-bold uppercase tracking-[0.3em] shadow-xl border border-orange-200">
+          {/* Aviso de Retorno - Compactado */}
+          <div className="mb-6 animate-pulse">
+            <span className="bg-orange-50/10 backdrop-blur-md text-orange-200 px-6 py-2 rounded-full text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] border border-orange-200/20">
               ✨ RETORNAREMOS EM BREVE
             </span>
           </div>
 
-          <div className="mb-10 md:mb-14 flex justify-center w-full">
+          {/* Logotipo - O GRANDE DESTAQUE */}
+          <div className="mb-6 md:mb-10 flex justify-center w-full transform hover:scale-[1.02] transition-transform duration-700">
             <img 
               src={settings.logo} 
-              className="w-full max-w-[280px] sm:max-w-[420px] md:max-w-[580px] h-auto drop-shadow-2xl object-contain animate-slide-up" 
+              className="w-full max-w-[300px] sm:max-w-[480px] md:max-w-[620px] h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] object-contain animate-slide-up" 
               alt="Logo Studio Moriá" 
             />
           </div>
 
-          {/* Chamada Atrativa em Máximo Destaque */}
-          <div className="max-w-2xl mx-auto mb-12 px-8 py-10 bg-white/10 backdrop-blur-xl rounded-[4rem] border-2 border-white/20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] transform hover:scale-[1.02] transition-all">
-            <p className="text-white font-serif italic text-xl md:text-3xl leading-relaxed font-bold tracking-tight drop-shadow-sm">
-              "Cadastre-se, selecione o serviço e entre na lista de espera para ser um dos primeiros a ser atendido."
+          {/* Chamada Atrativa - Destaque Diminuído e Suavizado */}
+          <div className="max-w-xl mx-auto mb-10 px-6 py-6 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 shadow-xl">
+            <p className="text-white/90 font-serif italic text-lg md:text-xl leading-relaxed font-medium tracking-tight">
+              Cadastre-se, selecione o serviço e entre na lista de espera para ser um dos primeiros a ser atendido.
             </p>
-            <div className="mt-4 flex justify-center gap-2">
-              <span className="w-1.5 h-1.5 bg-tea-300 rounded-full animate-bounce"></span>
-              <span className="w-1.5 h-1.5 bg-tea-300 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-              <span className="w-1.5 h-1.5 bg-tea-300 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-            </div>
           </div>
           
-          {/* Botões Originais Restaurados */}
-          <div className="w-full max-w-md mx-auto space-y-4 px-6 animate-slide-up">
+          {/* Botões Originais Restaurados e Subidos */}
+          <div className="w-full max-w-md mx-auto space-y-4 px-6 animate-slide-up pb-12">
             <div className="flex flex-col gap-3">
               <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
               <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
               <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Acessar Minha Conta</button>
             </div>
             
-            <div className="pt-6">
-              <div className="inline-flex items-center gap-3 text-white/90 font-medium px-8 py-4 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-sm">
-                <span className="text-xl">📍</span>
-                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] leading-relaxed">
+            <div className="pt-4">
+              <div className="inline-flex items-center gap-3 text-white/80 font-medium px-6 py-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
+                <span className="text-lg">📍</span>
+                <p className="text-[9px] md:text-[10px] uppercase tracking-[0.2em] leading-relaxed">
                   {displayAddress}
                 </p>
               </div>
