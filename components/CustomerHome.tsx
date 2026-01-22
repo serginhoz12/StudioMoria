@@ -38,53 +38,53 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
       {/* Botão Flutuante WhatsApp */}
       <button 
         onClick={() => handleContactSubmit()}
-        className="fixed bottom-8 right-8 z-[100] bg-tea-600 text-white p-4 rounded-full shadow-2xl hover:bg-tea-700 hover:scale-110 transition-all group"
+        className="fixed bottom-6 right-6 z-[100] bg-tea-600 text-white p-4 rounded-full shadow-2xl hover:bg-tea-700 hover:scale-110 transition-all group"
       >
         <span className="text-2xl">📱</span>
         <span className="absolute right-full mr-4 bg-tea-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Fale com a Moriá</span>
       </button>
 
-      {/* Hero Section - Padding reduzido para subir os itens */}
-      <section className="relative min-h-[85vh] flex flex-col items-center justify-start bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem] pt-8 md:pt-12">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[50vh] bg-tea-400/10 rounded-full blur-[100px] pointer-events-none"></div>
+      {/* Hero Section - Compactação máxima para 6.7" */}
+      <section className="relative min-h-[95vh] md:min-h-[85vh] flex flex-col items-center justify-start bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem] pt-0 md:pt-4">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[35vh] bg-tea-400/10 rounded-full blur-[80px] pointer-events-none"></div>
         
         <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center text-center">
           
-          {/* Aviso de Retorno - Compactado */}
-          <div className="mb-6 animate-pulse">
-            <span className="bg-orange-50/10 backdrop-blur-md text-orange-200 px-6 py-2 rounded-full text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] border border-orange-200/20">
+          {/* Aviso de Retorno - Colado no topo no mobile */}
+          <div className="mt-4 mb-1 animate-pulse">
+            <span className="bg-orange-50/5 backdrop-blur-md text-orange-200 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-[0.2em] border border-orange-200/5">
               ✨ RETORNAREMOS EM BREVE
             </span>
           </div>
 
-          {/* Logotipo - O GRANDE DESTAQUE */}
-          <div className="mb-6 md:mb-10 flex justify-center w-full transform hover:scale-[1.02] transition-transform duration-700">
+          {/* Logotipo - TAMANHO GIGANTE E SCALE 125 NO MOBILE */}
+          <div className="mb-1 md:mb-4 flex justify-center w-full transform scale-125 md:scale-105 transition-transform duration-1000 origin-center">
             <img 
               src={settings.logo} 
-              className="w-full max-w-[300px] sm:max-w-[480px] md:max-w-[620px] h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.5)] object-contain animate-slide-up" 
+              className="w-full max-w-[420px] sm:max-w-[520px] md:max-w-[720px] h-auto drop-shadow-[0_25px_60px_rgba(0,0,0,0.6)] object-contain animate-slide-up" 
               alt="Logo Studio Moriá" 
             />
           </div>
 
-          {/* Chamada Atrativa - Destaque Diminuído e Suavizado */}
-          <div className="max-w-xl mx-auto mb-10 px-6 py-6 bg-white/5 backdrop-blur-md rounded-[2.5rem] border border-white/10 shadow-xl">
-            <p className="text-white/90 font-serif italic text-lg md:text-xl leading-relaxed font-medium tracking-tight">
-              Cadastre-se, selecione o serviço e entre na lista de espera para ser um dos primeiros a ser atendido.
+          {/* Chamada Atrativa - Transparente e colada ao logo */}
+          <div className="max-w-lg mx-auto mb-4 px-6 py-2 bg-transparent">
+            <p className="text-white/80 font-serif italic text-base md:text-lg leading-tight font-medium tracking-tight">
+              Cadastre-se, selecione o serviço e entre na lista de espera.
             </p>
           </div>
           
-          {/* Botões Originais Restaurados e Subidos */}
-          <div className="w-full max-w-md mx-auto space-y-4 px-6 animate-slide-up pb-12">
-            <div className="flex flex-col gap-3">
-              <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
-              <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
-              <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Acessar Minha Conta</button>
+          {/* Botões - Aumentados para preencher largura (max-w-md) */}
+          <div className="w-full max-w-md mx-auto space-y-2.5 px-6 animate-slide-up pb-6">
+            <div className="flex flex-col gap-2">
+              <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-2xl font-bold shadow-xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
+              <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/5 py-5 rounded-2xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-lg">Fale com a Moriá</button>
+              <button onClick={onAuthClick} className="w-full bg-transparent text-white/30 py-1 font-bold uppercase tracking-[0.2em] text-[8px] hover:text-white transition-all">Acessar Minha Conta</button>
             </div>
             
-            <div className="pt-4">
-              <div className="inline-flex items-center gap-3 text-white/80 font-medium px-6 py-3 bg-white/5 rounded-2xl border border-white/5 backdrop-blur-sm">
-                <span className="text-lg">📍</span>
-                <p className="text-[9px] md:text-[10px] uppercase tracking-[0.2em] leading-relaxed">
+            <div className="pt-0">
+              <div className="inline-flex items-center gap-2.5 text-white/60 font-medium px-4 py-2 bg-white/5 rounded-xl border border-white/5 backdrop-blur-sm">
+                <span className="text-sm">📍</span>
+                <p className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] leading-tight">
                   {displayAddress}
                 </p>
               </div>
@@ -94,13 +94,13 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
       </section>
 
       {/* Catálogo Geral */}
-      <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
-        <div className="text-center mb-16">
+      <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-20 md:py-32">
+        <div className="text-center mb-14">
           <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Estética Studio Moriá</p>
           <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">{settings.servicesSectionTitle}</h2>
         </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
           {regularServices.map(service => (
             <div 
               key={service.id} 
@@ -127,7 +127,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
       </section>
 
       {/* Localização */}
-      <section id="localizacao" className="bg-gray-50 py-24 md:py-32 px-6 rounded-[5rem] md:rounded-[10rem] mx-4 md:mx-12 my-12 overflow-hidden relative">
+      <section id="localizacao" className="bg-gray-50 py-20 md:py-32 px-6 rounded-[5rem] md:rounded-[10rem] mx-4 md:mx-12 my-12 overflow-hidden relative border border-gray-100">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-16 md:gap-24 items-center">
           <div className="flex-1 space-y-8 text-center lg:text-left">
             <div className="space-y-4">
@@ -147,7 +147,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               <span className="text-2xl">🌍</span>
             </a>
           </div>
-          <div className="flex-1 w-full bg-white p-5 rounded-[4rem] md:rounded-[6rem] shadow-3xl border border-gray-100 h-[350px] md:h-[500px]">
+          <div className="flex-1 w-full bg-white p-4 rounded-[4rem] md:rounded-[6rem] shadow-3xl border border-gray-100 h-[320px] md:h-[500px]">
             <iframe 
               src="https://maps.google.com/maps?q=-23.9004600,-46.4425140&hl=pt&z=15&output=embed" 
               width="100%" 
@@ -162,14 +162,14 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
       </section>
 
       {/* Contato */}
-      <section id="contato" className="py-24 md:py-40 px-6">
+      <section id="contato" className="py-20 md:py-40 px-6">
         <div className="max-w-4xl mx-auto text-center space-y-16">
           <div className="space-y-6">
             <h2 className="text-4xl md:text-6xl font-serif text-tea-950 italic">Fale com a Moriá</h2>
             <p className="text-gray-500 font-light text-lg md:text-xl">Estamos prontas para cuidar da sua melhor versão.</p>
           </div>
           
-          <form onSubmit={handleContactSubmit} className="max-w-2xl mx-auto bg-white p-12 md:p-20 rounded-[4rem] md:rounded-[6rem] shadow-[0_50px_100px_rgba(0,0,0,0.06)] border border-tea-50 space-y-8 relative">
+          <form onSubmit={handleContactSubmit} className="max-w-2xl mx-auto bg-white p-10 md:p-20 rounded-[4rem] md:rounded-[6rem] shadow-[0_50px_100px_rgba(0,0,0,0.06)] border border-tea-50 space-y-8 relative">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 bg-tea-900 rounded-3xl flex items-center justify-center text-3xl shadow-2xl">🌿</div>
             <div className="space-y-4">
               <input 
