@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { SalonSettings, Service, Customer, Booking } from '../types.ts';
 
@@ -29,9 +28,9 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
     window.open(`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
-  // Garante a exibição do endereço curto conforme solicitado (removendo referência local se houver)
+  // Limpa o endereço apenas para a exibição na home
   const displayAddress = useMemo(() => {
-    return (settings.address || "").split(', próximo ao material de construção do Fabio')[0];
+    return (settings.address || "").replace(', próximo ao material de construção do Fabio', '');
   }, [settings.address]);
 
   return (
@@ -46,36 +45,50 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
       </button>
 
       {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex flex-col items-center justify-start bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem]">
+      <section className="relative min-h-[90vh] flex flex-col items-center justify-center bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem]">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60vh] bg-tea-400/10 rounded-full blur-[120px] pointer-events-none"></div>
-        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center pt-10 md:pt-16 text-center">
+        
+        <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col items-center text-center py-12">
           
           {/* Aviso de Retorno */}
-          <div className="mb-6 animate-pulse">
-            <span className="bg-orange-100 text-orange-800 px-6 py-2.5 rounded-full text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] shadow-lg">
+          <div className="mb-8 animate-pulse">
+            <span className="bg-orange-100 text-orange-800 px-8 py-3 rounded-full text-[11px] md:text-xs font-bold uppercase tracking-[0.3em] shadow-xl border border-orange-200">
               ✨ RETORNAREMOS EM BREVE
             </span>
           </div>
 
-          <div className="mb-8 md:mb-14 flex justify-center w-full">
+          <div className="mb-10 md:mb-14 flex justify-center w-full">
             <img 
               src={settings.logo} 
-              className="w-full max-w-[280px] sm:max-w-[420px] md:max-w-[580px] lg:max-w-[750px] h-auto drop-shadow-2xl object-contain" 
+              className="w-full max-w-[280px] sm:max-w-[420px] md:max-w-[580px] h-auto drop-shadow-2xl object-contain animate-slide-up" 
               alt="Logo Studio Moriá" 
             />
           </div>
+
+          {/* Chamada Atrativa em Máximo Destaque */}
+          <div className="max-w-2xl mx-auto mb-12 px-8 py-10 bg-white/10 backdrop-blur-xl rounded-[4rem] border-2 border-white/20 shadow-[0_30px_60px_-15px_rgba(0,0,0,0.3)] transform hover:scale-[1.02] transition-all">
+            <p className="text-white font-serif italic text-xl md:text-3xl leading-relaxed font-bold tracking-tight drop-shadow-sm">
+              "Cadastre-se, selecione o serviço e entre na lista de espera para ser um dos primeiros a ser atendido."
+            </p>
+            <div className="mt-4 flex justify-center gap-2">
+              <span className="w-1.5 h-1.5 bg-tea-300 rounded-full animate-bounce"></span>
+              <span className="w-1.5 h-1.5 bg-tea-300 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+              <span className="w-1.5 h-1.5 bg-tea-300 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+            </div>
+          </div>
           
-          <div className="w-full max-w-md mx-auto space-y-6 px-6">
+          {/* Botões Originais Restaurados */}
+          <div className="w-full max-w-md mx-auto space-y-4 px-6 animate-slide-up">
             <div className="flex flex-col gap-3">
               <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
               <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
               <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Acessar Minha Conta</button>
             </div>
             
-            <div className="pt-6 animate-slide-up">
+            <div className="pt-6">
               <div className="inline-flex items-center gap-3 text-white/90 font-medium px-8 py-4 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-sm">
                 <span className="text-xl">📍</span>
-                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] leading-relaxed max-w-[280px]">
+                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] leading-relaxed">
                   {displayAddress}
                 </p>
               </div>
@@ -107,8 +120,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               </div>
               <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
                 <div>
-                   <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">Investimento</p>
-                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">Valor para Clientes</span>
+                   <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">Cuidado Moriá</p>
+                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">Ver Detalhes</span>
                 </div>
                 <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
               </div>
@@ -189,7 +202,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
         </div>
       </section>
 
-      {/* Modal de Detalhes do Serviço (Descrição Completa) */}
+      {/* Modal de Detalhes do Serviço */}
       {selectedServiceDetail && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
@@ -215,8 +228,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                     <p className="text-xl font-serif text-tea-900 font-bold italic">{selectedServiceDetail.duration} min</p>
                  </div>
                  <div className="p-6 bg-tea-900 rounded-3xl text-white">
-                    <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor</p>
-                    <p className="text-sm font-bold uppercase tracking-widest">Para Clientes</p>
+                    <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-1">Status</p>
+                    <p className="text-sm font-bold uppercase tracking-widest">Pré-Lançamento</p>
                  </div>
               </div>
             </div>
@@ -226,7 +239,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                  onClick={() => { onAuthClick(); setSelectedServiceDetail(null); }} 
                  className="w-full py-6 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
                >
-                 Ver Valor & Agendar
+                 Acessar & Entrar na Lista
                </button>
                <button 
                  onClick={() => setSelectedServiceDetail(null)} 

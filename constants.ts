@@ -1,4 +1,3 @@
-
 import { Service, SalonSettings } from './types';
 
 export const INITIAL_SERVICES: Service[] = [
