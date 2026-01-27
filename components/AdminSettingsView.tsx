@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { SalonSettings, Service, TeamMember } from '../types.ts';
 import { db } from '../firebase.ts';
-import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { doc, setDoc } from "firebase/firestore";
 
 interface AdminSettingsViewProps {
   settings: SalonSettings;
@@ -10,299 +10,304 @@ interface AdminSettingsViewProps {
   customers: any[];
   bookings: any[];
   transactions: any[];
+  loggedMember: TeamMember;
 }
 
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
   settings, 
-  services = [],
+  services,
+  loggedMember
 }) => {
-  const categories = ['Olhar', 'Rosto', 'Mãos', 'Unhas', 'Corpo', 'Outros'];
-  const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false });
-  const [editingService, setEditingService] = useState<Service | null>(null);
-  const [newMemberName, setNewMemberName] = useState('');
+  const isOwner = loggedMember.role === 'owner';
+  
+  const [memberInEdit, setMemberInEdit] = useState<TeamMember | null>(null);
+  const [isAddingNew, setIsAddingNew] = useState(false);
+  const [myProfileData, setMyProfileData] = useState<TeamMember>(loggedMember);
 
-  const updateGlobalSettings = async (newSet: SalonSettings) => {
-    await setDoc(doc(db, "settings", "main"), { ...newSet, lastUpdated: Date.now() });
-  };
-
-  const addTeamMember = () => {
-    if (newMemberName.trim()) {
-      const newMember: TeamMember = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: newMemberName.trim(),
-        assignedServiceIds: [],
-        businessHours: { start: settings.businessHours.start, end: settings.businessHours.end },
-        offDays: [0] 
-      };
-      const updated = { ...settings, teamMembers: [...settings.teamMembers, newMember] };
-      updateGlobalSettings(updated);
-      setNewMemberName('');
-    }
-  };
-
-  const removeTeamMember = (id: string) => {
-    if (confirm("Remover profissional permanentemente?")) {
-      const updated = { ...settings, teamMembers: settings.teamMembers.filter(m => m.id !== id) };
-      updateGlobalSettings(updated);
-    }
-  };
-
-  const updateMemberField = (memberId: string, field: keyof TeamMember, value: any) => {
-    const updatedMembers = settings.teamMembers.map(m => {
-      if (m.id === memberId) {
-        return { ...m, [field]: value };
-      }
-      return m;
-    });
-    updateGlobalSettings({ ...settings, teamMembers: updatedMembers });
-  };
-
-  const toggleOffDay = (memberId: string, day: number) => {
-    const targetMember = settings.teamMembers.find(m => m.id === memberId);
-    if (!targetMember) return;
-    const currentOffDays = targetMember.offDays || [];
-    const newOffDays = currentOffDays.includes(day)
-      ? currentOffDays.filter(d => d !== day)
-      : [...currentOffDays, day];
-    updateMemberField(memberId, 'offDays', newOffDays);
-  };
-
-  const toggleServiceToMember = (memberId: string, serviceId: string) => {
-    const member = settings.teamMembers.find(m => m.id === memberId);
-    if (!member) return;
-    const currentIds = member.assignedServiceIds || [];
-    const hasService = currentIds.includes(serviceId);
-    const newServices = hasService 
-      ? currentIds.filter(id => id !== serviceId)
-      : [...currentIds, serviceId];
-    updateMemberField(memberId, 'assignedServiceIds', newServices);
-  };
-
-  const addService = async () => {
-    if (newService.name && newService.price > 0) {
-      const id = Math.random().toString(36).substr(2, 9);
-      await setDoc(doc(db, "services", id), { ...newService, id });
-      setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false });
-    }
-  };
-
-  const saveEditedService = async () => {
-    if (editingService && editingService.name && editingService.price > 0) {
-      const serviceRef = doc(db, "services", editingService.id);
-      await updateDoc(serviceRef, {
-        name: editingService.name,
-        price: editingService.price,
-        duration: editingService.duration,
-        description: editingService.description,
-        category: editingService.category
+  const saveToFirebase = async (updatedTeam: TeamMember[]) => {
+    try {
+      await setDoc(doc(db, "settings", "main"), { 
+        ...settings, 
+        teamMembers: updatedTeam, 
+        lastUpdated: Date.now() 
       });
-      setEditingService(null);
+      alert("Alterações salvas com sucesso no banco de dados.");
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      alert("Erro ao conectar com o banco de dados.");
     }
   };
 
-  const toggleServiceVisibility = async (id: string, current: boolean) => {
-    await updateDoc(doc(db, "services", id), { isVisible: !current });
+  const updateMyProfile = async () => {
+    if (!myProfileData.username || !myProfileData.password) {
+      alert("Usuário e Senha não podem estar vazios.");
+      return;
+    }
+    const updated = settings.teamMembers.map(m => m.id === myProfileData.id ? myProfileData : m);
+    await saveToFirebase(updated);
   };
 
-  const toggleServiceHighlight = async (id: string, current: boolean) => {
-    await updateDoc(doc(db, "services", id), { isHighlighted: !current });
+  const handleAddNewMember = () => {
+    const newMember: TeamMember = {
+      id: `tm-${Date.now()}`,
+      name: "",
+      username: "",
+      password: "",
+      role: 'staff',
+      assignedServiceIds: [],
+      businessHours: settings.businessHours,
+      offDays: [0]
+    };
+    setMemberInEdit(newMember);
+    setIsAddingNew(true);
   };
 
-  const handleDeleteService = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir permanentemente este serviço?")) {
-      await deleteDoc(doc(db, "services", id));
+  const saveMemberChange = async () => {
+    if (!memberInEdit) return;
+    if (!memberInEdit.name || !memberInEdit.username || !memberInEdit.password) {
+      alert("Preencha Nome, Usuário e Senha para continuar.");
+      return;
+    }
+
+    let updatedTeam: TeamMember[];
+    if (isAddingNew) {
+      updatedTeam = [...settings.teamMembers, memberInEdit];
+    } else {
+      updatedTeam = settings.teamMembers.map(m => m.id === memberInEdit.id ? memberInEdit : m);
+    }
+
+    await saveToFirebase(updatedTeam);
+    setMemberInEdit(null);
+    setIsAddingNew(false);
+  };
+
+  const deleteMember = async (id: string) => {
+    if (confirm("Deseja realmente remover este colaborador da equipe?")) {
+      const updated = settings.teamMembers.filter(m => m.id !== id);
+      await saveToFirebase(updated);
     }
   };
 
   const weekDays = [
-    { n: 0, label: 'Dom' },
-    { n: 1, label: 'Seg' },
-    { n: 2, label: 'Ter' },
-    { n: 3, label: 'Qua' },
-    { n: 4, label: 'Qui' },
-    { n: 5, label: 'Sex' },
-    { n: 6, label: 'Sáb' },
+    { n: 0, label: 'Dom' }, { n: 1, label: 'Seg' }, { n: 2, label: 'Ter' },
+    { n: 3, label: 'Qua' }, { n: 4, label: 'Qui' }, { n: 5, label: 'Sex' }, { n: 6, label: 'Sáb' },
   ];
 
   return (
     <div className="space-y-12 pb-32 animate-fade-in">
-      <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl">
-        <h2 className="text-3xl font-serif font-bold mb-2 italic">Configurações Studio Moriá</h2>
-        <p className="text-tea-100 font-light text-sm italic">Gestão de profissionais, catálogo e controle de agenda.</p>
+      {/* Header */}
+      <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-serif font-bold mb-2 italic">Configurações</h2>
+          <p className="text-tea-100 font-light text-sm italic">
+            {isOwner ? 'Painel Administrativo Studio Moriá.' : 'Gerencie seu perfil e horários.'}
+          </p>
+        </div>
       </div>
 
-      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-          <span className="text-3xl">📅</span> Disponibilidade da Agenda
-        </h3>
-        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
-           <div className="max-w-md">
-             <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 mb-2 block">Liberar Agenda para Clientes até:</label>
-             <input 
-              type="date" 
-              className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
-              value={settings.agendaOpenUntil || ''}
-              onChange={e => updateGlobalSettings({...settings, agendaOpenUntil: e.target.value})}
-             />
-             <p className="text-[9px] text-gray-400 mt-2 ml-1 italic">* Após esta data, nenhum horário estará visível para as clientes no app.</p>
-           </div>
-        </div>
-      </section>
-
-      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-           <span className="text-3xl">👥</span> Gestão da Equipe & Folgas
-        </h3>
-        <div className="flex gap-4 mb-10">
-          <input placeholder="Nome da nova colaboradora..." className="flex-grow p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
-          <button onClick={addTeamMember} className="bg-tea-800 text-white px-10 py-5 rounded-2xl font-bold hover:bg-tea-950 transition-colors shadow-lg uppercase text-[10px] tracking-widest">Adicionar Equipe</button>
+      {/* Meus Dados (Todos os funcionários veem o seu) */}
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-10">
+        <div className="flex items-center gap-4">
+           <div className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-xl">👤</div>
+           <h3 className="text-2xl font-serif text-tea-900 italic font-bold">Meu Acesso Pessoal</h3>
         </div>
         
-        <div className="space-y-12">
-          {settings.teamMembers.map(member => (
-            <div key={member.id} className="p-8 border-2 border-gray-50 rounded-[2.5rem] bg-white shadow-sm hover:border-tea-100 transition-all space-y-10 relative overflow-hidden">
-              <div className="flex justify-between items-center border-b border-gray-50 pb-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-tea-900 text-white rounded-2xl flex items-center justify-center font-serif text-xl font-bold">{member.name.charAt(0)}</div>
-                  <span className="font-serif font-bold text-2xl text-tea-950 italic">{member.name}</span>
-                </div>
-                <button onClick={() => removeTeamMember(member.id)} className="text-red-400 text-[10px] font-bold uppercase tracking-widest hover:text-red-600 p-3 bg-red-50 rounded-xl transition-colors">Remover da Unidade</button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                <div className="space-y-8">
-                  <div>
-                    <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
-                       <span className="text-lg">⏰</span> Turno de Atendimento
-                    </h4>
-                    <div className="flex items-center gap-4">
-                      <input type="time" className="flex-1 p-4 bg-gray-50 rounded-xl border-none font-bold text-sm shadow-inner" value={member.businessHours?.start || settings.businessHours.start} onChange={e => updateMemberField(member.id, 'businessHours', { ... (member.businessHours || settings.businessHours), start: e.target.value })} />
-                      <span className="text-gray-300 font-bold">às</span>
-                      <input type="time" className="flex-1 p-4 bg-gray-50 rounded-xl border-none font-bold text-sm shadow-inner" value={member.businessHours?.end || settings.businessHours.end} onChange={e => updateMemberField(member.id, 'businessHours', { ... (member.businessHours || settings.businessHours), end: e.target.value })} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
-                       <span className="text-lg">🚫</span> Dias de Folga (Agenda Fechada)
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {weekDays.map(day => (
-                        <button 
-                          key={day.n} 
-                          onClick={() => toggleOffDay(member.id, day.n)}
-                          className={`px-4 py-2 rounded-xl text-[10px] font-bold border-2 transition-all ${member.offDays?.includes(day.n) ? 'bg-red-500 border-red-500 text-white shadow-md' : 'bg-gray-50 border-gray-100 text-gray-400 hover:bg-gray-100'}`}
-                        >
-                          {day.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-[8px] text-gray-400 mt-3 font-bold uppercase tracking-widest">* Selecione os dias em que a profissional NÃO atende.</p>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
-                     <span className="text-lg">✨</span> Procedimentos Habilitados
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {services.map(s => (
-                      <button 
-                        key={s.id} 
-                        onClick={() => toggleServiceToMember(member.id, s.id)} 
-                        className={`px-5 py-3 rounded-2xl text-[10px] font-bold border-2 transition-all ${member.assignedServiceIds?.includes(s.id) ? 'bg-tea-800 border-tea-800 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-tea-200'}`}
-                      >
-                        {s.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="space-y-6">
+            <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest">Alterar Credenciais</h4>
+            <div className="space-y-4">
+               <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase ml-2">Nome de Usuário (Login)</label>
+                  <input 
+                    type="text" 
+                    value={myProfileData.username} 
+                    onChange={e => setMyProfileData({...myProfileData, username: e.target.value})}
+                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all" 
+                  />
+               </div>
+               <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase ml-2">Senha de Acesso</label>
+                  <input 
+                    type="text" 
+                    value={myProfileData.password} 
+                    onChange={e => setMyProfileData({...myProfileData, password: e.target.value})}
+                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all" 
+                  />
+               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="space-y-6">
+            <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest">Minha Disponibilidade</h4>
+            <div className="flex flex-wrap gap-2">
+              {weekDays.map(day => {
+                const offDays = myProfileData.offDays || [];
+                const isOff = offDays.includes(day.n);
+                return (
+                  <button 
+                    key={day.n}
+                    onClick={() => {
+                      const next = isOff ? offDays.filter(d => d !== day.n) : [...offDays, day.n];
+                      setMyProfileData({ ...myProfileData, offDays: next });
+                    }}
+                    className={`px-4 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all border-2 ${
+                      isOff ? 'bg-tea-800 text-white border-tea-800' : 'bg-white text-gray-400 border-gray-100'
+                    }`}
+                  >
+                    {day.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-10 border-t border-gray-50 flex justify-end">
+          <button 
+            onClick={updateMyProfile}
+            className="w-full md:w-auto px-12 py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black transition-all active:scale-95"
+          >
+            Salvar Meus Dados
+          </button>
         </div>
       </section>
 
-      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
-           <span className="text-3xl">📋</span> Catálogo de Cuidados
-        </h3>
-        
-        <div className="bg-tea-50/50 p-8 rounded-3xl mb-10 border border-tea-100">
-           <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-6 ml-1">Adicionar Novo Procedimento</h4>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-              <input placeholder="Nome do Procedimento" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
-              <select className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.category} onChange={e => setNewService({...newService, category: e.target.value})}>
-                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-              <input type="number" placeholder="Preço R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
-              <input type="number" placeholder="Duração (minutos)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
-           </div>
-           <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar no Catálogo</button>
-        </div>
+      {/* Gestão de Equipe (Apenas Dona) */}
+      {isOwner && (
+        <section className="space-y-8">
+          <div className="flex justify-between items-end px-4">
+             <div>
+                <h3 className="text-2xl font-serif text-tea-950 italic font-bold">Gestão de Funcionários</h3>
+                <p className="text-xs text-gray-500 italic">Administre a equipe e as permissões do Studio.</p>
+             </div>
+             <button 
+              onClick={handleAddNewMember}
+              className="bg-tea-900 text-white px-8 py-3 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-black transition-all shadow-lg"
+             >
+              + Cadastrar Funcionária
+             </button>
+          </div>
 
-        <div className="grid grid-cols-1 gap-4">
-          {services.map(s => (
-            <div key={s.id} className={`p-6 border-2 rounded-3xl flex justify-between items-center transition-all ${s.isVisible ? 'border-gray-50 hover:bg-gray-50/30' : 'bg-red-50/10 opacity-60 border-transparent'}`}>
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => toggleServiceHighlight(s.id, !!s.isHighlighted)}
-                  className={`p-3 rounded-2xl transition-all ${s.isHighlighted ? 'bg-orange-100 text-orange-600 scale-110 shadow-sm' : 'bg-gray-50 text-gray-300'}`}
-                  title={s.isHighlighted ? 'Remover Destaque' : 'Destacar no Site'}
-                >
-                  ⭐
-                </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {settings.teamMembers.map(member => (
+              <div key={member.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm hover:border-tea-200 transition-all">
+                <div className="flex justify-between items-start mb-6">
+                   <div className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-xl text-tea-900 font-bold">
+                      {member.name.charAt(0)}
+                   </div>
+                   <span className={`text-[8px] font-bold uppercase px-3 py-1 rounded-full ${member.role === 'owner' ? 'bg-tea-900 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      {member.role === 'owner' ? 'Proprietária' : 'Colaboradora'}
+                   </span>
+                </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-bold text-lg text-tea-950">{s.name}</p>
-                    <span className="text-[8px] bg-tea-100 text-tea-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{s.category}</span>
-                  </div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">R$ {s.price.toFixed(2)} • {s.duration} min</p>
+                   <h4 className="font-serif italic font-bold text-lg text-tea-950">{member.name}</h4>
+                   <div className="mt-2 space-y-1">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Usuário: <span className="text-tea-900">{member.username}</span></p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Senha: <span className="text-tea-900">{member.password}</span></p>
+                   </div>
+                </div>
+                <div className="mt-8 flex gap-2">
+                   <button 
+                    onClick={() => { setMemberInEdit(member); setIsAddingNew(false); }}
+                    className="flex-1 py-3 bg-gray-50 text-gray-600 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-tea-50 hover:text-tea-900 transition-all"
+                   >
+                    Editar Cadastro
+                   </button>
+                   {member.id !== loggedMember.id && (
+                     <button 
+                      onClick={() => deleteMember(member.id)}
+                      className="p-3 bg-red-50 text-red-300 rounded-xl hover:text-red-600 transition-colors"
+                     >
+                      🗑️
+                     </button>
+                   )}
                 </div>
               </div>
-              <div className="flex gap-2 items-center">
-                <button onClick={() => setEditingService(s)} className="p-3 bg-white text-tea-600 rounded-xl border border-tea-50 shadow-sm">✏️</button>
-                <button onClick={() => toggleServiceVisibility(s.id, s.isVisible)} className={`px-6 py-3 rounded-xl text-[10px] font-bold border-2 transition-all ${s.isVisible ? 'bg-white text-tea-700 border-tea-100' : 'bg-tea-800 text-white border-tea-800'}`}>
-                  {s.isVisible ? 'VISÍVEL' : 'OCULTO'}
-                </button>
-                <button onClick={() => handleDeleteService(s.id)} className="p-3 text-red-200 hover:text-red-500 transition-colors">🗑️</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {editingService && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-2xl animate-slide-up">
-            <h3 className="text-2xl font-serif text-tea-900 mb-8 italic font-bold">Ajustar Procedimento</h3>
-            <div className="space-y-6">
-              <input className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none font-bold shadow-inner" value={editingService.name} onChange={e => setEditingService({...editingService, name: e.target.value})} />
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Categoria</label>
-                    <select className="w-full p-4 rounded-2xl bg-gray-50 border-none outline-none font-bold shadow-inner" value={editingService.category} onChange={e => setEditingService({...editingService, category: e.target.value})}>
-                       {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                 </div>
-                 <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Preço R$</label>
-                    <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
-                 </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Duração (min)</label>
-                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: parseInt(e.target.value)})} />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Descrição</label>
-                <textarea className="w-full p-4 rounded-2xl bg-gray-50 outline-none h-24 shadow-inner" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button onClick={() => setEditingService(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
-                <button onClick={saveEditedService} className="flex-[2] bg-tea-800 text-white py-4 rounded-2xl font-bold shadow-xl uppercase text-[10px] tracking-widest">Confirmar Alterações</button>
-              </div>
-            </div>
+      {/* Modal de Cadastro/Edição de Funcionário */}
+      {memberInEdit && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 md:p-14 shadow-3xl space-y-8 animate-slide-up border border-tea-50">
+             <div className="text-center">
+                <h3 className="text-3xl font-serif font-bold text-tea-900 italic">{isAddingNew ? 'Novo Cadastro' : 'Editar Funcionária'}</h3>
+                <p className="text-xs text-gray-400 mt-2 italic">Defina as credenciais de acesso para a equipe.</p>
+             </div>
+
+             <div className="space-y-4">
+                <div className="space-y-1">
+                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Nome Completo</label>
+                   <input 
+                     type="text" 
+                     value={memberInEdit.name} 
+                     onChange={e => setMemberInEdit({...memberInEdit, name: e.target.value})}
+                     placeholder="Ex: Ana Souza"
+                     className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all" 
+                   />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Usuário Login</label>
+                      <input 
+                        type="text" 
+                        value={memberInEdit.username} 
+                        onChange={e => setMemberInEdit({...memberInEdit, username: e.target.value})}
+                        placeholder="Ex: ana.souza"
+                        className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all" 
+                      />
+                   </div>
+                   <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Senha de Acesso</label>
+                      <input 
+                        type="text" 
+                        value={memberInEdit.password} 
+                        onChange={e => setMemberInEdit({...memberInEdit, password: e.target.value})}
+                        placeholder="Ex: 123456"
+                        className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all" 
+                      />
+                   </div>
+                </div>
+                
+                <div className="space-y-1">
+                   <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Serviços Habilitados</label>
+                   <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scroll p-4 bg-gray-50 rounded-3xl">
+                      {services.map(srv => (
+                        <label key={srv.id} className="flex items-center gap-3 p-2 cursor-pointer hover:bg-white rounded-xl transition-colors">
+                           <input 
+                            type="checkbox" 
+                            checked={memberInEdit.assignedServiceIds.includes(srv.id)}
+                            onChange={() => {
+                              const ids = memberInEdit.assignedServiceIds.includes(srv.id)
+                                ? memberInEdit.assignedServiceIds.filter(i => i !== srv.id)
+                                : [...memberInEdit.assignedServiceIds, srv.id];
+                              setMemberInEdit({...memberInEdit, assignedServiceIds: ids});
+                            }}
+                            className="w-4 h-4 rounded text-tea-900 focus:ring-tea-900 border-gray-300"
+                           />
+                           <span className="text-[10px] font-bold text-tea-950 uppercase tracking-tight">{srv.name}</span>
+                        </label>
+                      ))}
+                   </div>
+                </div>
+             </div>
+
+             <div className="flex flex-col gap-3 pt-4">
+                <button 
+                  onClick={saveMemberChange}
+                  className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+                >
+                  Confirmar Alterações
+                </button>
+                <button 
+                  onClick={() => { setMemberInEdit(null); setIsAddingNew(false); }}
+                  className="w-full py-3 text-gray-400 font-bold uppercase text-[9px] hover:text-gray-600 transition-colors"
+                >
+                  Descartar
+                </button>
+             </div>
           </div>
         </div>
       )}

@@ -16,15 +16,23 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Customer>>({});
 
-  const filtered = customers.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.whatsapp.includes(search) ||
-    c.cpf.includes(search)
-  );
+  const filtered = (customers || []).filter(c => {
+    if (!c) return false;
+    const s = (search || '').toLowerCase();
+    const name = (c.name || '').toLowerCase();
+    const whatsapp = (c.whatsapp || '');
+    const cpf = (c.cpf || '');
+    
+    return name.includes(s) || whatsapp.includes(s) || cpf.includes(s);
+  });
 
   const handleEditClick = () => {
     if (selectedCustomer) {
-      setEditData({ name: selectedCustomer.name, whatsapp: selectedCustomer.whatsapp, cpf: selectedCustomer.cpf });
+      setEditData({ 
+        name: selectedCustomer.name || '', 
+        whatsapp: selectedCustomer.whatsapp || '', 
+        cpf: selectedCustomer.cpf || '' 
+      });
       setIsEditing(true);
     }
   };
@@ -46,8 +54,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
 
   // Cálculo de histórico e métricas EXCLUSIVAS ADMIN
   const getClientStats = (customerId: string) => {
-    const myBookings = bookings.filter(b => b.customerId === customerId);
-    const myTransactions = transactions.filter(t => t.customerId === customerId);
+    const myBookings = (bookings || []).filter(b => b.customerId === customerId);
+    const myTransactions = (transactions || []).filter(t => t.customerId === customerId);
 
     const cancelledCount = myBookings.filter(b => b.status === 'cancelled').length;
     const reschedules = myBookings.reduce((sum, b) => sum + (b.rescheduledCount || 0), 0);
@@ -131,7 +139,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
               <div className="p-8 bg-gray-50/50 border-b border-gray-100 flex justify-between items-start">
                 <div className="flex gap-6 items-center">
                   <div className="w-20 h-20 bg-tea-800 rounded-[2rem] flex items-center justify-center text-white text-3xl font-serif font-bold shadow-lg">
-                    {selectedCustomer.name.charAt(0)}
+                    {(selectedCustomer.name || 'C').charAt(0)}
                   </div>
                   <div>
                     <h3 className="text-3xl font-serif text-tea-950 font-bold">{selectedCustomer.name}</h3>

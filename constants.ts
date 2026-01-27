@@ -1,3 +1,4 @@
+
 import { Service, SalonSettings } from './types';
 
 export const INITIAL_SERVICES: Service[] = [
@@ -18,7 +19,14 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   googleMapsLink: "https://www.google.com/maps/search/?api=1&query=-23.9004600,-46.4425140",
   lastUpdated: Date.now(),
   teamMembers: [
-    { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
+    { 
+      id: 'tm1', 
+      name: "Moriá (Proprietária)", 
+      username: "admin", // Alterado conforme solicitado
+      role: 'owner', 
+      password: "460206", // Alterado conforme solicitado
+      assignedServiceIds: ['1', '2', '3', '4'] 
+    }
   ],
   businessHours: {
     start: "08:00",

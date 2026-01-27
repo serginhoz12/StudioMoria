@@ -46,6 +46,9 @@ export interface BusinessHours {
 export interface TeamMember {
   id: string;
   name: string;
+  username: string; // Novo campo para login digitado
+  password?: string;
+  role: 'owner' | 'staff';
   assignedServiceIds: string[];
   businessHours?: BusinessHours;
   offDays?: number[]; 
@@ -113,6 +116,7 @@ export interface Transaction {
   status: 'pending' | 'paid';
   customerId?: string;
   customerName?: string;
+  teamMemberId?: string; 
   promotionId?: string;
   paidAt?: string;
 }
