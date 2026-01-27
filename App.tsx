@@ -11,7 +11,7 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
-  increment
+  serverTimestamp
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -51,24 +51,18 @@ const App: React.FC = () => {
         setSettings(remoteSettings);
         
         // AUTO-REPARO DE CREDENCIAIS
-        // Se o banco de dados não tiver o usuário admin ou a senha estiver diferente da padrão inicial
-        // nós forçamos a atualização para garantir que a dona não fique trancada fora.
         const adminExists = remoteSettings.teamMembers?.some(m => m.username === "admin" && m.password === "460206");
         if (!adminExists) {
-          console.log("Sincronizando credenciais mestras com o banco...");
           const updatedTeam = [...(remoteSettings.teamMembers || [])];
           const adminIdx = updatedTeam.findIndex(m => m.username === "admin" || m.role === "owner");
-          
           const masterAdmin = DEFAULT_SETTINGS.teamMembers[0];
           if (adminIdx >= 0) {
             updatedTeam[adminIdx] = { ...updatedTeam[adminIdx], username: "admin", password: "460206", role: "owner" };
           } else {
             updatedTeam.push(masterAdmin);
           }
-          
           updateDoc(doc(db, "settings", "main"), { teamMembers: updatedTeam });
         }
-        
         setIsLoading(false);
       } else {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
@@ -109,16 +103,17 @@ const App: React.FC = () => {
     };
   }, [isLoading]);
 
-  // Efeito para sincronizar os dados do membro logado em tempo real
+  // Efeito para login automático do cliente
   useEffect(() => {
-    if (loggedAdminMember && settings.teamMembers.length > 0) {
-      const latestData = settings.teamMembers.find(m => m.id === loggedAdminMember.id);
-      if (latestData && JSON.stringify(latestData) !== JSON.stringify(loggedAdminMember)) {
-        setLoggedAdminMember(latestData);
-        localStorage.setItem('moria_admin_session', JSON.stringify(latestData));
-      }
+    const savedUser = localStorage.getItem('moria_user_session');
+    if (savedUser && customers.length > 0) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        const latestUser = customers.find(c => c.id === parsed.id);
+        if (latestUser) setCurrentUser(latestUser);
+      } catch (e) { localStorage.removeItem('moria_user_session'); }
     }
-  }, [settings.teamMembers, loggedAdminMember]);
+  }, [customers]);
 
   useEffect(() => {
     const savedAdmin = localStorage.getItem('moria_admin_session');
@@ -130,13 +125,6 @@ const App: React.FC = () => {
           setIsAdmin(true);
         }
       } catch (e) { localStorage.removeItem('moria_admin_session'); }
-    }
-    const savedUser = localStorage.getItem('moria_user_session');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        if (parsed) setCurrentUser(parsed);
-      } catch (e) { localStorage.removeItem('moria_user_session'); }
     }
   }, []);
 
@@ -154,6 +142,43 @@ const App: React.FC = () => {
     setCurrentView(View.CUSTOMER_HOME);
   };
 
+  const handleCustomerLogin = (cpf: string, pass: string) => {
+    const cleanCpf = cpf.replace(/\D/g, '');
+    const user = customers.find(c => c.cpf.replace(/\D/g, '') === cleanCpf && c.password === pass);
+    if (user) {
+      setCurrentUser(user);
+      localStorage.setItem('moria_user_session', JSON.stringify(user));
+      setCurrentView(View.CUSTOMER_DASHBOARD);
+    } else {
+      throw new Error("CPF ou senha incorretos.");
+    }
+  };
+
+  const handleCustomerRegister = async (name: string, whatsapp: string, cpf: string, pass: string, notifications: boolean) => {
+    const cleanCpf = cpf.replace(/\D/g, '');
+    if (customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf)) {
+      alert("Este CPF já está cadastrado.");
+      return;
+    }
+
+    const newCustomer = {
+      name,
+      whatsapp,
+      cpf: cleanCpf,
+      password: pass,
+      receivesNotifications: notifications,
+      agreedToTerms: true,
+      history: [],
+      createdAt: new Date().toISOString()
+    };
+
+    const docRef = await addDoc(collection(db, "customers"), newCustomer);
+    const userWithId = { ...newCustomer, id: docRef.id } as Customer;
+    setCurrentUser(userWithId);
+    localStorage.setItem('moria_user_session', JSON.stringify(userWithId));
+    setCurrentView(View.CUSTOMER_DASHBOARD);
+  };
+
   const renderView = () => {
     if (isAdmin) {
       if (!loggedAdminMember) return <AdminLogin teamMembers={settings.teamMembers} onLogin={handleAdminLogin} onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} />;
@@ -161,15 +186,15 @@ const App: React.FC = () => {
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} loggedMember={loggedAdminMember} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} loggedMember={loggedAdminMember} />;
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} waitlist={waitlist} onUpdateStatus={(id, s) => updateDoc(doc(db, "bookings", id), {status: s})} onUpdateDeposit={(id, d) => updateDoc(doc(db, "bookings", id), {depositStatus: d})} onDeleteBooking={(id) => deleteDoc(doc(db, "bookings", id))} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} loggedMember={loggedAdminMember} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} waitlist={waitlist} onUpdateStatus={(id, s) => updateDoc(doc(db, "bookings", id), {status: s})} onUpdateDeposit={(id, d) => updateDoc(doc(db, "bookings", id), {depositStatus: d})} onDeleteBooking={(id) => deleteDoc(doc(db, "bookings", id))} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, d) => updateDoc(doc(db, "customers", id), d)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} loggedMember={loggedAdminMember} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} loggedMember={loggedAdminMember} />;
       }
     }
 
-    if (currentUser && currentView === View.CUSTOMER_DASHBOARD) {
+    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN)) {
        return (
          <CustomerDashboard 
             customer={currentUser} 
@@ -178,18 +203,19 @@ const App: React.FC = () => {
             settings={settings}
             onBook={() => {}}
             onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
-            onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
+            onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }}
             onCancelBooking={(id) => updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
-            onAddToWaitlist={() => {}}
+            onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
-            onRemoveWaitlist={() => {}}
+            onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
          />
        );
     }
 
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={() => {}} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={(cpf, pass) => {}} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleCustomerRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_PROFILE: return currentUser ? <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(val) => updateDoc(doc(db, "customers", currentUser.id), {receivesNotifications: val})} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} /> : null;
       default: return (
         <CustomerHome 
           settings={settings} services={services} bookings={bookings} 
@@ -220,7 +246,7 @@ const App: React.FC = () => {
           salonName={settings.name} 
           logo={settings.logo} 
           currentUser={currentUser} 
-          onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }} 
+          onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }} 
           onAdminLogout={handleAdminLogout} 
           isAdminAuthenticated={!!loggedAdminMember} 
         />

@@ -10,13 +10,20 @@ interface CustomerLoginViewProps {
 const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegisterClick, onBack }) => {
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    
     if (cpf && password) {
-      onLogin(cpf, password);
+      try {
+        onLogin(cpf, password);
+      } catch (err: any) {
+        setError(err.message || "Erro ao tentar acessar. Verifique seus dados.");
+      }
     } else {
-      alert("Por favor, preencha CPF e Senha.");
+      setError("Por favor, preencha CPF e Senha.");
     }
   };
 
@@ -34,7 +41,7 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
             <input 
               type="text" 
               placeholder="000.000.000-00"
-              className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-tea-200 focus:bg-white outline-none transition-all text-gray-800"
+              className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all text-gray-800 ${error ? 'border-red-200 bg-red-50' : 'border-transparent focus:border-tea-200 focus:bg-white'}`}
               value={cpf}
               onChange={(e) => setCpf(e.target.value)}
               required
@@ -45,12 +52,18 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
             <input 
               type="password" 
               placeholder="••••••••"
-              className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-tea-200 focus:bg-white outline-none transition-all text-gray-800"
+              className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all text-gray-800 ${error ? 'border-red-200 bg-red-50' : 'border-transparent focus:border-tea-200 focus:bg-white'}`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
+
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl animate-shake">
+              <p className="text-xs text-red-600 font-bold text-center uppercase tracking-tight">{error}</p>
+            </div>
+          )}
 
           <button 
             type="submit"

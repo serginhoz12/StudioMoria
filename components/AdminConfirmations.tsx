@@ -10,7 +10,6 @@ interface AdminConfirmationsProps {
   onDeleteBooking: (id: string) => void;
   waitlist: WaitlistEntry[];
   onRemoveWaitlist: (id: string) => void;
-  onReactivateWaitlist?: (id: string) => void;
 }
 
 const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ 
@@ -19,8 +18,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
   onUpdateDeposit, 
   onDeleteBooking,
   waitlist = [], 
-  onRemoveWaitlist,
-  onReactivateWaitlist
+  onRemoveWaitlist
 }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist' | 'history'>('pending');
   
@@ -36,25 +34,25 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
   return (
     <div className="space-y-8 animate-fade-in">
       <div className="flex flex-wrap gap-3 border-b border-gray-100 pb-4 overflow-x-auto no-scrollbar">
-        <button onClick={() => setActiveTab('pending')} className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-tea-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Pedidos Pendentes ({pending.length})</button>
-        <button onClick={() => setActiveTab('waitlist')} className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'waitlist' ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Lista de Espera ({activeWaitlist.length})</button>
-        <button onClick={() => setActiveTab('history')} className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-red-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Histórico / Cancelados</button>
+        <button onClick={() => setActiveTab('pending')} className={`px-8 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-tea-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Pendentes ({pending.length})</button>
+        <button onClick={() => setActiveTab('waitlist')} className={`px-8 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'waitlist' ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Fila de Espera ({activeWaitlist.length})</button>
+        <button onClick={() => setActiveTab('history')} className={`px-8 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-red-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Cancelados</button>
       </div>
 
       {activeTab === 'pending' && (
         <div className="grid grid-cols-1 gap-6">
           {pending.map(booking => (
-            <div key={booking.id} className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-10 hover:border-tea-200 transition-all group relative overflow-hidden">
+            <div key={booking.id} className="bg-white p-10 rounded-[4rem] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-10 hover:border-tea-200 transition-all group relative overflow-hidden">
               {booking.agreedToCancellationPolicy && (
-                <div className="absolute top-0 right-10 bg-tea-900 text-white px-6 py-1.5 rounded-b-2xl text-[8px] font-bold uppercase tracking-[0.2em] shadow-sm">
+                <div className="absolute top-0 right-10 bg-tea-900 text-white px-6 py-2 rounded-b-2xl text-[8px] font-bold uppercase tracking-[0.2em] shadow-sm">
                   Ciente da Taxa ✓
                 </div>
               )}
               
               <div className="flex items-center gap-8">
                 <div className="w-24 h-24 bg-tea-50 rounded-[2.5rem] flex items-center justify-center text-tea-700 text-4xl font-serif font-bold group-hover:bg-tea-100 transition-colors">{booking.customerName.charAt(0)}</div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-gray-800">{booking.customerName}</h3>
+                <div className="space-y-3">
+                  <h3 className="text-2xl font-bold text-tea-950 font-serif italic">{booking.customerName}</h3>
                   <div className="flex flex-wrap gap-3 mt-2">
                     <span className="text-[10px] text-tea-600 font-bold uppercase tracking-widest bg-tea-50 px-4 py-1.5 rounded-full border border-tea-100">{booking.serviceName}</span>
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest border border-gray-100 px-4 py-1.5 rounded-full">🗓️ {booking.dateTime}</span>
@@ -62,24 +60,32 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto items-center">
-                {booking.depositStatus !== 'paid' && (
-                  <button 
-                    onClick={() => onUpdateDeposit(booking.id, 'paid')}
-                    className="px-8 py-4 bg-white border-2 border-orange-200 text-orange-700 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-orange-50 transition-all"
-                  >
-                    Confirmar Sinal
-                  </button>
-                )}
+                <button 
+                  onClick={() => openWhatsApp(booking.customerWhatsapp || '', `Olá ${booking.customerName}! Aqui é o Studio Moriá. Vimos seu pedido para ${booking.serviceName}. Gostaria de confirmar seu horário?`)}
+                  className="p-5 bg-green-50 text-green-600 rounded-2xl hover:bg-green-100 transition-colors"
+                >
+                  📱
+                </button>
                 <button 
                   onClick={() => onUpdateStatus(booking.id, 'scheduled')} 
-                  className={`px-10 py-5 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl transition-all ${booking.depositStatus === 'paid' ? 'bg-tea-800 text-white hover:bg-tea-950' : 'bg-gray-200 text-gray-400'}`}
+                  className="px-10 py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
                 >
                   Aprovar Agenda
+                </button>
+                <button 
+                  onClick={() => onUpdateStatus(booking.id, 'cancelled')} 
+                  className="px-6 py-5 bg-red-50 text-red-400 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-red-100 transition-all"
+                >
+                  Rejeitar
                 </button>
               </div>
             </div>
           ))}
-          {pending.length === 0 && <p className="text-center py-24 text-gray-300 italic font-serif text-lg">Nenhum pedido aguardando sua análise.</p>}
+          {pending.length === 0 && (
+            <div className="text-center py-32 bg-gray-50 rounded-[4rem] border-2 border-dashed border-gray-100">
+               <p className="text-gray-300 italic font-serif text-2xl">Nenhum pedido pendente hoje ✨</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -87,8 +93,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
         <div className="grid grid-cols-1 gap-6 animate-slide-up">
            {activeWaitlist.map(entry => (
              <div key={entry.id} className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-orange-50 flex flex-col md:flex-row justify-between items-center gap-10 relative overflow-hidden group">
-                <div className="absolute top-0 right-10 bg-orange-500 text-white px-6 py-1.5 rounded-b-2xl text-[8px] font-bold uppercase tracking-[0.2em]">
-                  Em Espera ✨
+                <div className="absolute top-0 right-10 bg-orange-500 text-white px-6 py-2 rounded-b-2xl text-[8px] font-bold uppercase tracking-[0.2em]">
+                  Fila Ativa ✨
                 </div>
 
                 <div className="flex items-center gap-8">
@@ -99,52 +105,42 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({
                        <span className="text-[10px] text-orange-700 font-bold uppercase tracking-widest bg-orange-50 px-4 py-1.5 rounded-full border border-orange-100">{entry.serviceName}</span>
                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest border border-gray-100 px-4 py-1.5 rounded-full italic">Preferencia: {entry.preferredDate}</span>
                     </div>
-                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-2">Registrado em: {new Date(entry.createdAt).toLocaleDateString()}</p>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                <div className="flex gap-4 w-full md:w-auto">
                    <button 
-                     onClick={() => openWhatsApp(entry.customerWhatsapp, `Olá ${entry.customerName}! Aqui é do Studio Moriá. Vimos que você está na nossa lista de espera para ${entry.serviceName}. Surgiu uma vaga, você tem interesse?`)}
-                     className="px-8 py-4 bg-orange-600 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
+                     onClick={() => openWhatsApp(entry.customerWhatsapp, `Olá ${entry.customerName}! Aqui é do Studio Moriá. Temos uma vaga para ${entry.serviceName}. Você ainda tem interesse?`)}
+                     className="flex-1 px-8 py-5 bg-orange-600 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
                    >
-                     📱 Chamar Cliente
+                     📱 Chamar agora
                    </button>
                    <button 
                      onClick={() => onRemoveWaitlist(entry.id)}
-                     className="px-8 py-4 bg-white border-2 border-gray-100 text-gray-400 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:border-red-200 hover:text-red-500 transition-all"
+                     className="p-5 bg-white border-2 border-gray-100 text-gray-300 rounded-2xl hover:text-red-500 transition-all"
                    >
-                     Remover
+                     🗑️
                    </button>
                 </div>
              </div>
            ))}
-           {activeWaitlist.length === 0 && <p className="text-center py-24 text-gray-300 italic font-serif text-lg">Nenhuma cliente na lista de espera no momento.</p>}
         </div>
       )}
 
       {activeTab === 'history' && (
-        <div className="space-y-12">
-           <section>
-              <h4 className="text-[10px] font-bold text-red-900 uppercase tracking-[0.3em] mb-6 ml-4">Cancelados (Histórico para Auditoria)</h4>
-              <div className="grid grid-cols-1 gap-4">
-                {cancelledBookings.map(b => (
-                  <div key={b.id} className="bg-white p-8 rounded-[2.5rem] border border-red-50 flex justify-between items-center shadow-sm">
-                    <div className="flex items-center gap-6">
-                      <div className="text-3xl opacity-20">🚫</div>
-                      <div>
-                        <p className="font-bold text-gray-800 text-lg">{b.customerName}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{b.serviceName} • {b.dateTime}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-[8px] font-bold text-red-400 uppercase tracking-widest">Data do Cancelamento:</p>
-                       <p className="text-[10px] text-red-800 font-bold">{b.cancelledAt ? new Date(b.cancelledAt).toLocaleString() : 'Não registrado'}</p>
-                    </div>
-                  </div>
-                ))}
+        <div className="grid grid-cols-1 gap-4">
+          {cancelledBookings.map(b => (
+            <div key={b.id} className="bg-white p-8 rounded-[2.5rem] border border-red-50 flex justify-between items-center opacity-70">
+              <div className="flex items-center gap-6">
+                <div className="text-2xl opacity-20">🚫</div>
+                <div>
+                  <p className="font-bold text-gray-800 text-lg">{b.customerName}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{b.serviceName} • {b.dateTime}</p>
+                </div>
               </div>
-           </section>
+              <button onClick={() => onDeleteBooking(b.id)} className="text-[8px] font-bold text-red-300 uppercase hover:text-red-600 underline">Apagar Registro</button>
+            </div>
+          ))}
         </div>
       )}
     </div>
