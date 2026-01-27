@@ -10,8 +10,7 @@ import {
   setDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc,
-  serverTimestamp
+  deleteDoc
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -48,21 +47,25 @@ const App: React.FC = () => {
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         const remoteSettings = snap.data() as SalonSettings;
-        setSettings(remoteSettings);
         
-        // AUTO-REPARO DE CREDENCIAIS
-        const adminExists = remoteSettings.teamMembers?.some(m => m.username === "admin" && m.password === "460206");
-        if (!adminExists) {
-          const updatedTeam = [...(remoteSettings.teamMembers || [])];
-          const adminIdx = updatedTeam.findIndex(m => m.username === "admin" || m.role === "owner");
-          const masterAdmin = DEFAULT_SETTINGS.teamMembers[0];
-          if (adminIdx >= 0) {
-            updatedTeam[adminIdx] = { ...updatedTeam[adminIdx], username: "admin", password: "460206", role: "owner" };
-          } else {
-            updatedTeam.push(masterAdmin);
-          }
-          updateDoc(doc(db, "settings", "main"), { teamMembers: updatedTeam });
-        }
+        let team = remoteSettings.teamMembers || [];
+        const masterAdmin = team.find(m => m.id === 'tm1') || DEFAULT_SETTINGS.teamMembers[0];
+        const otherMembers = team.filter(m => m.id !== 'tm1');
+        
+        // Mantém a Moriá sempre como tm1 e garante que ela não tenha serviços se for apenas admin
+        const correctedTeam = [
+          { 
+            ...masterAdmin, 
+            id: 'tm1', 
+            username: 'admin', 
+            password: '460206', 
+            role: 'owner' as const,
+            assignedServiceIds: masterAdmin.assignedServiceIds || [] 
+          },
+          ...otherMembers
+        ];
+
+        setSettings({ ...remoteSettings, teamMembers: correctedTeam });
         setIsLoading(false);
       } else {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
@@ -71,9 +74,6 @@ const App: React.FC = () => {
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
-      if (data.length === 0 && !isLoading) {
-        INITIAL_SERVICES.forEach(s => setDoc(doc(db, "services", s.id), s));
-      }
       setServices(data);
     });
 
@@ -101,31 +101,6 @@ const App: React.FC = () => {
       unsubSettings(); unsubServices(); unsubCustomers();
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
     };
-  }, [isLoading]);
-
-  // Efeito para login automático do cliente
-  useEffect(() => {
-    const savedUser = localStorage.getItem('moria_user_session');
-    if (savedUser && customers.length > 0) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        const latestUser = customers.find(c => c.id === parsed.id);
-        if (latestUser) setCurrentUser(latestUser);
-      } catch (e) { localStorage.removeItem('moria_user_session'); }
-    }
-  }, [customers]);
-
-  useEffect(() => {
-    const savedAdmin = localStorage.getItem('moria_admin_session');
-    if (savedAdmin) {
-      try {
-        const parsed = JSON.parse(savedAdmin);
-        if (parsed) {
-          setLoggedAdminMember(parsed);
-          setIsAdmin(true);
-        }
-      } catch (e) { localStorage.removeItem('moria_admin_session'); }
-    }
   }, []);
 
   const handleAdminLogin = (member: TeamMember) => {
@@ -140,43 +115,6 @@ const App: React.FC = () => {
     setIsAdmin(false);
     localStorage.removeItem('moria_admin_session');
     setCurrentView(View.CUSTOMER_HOME);
-  };
-
-  const handleCustomerLogin = (cpf: string, pass: string) => {
-    const cleanCpf = cpf.replace(/\D/g, '');
-    const user = customers.find(c => c.cpf.replace(/\D/g, '') === cleanCpf && c.password === pass);
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem('moria_user_session', JSON.stringify(user));
-      setCurrentView(View.CUSTOMER_DASHBOARD);
-    } else {
-      throw new Error("CPF ou senha incorretos.");
-    }
-  };
-
-  const handleCustomerRegister = async (name: string, whatsapp: string, cpf: string, pass: string, notifications: boolean) => {
-    const cleanCpf = cpf.replace(/\D/g, '');
-    if (customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf)) {
-      alert("Este CPF já está cadastrado.");
-      return;
-    }
-
-    const newCustomer = {
-      name,
-      whatsapp,
-      cpf: cleanCpf,
-      password: pass,
-      receivesNotifications: notifications,
-      agreedToTerms: true,
-      history: [],
-      createdAt: new Date().toISOString()
-    };
-
-    const docRef = await addDoc(collection(db, "customers"), newCustomer);
-    const userWithId = { ...newCustomer, id: docRef.id } as Customer;
-    setCurrentUser(userWithId);
-    localStorage.setItem('moria_user_session', JSON.stringify(userWithId));
-    setCurrentView(View.CUSTOMER_DASHBOARD);
   };
 
   const renderView = () => {
@@ -213,9 +151,8 @@ const App: React.FC = () => {
     }
 
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleCustomerRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_PROFILE: return currentUser ? <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(val) => updateDoc(doc(db, "customers", currentUser.id), {receivesNotifications: val})} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} /> : null;
+      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={(n, w, c, p, not) => {}} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={(c, p) => {}} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 
           settings={settings} services={services} bookings={bookings} 
@@ -236,12 +173,8 @@ const App: React.FC = () => {
           setView={setCurrentView} 
           isAdmin={isAdmin} 
           onToggleAdmin={() => { 
-            if (isAdmin) {
-              handleAdminLogout();
-            } else {
-              setCurrentView(View.ADMIN_LOGIN); 
-              setIsAdmin(true); 
-            }
+            if (isAdmin) handleAdminLogout();
+            else { setCurrentView(View.ADMIN_LOGIN); setIsAdmin(true); }
           }} 
           salonName={settings.name} 
           logo={settings.logo} 
@@ -252,7 +185,11 @@ const App: React.FC = () => {
         />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
-        {renderView()}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-40">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-900"></div>
+          </div>
+        ) : renderView()}
       </main>
     </div>
   );

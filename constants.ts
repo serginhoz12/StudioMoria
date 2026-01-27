@@ -22,10 +22,10 @@ export const DEFAULT_SETTINGS: SalonSettings = {
     { 
       id: 'tm1', 
       name: "Moriá (Proprietária)", 
-      username: "admin", // Alterado conforme solicitado
+      username: "admin",
       role: 'owner', 
-      password: "460206", // Alterado conforme solicitado
-      assignedServiceIds: ['1', '2', '3', '4'] 
+      password: "460206",
+      assignedServiceIds: [] // Somente administrativa, sem serviços atribuídos
     }
   ],
   businessHours: {
