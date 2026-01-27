@@ -64,7 +64,7 @@ export interface Booking {
   teamMemberName?: string;
   dateTime: string;
   duration: number;
-  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked' | 'liberated';
   depositStatus: 'pending' | 'paid'; 
   rescheduledCount?: number; 
   agreedToCancellationPolicy: boolean;

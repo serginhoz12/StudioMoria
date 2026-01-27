@@ -69,40 +69,30 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   const getAvailabilityForDate = (date: string, service: Service) => {
     const slots: Record<string, TeamMember[]> = {};
-    const startH = parseInt(settings.businessHours.start.split(':')[0]);
-    const endH = parseInt(settings.businessHours.end.split(':')[0]);
+    
+    // Filtramos apenas as liberações explícitas feitas pela Moriá para esta data
+    const liberatedSlots = bookings.filter(b => 
+      b.dateTime.startsWith(date) && 
+      b.status === 'liberated'
+    );
 
-    const timeToMin = (t: string) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
-    };
+    liberatedSlots.forEach(slot => {
+      const time = slot.dateTime.split(' ')[1];
+      const pro = settings.teamMembers.find(m => m.id === slot.teamMemberId);
+      
+      if (pro && pro.assignedServiceIds.includes(service.id)) {
+        // Verifica se houve algum agendamento real que sobrepôs essa liberação
+        const isActuallyTaken = bookings.some(b => 
+          b.teamMemberId === pro.id && 
+          b.dateTime === slot.dateTime && 
+          (b.status === 'scheduled' || b.status === 'pending')
+        );
 
-    const possibleTimes: string[] = [];
-    for (let h = startH; h < endH; h++) {
-      possibleTimes.push(`${h.toString().padStart(2, '0')}:00`, `${h.toString().padStart(2, '0')}:30`);
-    }
-
-    possibleTimes.forEach(time => {
-      const sStart = timeToMin(time);
-      const sEnd = sStart + service.duration;
-
-      const pros = settings.teamMembers.filter(pro => {
-        if (!pro.assignedServiceIds.includes(service.id)) return false;
-        const dayOfWeek = new Date(date + 'T12:00:00').getDay();
-        if (pro.offDays?.includes(dayOfWeek)) return false;
-
-        const hasConflict = bookings.some(b => {
-          if (b.teamMemberId !== pro.id || b.status === 'cancelled' || !b.dateTime.startsWith(date)) return false;
-          const bStart = timeToMin(b.dateTime.split(' ')[1]);
-          const bDuration = b.duration || 30;
-          const bEnd = bStart + bDuration;
-          return (sStart < bEnd && sEnd > bStart);
-        });
-
-        return !hasConflict;
-      });
-
-      if (pros.length > 0) slots[time] = pros;
+        if (!isActuallyTaken) {
+          if (!slots[time]) slots[time] = [];
+          slots[time].push(pro);
+        }
+      }
     });
 
     return slots;
@@ -140,6 +130,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const handleBookSubmit = async () => {
     if (selectedService && selectedProId && selectedTime && agreedToCancellation) {
       const pro = settings.teamMembers.find(m => m.id === selectedProId);
+      
+      // Quando um cliente agenda, mantemos o registro da liberação para controle administrativo
+      // mas o novo agendamento 'pending' ou 'scheduled' sobrepõe a visualização.
       await addDoc(collection(db, "bookings"), {
         customerId: customer.id,
         customerName: customer.name,
