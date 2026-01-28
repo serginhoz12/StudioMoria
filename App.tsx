@@ -43,15 +43,17 @@ const App: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
-  // Efeito para carregar dados e restaurar sessões
+  // Helper para limpar objetos antes de enviar para o Firestore
+  const cleanData = (data: any) => JSON.parse(JSON.stringify(data));
+
   useEffect(() => {
-    // Timeout de segurança: Se o Firebase não responder em 10 segundos, libera o carregamento
+    // Timeout de segurança: Se o Firebase não responder em 12 segundos, libera o carregamento
     const loadingTimeout = setTimeout(() => {
       if (isLoading) {
-        console.warn("Firebase demorando para responder, liberando interface...");
+        console.warn("Sistema demorando para responder...");
         setIsLoading(false);
       }
-    }, 10000);
+    }, 12000);
 
     // Restaurar Sessão Admin
     const savedAdmin = localStorage.getItem('moria_admin_session');
@@ -72,7 +74,7 @@ const App: React.FC = () => {
       } catch(e) { console.error("Sessão cliente corrompida."); }
     }
 
-    // Ouvinte de Configurações - O mais crítico para o carregamento
+    // Ouvinte de Configurações
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         const remoteSettings = snap.data() as SalonSettings;
@@ -91,27 +93,24 @@ const App: React.FC = () => {
           },
           ...otherMembers
         ];
-
         setSettings({ ...remoteSettings, teamMembers: correctedTeam });
       } else {
-        // Inicializa com as configurações padrão se for a primeira execução
-        setDoc(doc(db, "settings", "main"), JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
+        setDoc(doc(db, "settings", "main"), cleanData(DEFAULT_SETTINGS));
       }
-      setIsLoading(false); // Libera o spinner após receber o snapshot (existindo ou não)
+      setIsLoading(false);
     }, (error) => {
-      console.error("Erro ao carregar configurações:", error);
-      setIsLoading(false); // Libera mesmo com erro para não travar o site
+      console.error("Erro Firebase Settings:", error);
+      setIsLoading(false);
     });
 
+    // Outros ouvintes
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
-      setServices(data);
-    }, (e) => console.error("Erro serviços:", e));
+      setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
+    }, (e) => console.error("Erro Firebase Services:", e));
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
       setCustomers(data);
-      
       const savedUser = localStorage.getItem('moria_user_session');
       if (savedUser) {
         try {
@@ -120,23 +119,23 @@ const App: React.FC = () => {
           if (updated) setCurrentUser(updated);
         } catch(e) {}
       }
-    }, (e) => console.error("Erro clientes:", e));
+    }, (e) => console.error("Erro Firebase Customers:", e));
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
-    }, (e) => console.error("Erro agendamentos:", e));
+    }, (e) => console.error("Erro Firebase Bookings:", e));
 
     const unsubTransactions = onSnapshot(collection(db, "transactions"), (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)));
-    }, (e) => console.error("Erro transações:", e));
+    }, (e) => console.error("Erro Firebase Transactions:", e));
 
     const unsubWaitlist = onSnapshot(collection(db, "waitlist"), (snapshot) => {
       setWaitlist(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as WaitlistEntry)));
-    }, (e) => console.error("Erro lista espera:", e));
+    }, (e) => console.error("Erro Firebase Waitlist:", e));
 
     const unsubPromotions = onSnapshot(collection(db, "promotions"), (snapshot) => {
       setPromotions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Promotion)));
-    }, (e) => console.error("Erro promoções:", e));
+    }, (e) => console.error("Erro Firebase Promotions:", e));
 
     return () => {
       clearTimeout(loadingTimeout);
@@ -189,16 +188,18 @@ const App: React.FC = () => {
         createdAt: new Date().toISOString()
       };
 
-      const docRef = await addDoc(collection(db, "customers"), newCustomer);
-      const created = { ...newCustomer, id: docRef.id } as Customer;
+      // Garantir limpeza total do objeto antes de enviar
+      const dataToSave = cleanData(newCustomer);
+      const docRef = await addDoc(collection(db, "customers"), dataToSave);
       
+      const created = { ...newCustomer, id: docRef.id } as Customer;
       setCurrentUser(created);
       localStorage.setItem('moria_user_session', JSON.stringify(created));
       setCurrentView(View.CUSTOMER_DASHBOARD);
       alert("Cadastro realizado com sucesso! Bem-vinda ao Studio Moriá.");
     } catch (e) {
-      console.error("Erro ao registrar cliente:", e);
-      alert("Ocorreu um erro ao realizar o cadastro. Tente novamente.");
+      console.error("Erro fatal ao registrar cliente:", e);
+      alert("Não foi possível concluir seu cadastro agora. Verifique sua internet ou tente novamente em instantes.");
     }
   };
 
@@ -219,28 +220,16 @@ const App: React.FC = () => {
 
     if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_PROFILE)) {
        if (currentView === View.CUSTOMER_PROFILE) {
-         return <CustomerProfile 
-           customer={currentUser} 
-           transactions={transactions} 
-           bookings={bookings} 
-           onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} 
-           onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} 
-         />;
+         return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
        }
        return (
          <CustomerDashboard 
-            customer={currentUser} 
-            bookings={bookings} 
-            services={services}
-            settings={settings}
-            onBook={() => {}}
-            onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
+            customer={currentUser} bookings={bookings} services={services} settings={settings}
+            onBook={() => {}} onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }}
             onCancelBooking={(id) => updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
             onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
-            waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
-            onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
-            promotions={promotions}
+            waitlist={waitlist.filter(w => w.customerId === currentUser.id)} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} promotions={promotions}
          />
        );
     }
@@ -250,11 +239,7 @@ const App: React.FC = () => {
       case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 
-          settings={settings} services={services} bookings={bookings} 
-          onBook={() => {}} 
-          onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} 
-          onAddToWaitlist={() => {}} 
-          currentUser={currentUser} 
+          settings={settings} services={services} bookings={bookings} onBook={() => {}} onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} onAddToWaitlist={() => {}} currentUser={currentUser} 
         />
       );
     }
@@ -264,26 +249,24 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-white">
       {currentView !== View.CUSTOMER_DASHBOARD && (
         <Navbar 
-          view={currentView} 
-          setView={setCurrentView} 
-          isAdmin={isAdmin} 
+          view={currentView} setView={setCurrentView} isAdmin={isAdmin} 
           onToggleAdmin={() => { 
             if (isAdmin) handleAdminLogout();
             else { setCurrentView(View.ADMIN_LOGIN); setIsAdmin(true); }
           }} 
-          salonName={settings.name} 
-          logo={settings.logo} 
-          currentUser={currentUser} 
+          salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
           onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }} 
-          onAdminLogout={handleAdminLogout} 
-          isAdminAuthenticated={!!loggedAdminMember} 
+          onAdminLogout={handleAdminLogout} isAdminAuthenticated={!!loggedAdminMember} 
         />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-900"></div>
-            <p className="text-tea-900 font-serif italic text-sm animate-pulse">Conectando ao Studio Moriá...</p>
+          <div className="flex flex-col items-center justify-center py-40 gap-6">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-tea-900"></div>
+              <div className="absolute inset-0 flex items-center justify-center text-xs font-serif font-bold italic text-tea-950">M</div>
+            </div>
+            <p className="text-tea-950 font-serif italic text-sm animate-pulse tracking-widest">Iniciando Studio Moriá...</p>
           </div>
         ) : renderView()}
       </main>
