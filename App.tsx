@@ -45,21 +45,34 @@ const App: React.FC = () => {
 
   // Efeito para carregar dados e restaurar sessões
   useEffect(() => {
+    // Timeout de segurança: Se o Firebase não responder em 10 segundos, libera o carregamento
+    const loadingTimeout = setTimeout(() => {
+      if (isLoading) {
+        console.warn("Firebase demorando para responder, liberando interface...");
+        setIsLoading(false);
+      }
+    }, 10000);
+
     // Restaurar Sessão Admin
     const savedAdmin = localStorage.getItem('moria_admin_session');
     if (savedAdmin) {
-      setLoggedAdminMember(JSON.parse(savedAdmin));
-      setIsAdmin(true);
-      setCurrentView(View.ADMIN_DASHBOARD);
+      try {
+        setLoggedAdminMember(JSON.parse(savedAdmin));
+        setIsAdmin(true);
+        setCurrentView(View.ADMIN_DASHBOARD);
+      } catch(e) { console.error("Sessão admin corrompida."); }
     }
 
     // Restaurar Sessão Cliente
     const savedUser = localStorage.getItem('moria_user_session');
     if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-      setCurrentView(View.CUSTOMER_DASHBOARD);
+      try {
+        setCurrentUser(JSON.parse(savedUser));
+        setCurrentView(View.CUSTOMER_DASHBOARD);
+      } catch(e) { console.error("Sessão cliente corrompida."); }
     }
 
+    // Ouvinte de Configurações - O mais crítico para o carregamento
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         const remoteSettings = snap.data() as SalonSettings;
@@ -80,47 +93,53 @@ const App: React.FC = () => {
         ];
 
         setSettings({ ...remoteSettings, teamMembers: correctedTeam });
-        setIsLoading(false);
       } else {
-        setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
+        // Inicializa com as configurações padrão se for a primeira execução
+        setDoc(doc(db, "settings", "main"), JSON.parse(JSON.stringify(DEFAULT_SETTINGS)));
       }
+      setIsLoading(false); // Libera o spinner após receber o snapshot (existindo ou não)
+    }, (error) => {
+      console.error("Erro ao carregar configurações:", error);
+      setIsLoading(false); // Libera mesmo com erro para não travar o site
     });
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
       setServices(data);
-    });
+    }, (e) => console.error("Erro serviços:", e));
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
       setCustomers(data);
       
-      // Atualizar currentUser se ele estiver na lista (para refletir mudanças externas)
       const savedUser = localStorage.getItem('moria_user_session');
       if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        const updated = data.find(c => c.id === parsed.id);
-        if (updated) setCurrentUser(updated);
+        try {
+          const parsed = JSON.parse(savedUser);
+          const updated = data.find(c => c.id === parsed.id);
+          if (updated) setCurrentUser(updated);
+        } catch(e) {}
       }
-    });
+    }, (e) => console.error("Erro clientes:", e));
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
-    });
+    }, (e) => console.error("Erro agendamentos:", e));
 
     const unsubTransactions = onSnapshot(collection(db, "transactions"), (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)));
-    });
+    }, (e) => console.error("Erro transações:", e));
 
     const unsubWaitlist = onSnapshot(collection(db, "waitlist"), (snapshot) => {
       setWaitlist(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as WaitlistEntry)));
-    });
+    }, (e) => console.error("Erro lista espera:", e));
 
     const unsubPromotions = onSnapshot(collection(db, "promotions"), (snapshot) => {
       setPromotions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Promotion)));
-    });
+    }, (e) => console.error("Erro promoções:", e));
 
     return () => {
+      clearTimeout(loadingTimeout);
       unsubSettings(); unsubServices(); unsubCustomers();
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
     };
@@ -262,8 +281,9 @@ const App: React.FC = () => {
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-40">
+          <div className="flex flex-col items-center justify-center py-40 gap-4">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-900"></div>
+            <p className="text-tea-900 font-serif italic text-sm animate-pulse">Conectando ao Studio Moriá...</p>
           </div>
         ) : renderView()}
       </main>
