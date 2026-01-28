@@ -10,9 +10,7 @@ import {
   setDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc,
-  query,
-  limit
+  deleteDoc
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -31,6 +29,7 @@ import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
 
 const App: React.FC = () => {
+  // OBRIGATÓRIO: Sempre iniciar na Home do Cliente
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loggedAdminMember, setLoggedAdminMember] = useState<TeamMember | null>(null);
@@ -50,29 +49,27 @@ const App: React.FC = () => {
 
   const cleanData = (data: any) => JSON.parse(JSON.stringify(data));
 
-  // 1. PUBLIC DATA LOADING (Settings & Services) - Immediate and Optimized
+  // 1. PUBLIC DATA LOADING & SESSION CLEANUP
   useEffect(() => {
-    // Check local sessions first
+    // REMOVIDO: Bypasses automáticos para Dashboards. 
+    // O sistema agora apenas restaura os dados do usuário, mas mantém na Home.
     const savedAdmin = localStorage.getItem('moria_admin_session');
     if (savedAdmin) {
       try {
-        const parsed = JSON.parse(savedAdmin);
-        setLoggedAdminMember(parsed);
-        setIsAdmin(true);
-        setCurrentView(View.ADMIN_DASHBOARD);
+        setLoggedAdminMember(JSON.parse(savedAdmin));
+        // Não chamamos setCurrentView aqui para forçar início na Home
       } catch(e) {}
     }
 
     const savedUser = localStorage.getItem('moria_user_session');
     if (savedUser) {
       try {
-        const parsed = JSON.parse(savedUser);
-        setCurrentUser(parsed);
-        setCurrentView(View.CUSTOMER_DASHBOARD);
+        setCurrentUser(JSON.parse(savedUser));
+        // Não chamamos setCurrentView aqui para forçar início na Home
       } catch(e) {}
     }
 
-    // Load Settings
+    // Load Critical Settings
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         setSettings(prev => ({...prev, ...snap.data() as SalonSettings}));
@@ -85,7 +82,7 @@ const App: React.FC = () => {
       setIsLoading(false);
     });
 
-    // Load Services (Limited for Home view)
+    // Load Public Services
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
     }, (error) => console.error("Firestore Services Error:", error));
@@ -93,13 +90,10 @@ const App: React.FC = () => {
     return () => { unsubSettings(); unsubServices(); };
   }, []);
 
-  // 2. PRIVATE DATA LOADING (Lazy Load when Logged In)
+  // 2. PRIVATE DATA LOADING (Apenas quando autenticado no estado atual)
   useEffect(() => {
-    // If not logged in as admin or customer, don't waste bandwidth/CPU
-    if (!isAdmin && !currentUser) {
-      setCustomers([]); setBookings([]); setTransactions([]); setWaitlist([]); setPromotions([]);
-      return;
-    }
+    // O carregamento de dados sensíveis só ocorre se o admin ou usuário estiverem ativos no estado
+    if (!isAdmin && !currentUser) return;
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
@@ -147,6 +141,7 @@ const App: React.FC = () => {
   };
 
   const handleCustomerLogin = (cpfOrWhatsapp: string, pass: string) => {
+    // Busca na base carregada sob demanda ou local
     const cleanInput = cpfOrWhatsapp.replace(/\D/g, '');
     const user = customers.find(c => {
       const cleanCpf = (c.cpf || "").replace(/\D/g, '');
@@ -159,7 +154,7 @@ const App: React.FC = () => {
       localStorage.setItem('moria_user_session', JSON.stringify(user));
       setCurrentView(View.CUSTOMER_DASHBOARD);
     } else {
-      throw new Error("Credenciais incorretas.");
+      throw new Error("Credenciais não encontradas. Verifique se seu cadastro está correto.");
     }
   };
 
@@ -177,13 +172,20 @@ const App: React.FC = () => {
       setCurrentView(View.CUSTOMER_DASHBOARD);
     } catch (e) {
       console.error("Register Error:", e);
-      alert("Erro ao cadastrar.");
+      alert("Não foi possível realizar o cadastro no momento.");
     }
   };
 
   const renderView = () => {
+    // PRIORIDADE: Login da Equipe
     if (isAdmin) {
-      if (!loggedAdminMember) return <AdminLogin teamMembers={settings.teamMembers} onLogin={handleAdminLogin} onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} />;
+      if (!loggedAdminMember) {
+        return <AdminLogin 
+          teamMembers={settings.teamMembers} 
+          onLogin={handleAdminLogin} 
+          onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} 
+        />;
+      }
       
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} loggedMember={loggedAdminMember} />;
@@ -196,7 +198,8 @@ const App: React.FC = () => {
       }
     }
 
-    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_PROFILE)) {
+    // Áreas do Cliente Autenticado
+    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_PROFILE)) {
        if (currentView === View.CUSTOMER_PROFILE) {
          return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
        }
@@ -212,6 +215,7 @@ const App: React.FC = () => {
        );
     }
 
+    // Fluxos Públicos e Login/Cadastro
     switch (currentView) {
       case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleCustomerRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
@@ -230,11 +234,19 @@ const App: React.FC = () => {
           view={currentView} setView={setCurrentView} isAdmin={isAdmin} 
           onToggleAdmin={() => { 
             if (isAdmin) handleAdminLogout();
-            else { setCurrentView(View.ADMIN_LOGIN); setIsAdmin(true); }
+            else { 
+              setIsAdmin(true);
+              setCurrentView(View.ADMIN_LOGIN); 
+            }
           }} 
           salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
-          onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }} 
-          onAdminLogout={handleAdminLogout} isAdminAuthenticated={!!loggedAdminMember} 
+          onLogout={() => { 
+            setCurrentUser(null); 
+            localStorage.removeItem('moria_user_session'); 
+            setCurrentView(View.CUSTOMER_HOME); 
+          }} 
+          onAdminLogout={handleAdminLogout} 
+          isAdminAuthenticated={!!loggedAdminMember} 
         />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
@@ -244,7 +256,7 @@ const App: React.FC = () => {
               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-tea-900"></div>
               <div className="absolute inset-0 flex items-center justify-center text-xs font-serif font-bold italic text-tea-950">M</div>
             </div>
-            <p className="text-tea-950 font-serif italic text-sm animate-pulse tracking-widest uppercase">Iniciando Studio Moriá...</p>
+            <p className="text-tea-950 font-serif italic text-sm animate-pulse tracking-widest uppercase">Studio Moriá Estética...</p>
           </div>
         ) : renderView()}
       </main>
