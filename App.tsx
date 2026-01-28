@@ -43,16 +43,30 @@ const App: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
+  // Efeito para carregar dados e restaurar sessões
   useEffect(() => {
+    // Restaurar Sessão Admin
+    const savedAdmin = localStorage.getItem('moria_admin_session');
+    if (savedAdmin) {
+      setLoggedAdminMember(JSON.parse(savedAdmin));
+      setIsAdmin(true);
+      setCurrentView(View.ADMIN_DASHBOARD);
+    }
+
+    // Restaurar Sessão Cliente
+    const savedUser = localStorage.getItem('moria_user_session');
+    if (savedUser) {
+      setCurrentUser(JSON.parse(savedUser));
+      setCurrentView(View.CUSTOMER_DASHBOARD);
+    }
+
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         const remoteSettings = snap.data() as SalonSettings;
-        
         let team = remoteSettings.teamMembers || [];
         const masterAdmin = team.find(m => m.id === 'tm1') || DEFAULT_SETTINGS.teamMembers[0];
         const otherMembers = team.filter(m => m.id !== 'tm1');
         
-        // Mantém a Moriá sempre como tm1 e garante que ela não tenha serviços se for apenas admin
         const correctedTeam = [
           { 
             ...masterAdmin, 
@@ -78,7 +92,16 @@ const App: React.FC = () => {
     });
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-      setCustomers(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
+      const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
+      setCustomers(data);
+      
+      // Atualizar currentUser se ele estiver na lista (para refletir mudanças externas)
+      const savedUser = localStorage.getItem('moria_user_session');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        const updated = data.find(c => c.id === parsed.id);
+        if (updated) setCurrentUser(updated);
+      }
     });
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
@@ -117,6 +140,49 @@ const App: React.FC = () => {
     setCurrentView(View.CUSTOMER_HOME);
   };
 
+  const handleCustomerLogin = (cpfOrWhatsapp: string, pass: string) => {
+    const cleanInput = cpfOrWhatsapp.replace(/\D/g, '');
+    const user = customers.find(c => {
+      const cleanCpf = (c.cpf || "").replace(/\D/g, '');
+      const cleanWa = (c.whatsapp || "").replace(/\D/g, '');
+      return (cleanCpf === cleanInput || cleanWa === cleanInput) && c.password === pass;
+    });
+
+    if (user) {
+      setCurrentUser(user);
+      localStorage.setItem('moria_user_session', JSON.stringify(user));
+      setCurrentView(View.CUSTOMER_DASHBOARD);
+    } else {
+      throw new Error("Credenciais incorretas. Verifique seu CPF/WhatsApp e senha.");
+    }
+  };
+
+  const handleCustomerRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
+    try {
+      const newCustomer = {
+        name,
+        whatsapp,
+        cpf: cpf || "",
+        password,
+        receivesNotifications,
+        agreedToTerms: true,
+        history: [],
+        createdAt: new Date().toISOString()
+      };
+
+      const docRef = await addDoc(collection(db, "customers"), newCustomer);
+      const created = { ...newCustomer, id: docRef.id } as Customer;
+      
+      setCurrentUser(created);
+      localStorage.setItem('moria_user_session', JSON.stringify(created));
+      setCurrentView(View.CUSTOMER_DASHBOARD);
+      alert("Cadastro realizado com sucesso! Bem-vinda ao Studio Moriá.");
+    } catch (e) {
+      console.error("Erro ao registrar cliente:", e);
+      alert("Ocorreu um erro ao realizar o cadastro. Tente novamente.");
+    }
+  };
+
   const renderView = () => {
     if (isAdmin) {
       if (!loggedAdminMember) return <AdminLogin teamMembers={settings.teamMembers} onLogin={handleAdminLogin} onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} />;
@@ -132,7 +198,16 @@ const App: React.FC = () => {
       }
     }
 
-    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN)) {
+    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_PROFILE)) {
+       if (currentView === View.CUSTOMER_PROFILE) {
+         return <CustomerProfile 
+           customer={currentUser} 
+           transactions={transactions} 
+           bookings={bookings} 
+           onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} 
+           onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} 
+         />;
+       }
        return (
          <CustomerDashboard 
             customer={currentUser} 
@@ -146,13 +221,14 @@ const App: React.FC = () => {
             onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
             onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
+            promotions={promotions}
          />
        );
     }
 
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={(n, w, c, p, not) => {}} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={(c, p) => {}} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleCustomerRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 
           settings={settings} services={services} bookings={bookings} 
