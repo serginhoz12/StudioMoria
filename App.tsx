@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, TeamMember } from './types.ts';
-import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
+import { DEFAULT_SETTINGS } from './constants.ts';
 import { db } from './firebase.ts';
 import { 
   collection, 
@@ -10,7 +10,9 @@ import {
   setDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc
+  deleteDoc,
+  query,
+  limit
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -34,8 +36,11 @@ const App: React.FC = () => {
   const [loggedAdminMember, setLoggedAdminMember] = useState<TeamMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Public Data
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
   const [services, setServices] = useState<Service[]>([]);
+  
+  // Private Data (Loaded on demand)
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -43,106 +48,89 @@ const App: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
-  // Helper para limpar objetos antes de enviar para o Firestore
   const cleanData = (data: any) => JSON.parse(JSON.stringify(data));
 
+  // 1. PUBLIC DATA LOADING (Settings & Services) - Immediate and Optimized
   useEffect(() => {
-    // Timeout de segurança: Se o Firebase não responder em 12 segundos, libera o carregamento
-    const loadingTimeout = setTimeout(() => {
-      if (isLoading) {
-        console.warn("Sistema demorando para responder...");
-        setIsLoading(false);
-      }
-    }, 12000);
-
-    // Restaurar Sessão Admin
+    // Check local sessions first
     const savedAdmin = localStorage.getItem('moria_admin_session');
     if (savedAdmin) {
       try {
-        setLoggedAdminMember(JSON.parse(savedAdmin));
+        const parsed = JSON.parse(savedAdmin);
+        setLoggedAdminMember(parsed);
         setIsAdmin(true);
         setCurrentView(View.ADMIN_DASHBOARD);
-      } catch(e) { console.error("Sessão admin corrompida."); }
+      } catch(e) {}
     }
 
-    // Restaurar Sessão Cliente
     const savedUser = localStorage.getItem('moria_user_session');
     if (savedUser) {
       try {
-        setCurrentUser(JSON.parse(savedUser));
+        const parsed = JSON.parse(savedUser);
+        setCurrentUser(parsed);
         setCurrentView(View.CUSTOMER_DASHBOARD);
-      } catch(e) { console.error("Sessão cliente corrompida."); }
+      } catch(e) {}
     }
 
-    // Ouvinte de Configurações
+    // Load Settings
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
-        const remoteSettings = snap.data() as SalonSettings;
-        let team = remoteSettings.teamMembers || [];
-        const masterAdmin = team.find(m => m.id === 'tm1') || DEFAULT_SETTINGS.teamMembers[0];
-        const otherMembers = team.filter(m => m.id !== 'tm1');
-        
-        const correctedTeam = [
-          { 
-            ...masterAdmin, 
-            id: 'tm1', 
-            username: 'admin', 
-            password: '460206', 
-            role: 'owner' as const,
-            assignedServiceIds: masterAdmin.assignedServiceIds || [] 
-          },
-          ...otherMembers
-        ];
-        setSettings({ ...remoteSettings, teamMembers: correctedTeam });
+        setSettings(prev => ({...prev, ...snap.data() as SalonSettings}));
       } else {
         setDoc(doc(db, "settings", "main"), cleanData(DEFAULT_SETTINGS));
       }
       setIsLoading(false);
     }, (error) => {
-      console.error("Erro Firebase Settings:", error);
+      console.error("Firestore Settings Error:", error);
       setIsLoading(false);
     });
 
-    // Outros ouvintes
+    // Load Services (Limited for Home view)
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
-    }, (e) => console.error("Erro Firebase Services:", e));
+    }, (error) => console.error("Firestore Services Error:", error));
+
+    return () => { unsubSettings(); unsubServices(); };
+  }, []);
+
+  // 2. PRIVATE DATA LOADING (Lazy Load when Logged In)
+  useEffect(() => {
+    // If not logged in as admin or customer, don't waste bandwidth/CPU
+    if (!isAdmin && !currentUser) {
+      setCustomers([]); setBookings([]); setTransactions([]); setWaitlist([]); setPromotions([]);
+      return;
+    }
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
       setCustomers(data);
-      const savedUser = localStorage.getItem('moria_user_session');
-      if (savedUser) {
-        try {
-          const parsed = JSON.parse(savedUser);
-          const updated = data.find(c => c.id === parsed.id);
-          if (updated) setCurrentUser(updated);
-        } catch(e) {}
+      if (currentUser) {
+        const updated = data.find(c => c.id === currentUser.id);
+        if (updated) setCurrentUser(updated);
       }
-    }, (e) => console.error("Erro Firebase Customers:", e));
+    });
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
-    }, (e) => console.error("Erro Firebase Bookings:", e));
+    });
 
     const unsubTransactions = onSnapshot(collection(db, "transactions"), (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)));
-    }, (e) => console.error("Erro Firebase Transactions:", e));
+    });
 
     const unsubWaitlist = onSnapshot(collection(db, "waitlist"), (snapshot) => {
       setWaitlist(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as WaitlistEntry)));
-    }, (e) => console.error("Erro Firebase Waitlist:", e));
+    });
 
     const unsubPromotions = onSnapshot(collection(db, "promotions"), (snapshot) => {
       setPromotions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Promotion)));
-    }, (e) => console.error("Erro Firebase Promotions:", e));
+    });
 
     return () => {
-      clearTimeout(loadingTimeout);
-      unsubSettings(); unsubServices(); unsubCustomers();
-      unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
+      unsubCustomers(); unsubBookings(); unsubTransactions();
+      unsubWaitlist(); unsubPromotions();
     };
-  }, []);
+  }, [isAdmin, currentUser?.id]);
 
   const handleAdminLogin = (member: TeamMember) => {
     setLoggedAdminMember(member);
@@ -171,35 +159,25 @@ const App: React.FC = () => {
       localStorage.setItem('moria_user_session', JSON.stringify(user));
       setCurrentView(View.CUSTOMER_DASHBOARD);
     } else {
-      throw new Error("Credenciais incorretas. Verifique seu CPF/WhatsApp e senha.");
+      throw new Error("Credenciais incorretas.");
     }
   };
 
   const handleCustomerRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
     try {
-      const newCustomer = {
-        name,
-        whatsapp,
-        cpf: cpf || "",
-        password,
-        receivesNotifications,
-        agreedToTerms: true,
-        history: [],
-        createdAt: new Date().toISOString()
-      };
-
-      // Garantir limpeza total do objeto antes de enviar
-      const dataToSave = cleanData(newCustomer);
-      const docRef = await addDoc(collection(db, "customers"), dataToSave);
-      
+      const newCustomer = cleanData({
+        name, whatsapp, cpf: cpf || "", password,
+        receivesNotifications, agreedToTerms: true,
+        history: [], createdAt: new Date().toISOString()
+      });
+      const docRef = await addDoc(collection(db, "customers"), newCustomer);
       const created = { ...newCustomer, id: docRef.id } as Customer;
       setCurrentUser(created);
       localStorage.setItem('moria_user_session', JSON.stringify(created));
       setCurrentView(View.CUSTOMER_DASHBOARD);
-      alert("Cadastro realizado com sucesso! Bem-vinda ao Studio Moriá.");
     } catch (e) {
-      console.error("Erro fatal ao registrar cliente:", e);
-      alert("Não foi possível concluir seu cadastro agora. Verifique sua internet ou tente novamente em instantes.");
+      console.error("Register Error:", e);
+      alert("Erro ao cadastrar.");
     }
   };
 
@@ -261,12 +239,12 @@ const App: React.FC = () => {
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-6">
+          <div className="flex flex-col items-center justify-center py-40 gap-8 animate-fade-in">
             <div className="relative">
               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-tea-900"></div>
               <div className="absolute inset-0 flex items-center justify-center text-xs font-serif font-bold italic text-tea-950">M</div>
             </div>
-            <p className="text-tea-950 font-serif italic text-sm animate-pulse tracking-widest">Iniciando Studio Moriá...</p>
+            <p className="text-tea-950 font-serif italic text-sm animate-pulse tracking-widest uppercase">Iniciando Studio Moriá...</p>
           </div>
         ) : renderView()}
       </main>

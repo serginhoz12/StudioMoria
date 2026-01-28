@@ -5,8 +5,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Studio Moriá Estética</title>
+    
+    <!-- Performance Optimization -->
+    <link rel="preconnect" href="https://www.gstatic.com">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    
     <script>
       tailwind.config = {
         theme: {
@@ -35,47 +42,50 @@
       }
     </script>
     <style>
-      :root { color-scheme: light; }
+      :root { color-scheme: light; font-display: swap; }
       body {
         -webkit-tap-highlight-color: transparent;
         background-color: #ffffff !important;
         color: #111827 !important;
+        margin: 0;
       }
       .custom-scroll::-webkit-scrollbar { width: 4px; }
       .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-      .force-brand-bg { background-color: #1e3d28 !important; }
-
-      @keyframes fadeIn {
-        from { opacity: 0; }
-        to { opacity: 1; }
-      }
-      @keyframes slideUp {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-      .animate-fade-in {
-        animation: fadeIn 0.8s ease-out forwards;
-      }
-      .animate-slide-up {
-        animation: slideUp 0.8s ease-out forwards;
+      
+      @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+      .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
+      
+      /* Skeleton/Loading state for slow connections */
+      .loading-overlay {
+        position: fixed;
+        inset: 0;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
       }
     </style>
+    
     <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "@google/genai": "https://esm.sh/@google/genai@1.3.0",
+    "recharts": "https://esm.sh/recharts@2.12.0",
     "firebase/app": "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js",
     "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js",
-    "firebase/": "https://esm.sh/firebase@^12.8.0/"
+    "firebase/": "https://esm.sh/firebase@^12.8.0/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
   }
 }
 </script>
   </head>
-  <body class="bg-white text-gray-900 font-sans">
+  <body class="bg-white text-gray-900 font-sans overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
