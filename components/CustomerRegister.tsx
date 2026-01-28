@@ -23,11 +23,11 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
     type: 'terms'
   });
 
-  // Verificação de CPF Duplicado em Tempo Real
+  // Verificação de CPF Duplicado (Apenas se o CPF for preenchido)
   const isDuplicateCpf = useMemo(() => {
     const cleanCpf = cpf.replace(/\D/g, '');
-    if (cleanCpf.length < 11) return false;
-    return customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf);
+    if (cleanCpf.length < 1) return false;
+    return customers.some(c => c.cpf && c.cpf.replace(/\D/g, '') === cleanCpf);
   }, [cpf, customers]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -36,13 +36,14 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
       alert("Este CPF já possui um cadastro no Studio Moriá.");
       return;
     }
-    if (name && whatsapp && cpf && password && agreedToTerms) {
+    // CPF agora é opcional, mas nome, whatsapp, senha e termos são obrigatórios
+    if (name && whatsapp && password && agreedToTerms) {
       onRegister(name, whatsapp, cpf, password, receivesNotifications);
     } else {
       if (!agreedToTerms) {
         alert("Para sua segurança, é necessário aceitar os termos de uso.");
       } else {
-        alert("Por favor, preencha todos os campos.");
+        alert("Por favor, preencha todos os campos obrigatórios (Nome, WhatsApp e Senha).");
       }
     }
   };
@@ -95,10 +96,9 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
                 />
               </div>
               <div className="relative group">
-                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Seu CPF</label>
+                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Seu CPF (Opcional)</label>
                 <input 
                   type="text" 
-                  required
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value)}
                   className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all placeholder-gray-300 shadow-inner ${isDuplicateCpf ? 'border-red-300 bg-red-50' : 'border-transparent focus:bg-white focus:border-tea-200'}`}

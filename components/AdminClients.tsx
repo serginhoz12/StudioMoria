@@ -36,15 +36,19 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
   });
 
   const handleAddNew = async () => {
-    if (!formData.name || !formData.whatsapp || !formData.cpf || !formData.password) {
-      alert("Por favor, preencha todos os campos obrigatórios.");
+    // CPF removido da obrigatoriedade
+    if (!formData.name || !formData.whatsapp || !formData.password) {
+      alert("Por favor, preencha Nome, WhatsApp e Senha.");
       return;
     }
 
-    const exists = customers.find(c => c.cpf.replace(/\D/g, '') === formData.cpf.replace(/\D/g, ''));
-    if (exists) {
-      alert("Este CPF já está cadastrado no sistema.");
-      return;
+    // Só verifica duplicidade de CPF se ele for preenchido
+    if (formData.cpf) {
+      const exists = customers.find(c => c.cpf && c.cpf.replace(/\D/g, '') === formData.cpf.replace(/\D/g, ''));
+      if (exists) {
+        alert("Este CPF já está cadastrado no sistema.");
+        return;
+      }
     }
 
     try {
@@ -55,7 +59,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
         history: [],
         createdAt: new Date().toISOString()
       });
-      alert("Cliente cadastrada com sucesso! Ela já pode acessar o portal com o CPF e a senha definida.");
+      alert("Cliente cadastrada com sucesso! Informe o WhatsApp e a senha para ela acessar.");
       setShowAddModal(false);
       setFormData({ name: '', whatsapp: '', cpf: '', password: '' });
     } catch (e) {
@@ -105,7 +109,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
           <div className="relative flex-1 sm:w-80">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
             <input 
-              placeholder="Buscar por nome ou CPF..." 
+              placeholder="Buscar por nome ou WhatsApp..." 
               className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl outline-none focus:ring-2 focus:ring-tea-100 font-medium"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -155,7 +159,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   </div>
                   <div>
                     <h3 className="text-3xl font-serif text-tea-950 font-bold italic">{selectedCustomer.name}</h3>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">CPF: {selectedCustomer.cpf} • WhatsApp: {selectedCustomer.whatsapp}</p>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">CPF: {selectedCustomer.cpf || 'Não Informado'} • WhatsApp: {selectedCustomer.whatsapp}</p>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -171,7 +175,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="Nome Completo" className="p-4 bg-white rounded-2xl border-none outline-none font-bold text-sm" />
                        <input value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} placeholder="WhatsApp" className="p-4 bg-white rounded-2xl border-none outline-none font-bold text-sm" />
-                       <input value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} placeholder="CPF" className="p-4 bg-white rounded-2xl border-none outline-none font-bold text-sm" />
+                       <input value={formData.cpf} onChange={e => setFormData({...formData, cpf: e.target.value})} placeholder="CPF (Opcional)" className="p-4 bg-white rounded-2xl border-none outline-none font-bold text-sm" />
                        <input value={formData.password} onChange={e => setFormData({...formData, password: e.target.value})} placeholder="Senha de Acesso" className="p-4 bg-white rounded-2xl border-none outline-none font-bold text-sm" />
                     </div>
                     <div className="flex gap-3 pt-4">
@@ -258,7 +262,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-2">CPF (Apenas Números)</label>
+                  <label className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-2">CPF (Opcional)</label>
                   <input 
                     type="text" 
                     value={formData.cpf} 
