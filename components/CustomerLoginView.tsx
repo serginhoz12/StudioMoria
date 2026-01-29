@@ -38,10 +38,10 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">CPF, Celular ou Nome</label>
+            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">CPF ou Celular</label>
             <input 
               type="text" 
-              placeholder="Digite seu CPF, Celular ou Nome"
+              placeholder="Digite seu CPF ou Celular"
               className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all text-gray-800 ${error ? 'border-red-200 bg-red-50' : 'border-transparent focus:border-tea-200 focus:bg-white'}`}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
