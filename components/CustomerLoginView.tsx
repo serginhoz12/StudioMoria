@@ -16,6 +16,14 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
     e.preventDefault();
     setError(null);
     
+    const cleanIdentifier = identifier.replace(/\D/g, '');
+    
+    // Validação de 9 dígitos (Celular sem DDD)
+    if (cleanIdentifier.length === 9) {
+      setError("Por favor, inclua o DDD (ex: 13) antes do número do seu celular.");
+      return;
+    }
+
     if (identifier && password) {
       try {
         onLogin(identifier, password);
@@ -37,37 +45,48 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
 
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-tea-800 uppercase tracking-widest ml-1">CPF OU CELULAR</label>
+            <label htmlFor="user-id-field" className="text-[10px] font-bold text-tea-800 uppercase tracking-widest ml-1">
+              CPF OU CELULAR
+            </label>
             <input 
+              id="user-id-field"
               type="text" 
-              placeholder="Digite seu CPF ou Celular"
+              placeholder="Digite CPF ou Celular com DDD"
               className={`w-full px-8 py-5 rounded-[2rem] bg-gray-50/80 border-2 outline-none transition-all text-gray-800 placeholder-gray-300 ${error ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-tea-100 focus:bg-white focus:shadow-sm'}`}
               value={identifier}
               onChange={(e) => setIdentifier(e.target.value)}
               required
+              autoComplete="username"
             />
           </div>
+          
           <div className="space-y-2">
-            <label className="text-[10px] font-bold text-tea-800 uppercase tracking-widest ml-1">SUA SENHA</label>
+            <label htmlFor="user-pass-field" className="text-[10px] font-bold text-tea-800 uppercase tracking-widest ml-1">
+              SUA SENHA
+            </label>
             <input 
+              id="user-pass-field"
               type="password" 
               placeholder="••••••••"
               className={`w-full px-8 py-5 rounded-[2rem] bg-gray-50/80 border-2 outline-none transition-all text-gray-800 placeholder-gray-300 ${error ? 'border-red-100 bg-red-50' : 'border-transparent focus:border-tea-100 focus:bg-white focus:shadow-sm'}`}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </div>
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl">
-              <p className="text-[10px] text-red-600 font-bold text-center uppercase tracking-tight">{error}</p>
+            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl animate-shake">
+              <p className="text-[10px] text-red-600 font-bold text-center uppercase tracking-tight leading-relaxed">
+                {error}
+              </p>
             </div>
           )}
 
           <button 
             type="submit"
-            className="w-full bg-tea-900 text-white py-6 rounded-[2rem] font-bold text-lg hover:bg-tea-950 transition-all shadow-xl shadow-tea-900/10 mt-4 tracking-wide"
+            className="w-full bg-tea-900 text-white py-6 rounded-[2rem] font-bold text-lg hover:bg-black transition-all shadow-xl shadow-tea-900/10 mt-4 tracking-wide"
           >
             Entrar no Perfil
           </button>
