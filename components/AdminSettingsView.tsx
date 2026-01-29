@@ -21,6 +21,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const isOwner = loggedMember.role === 'owner';
   const [activeSubTab, setActiveSubTab] = useState<'identity' | 'operational' | 'team' | 'social'>('identity');
   
+  // Estados Locais para Edição
   const [tempSettings, setTempSettings] = useState<SalonSettings>(settings);
   const [memberInEdit, setMemberInEdit] = useState<TeamMember | null>(null);
   const [showPassword, setShowPassword] = useState<Record<string, boolean>>({});
@@ -29,22 +30,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Função crítica para evitar erro de circularidade (Converting circular structure to JSON)
-  const cleanData = (data: any) => {
-    return JSON.parse(JSON.stringify(data));
-  };
-
   const saveSettings = async (updated: SalonSettings) => {
     try {
-      // Limpamos o objeto para remover referências internas do Firestore antes de salvar
-      const dataToSave = cleanData({ 
-        ...updated, 
-        lastUpdated: Date.now() 
-      });
-      await setDoc(doc(db, "settings", "main"), dataToSave);
-      alert("Configurações do Studio atualizadas!");
+      await setDoc(doc(db, "settings", "main"), { ...updated, lastUpdated: Date.now() });
+      alert("Configurações atualizadas com sucesso!");
     } catch (e) {
-      console.error("Erro ao salvar configurações:", e);
       alert("Erro ao salvar no banco de dados.");
     }
   };
@@ -72,7 +62,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             type="text" 
             value={tempSettings.name} 
             onChange={e => setTempSettings({...tempSettings, name: e.target.value})}
-            className="w-full p-5 bg-gray-50 rounded-3xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all shadow-inner"
+            className="w-full p-5 bg-gray-50 rounded-3xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all"
           />
         </div>
         <div className="space-y-4">
@@ -81,7 +71,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             type="text" 
             value={tempSettings.logo} 
             onChange={e => setTempSettings({...tempSettings, logo: e.target.value})}
-            className="w-full p-5 bg-gray-50 rounded-3xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all shadow-inner"
+            className="w-full p-5 bg-gray-50 rounded-3xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all"
           />
         </div>
       </div>
@@ -90,38 +80,38 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         <textarea 
           value={tempSettings.address} 
           onChange={e => setTempSettings({...tempSettings, address: e.target.value})}
-          className="w-full p-5 bg-gray-50 rounded-3xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all h-32 shadow-inner"
+          className="w-full p-5 bg-gray-50 rounded-3xl font-bold border-2 border-transparent focus:border-tea-100 outline-none transition-all h-32"
         />
       </div>
-      <button onClick={() => saveSettings(tempSettings)} className="bg-tea-900 text-white px-10 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all">Salvar Identidade</button>
+      <button onClick={() => saveSettings(tempSettings)} className="bg-tea-900 text-white px-10 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Salvar Identidade</button>
     </div>
   );
 
   const renderOperational = () => (
     <div className="space-y-8 animate-fade-in">
        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="p-8 bg-gray-50 rounded-[3rem] shadow-sm space-y-6">
+          <div className="p-8 bg-gray-50 rounded-[3rem] space-y-6">
              <h4 className="text-sm font-bold text-tea-950 uppercase tracking-widest border-b border-tea-100 pb-2">Horário do Salão</h4>
              <div className="flex gap-4">
                 <div className="flex-1">
                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Abertura</label>
-                   <input type="time" value={tempSettings.businessHours.start} onChange={e => setTempSettings({...tempSettings, businessHours: {...tempSettings.businessHours, start: e.target.value}})} className="w-full p-4 rounded-2xl border-none font-bold shadow-inner" />
+                   <input type="time" value={tempSettings.businessHours.start} onChange={e => setTempSettings({...tempSettings, businessHours: {...tempSettings.businessHours, start: e.target.value}})} className="w-full p-4 rounded-2xl border-none font-bold" />
                 </div>
                 <div className="flex-1">
                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Fechamento</label>
-                   <input type="time" value={tempSettings.businessHours.end} onChange={e => setTempSettings({...tempSettings, businessHours: {...tempSettings.businessHours, end: e.target.value}})} className="w-full p-4 rounded-2xl border-none font-bold shadow-inner" />
+                   <input type="time" value={tempSettings.businessHours.end} onChange={e => setTempSettings({...tempSettings, businessHours: {...tempSettings.businessHours, end: e.target.value}})} className="w-full p-4 rounded-2xl border-none font-bold" />
                 </div>
              </div>
           </div>
-          <div className="p-8 bg-gray-50 rounded-[3rem] shadow-sm space-y-6">
+          <div className="p-8 bg-gray-50 rounded-[3rem] space-y-6">
              <h4 className="text-sm font-bold text-tea-950 uppercase tracking-widest border-b border-tea-100 pb-2">Gestão de Agenda</h4>
              <div>
                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Agenda Aberta Até</label>
-                <input type="date" value={tempSettings.agendaOpenUntil} onChange={e => setTempSettings({...tempSettings, agendaOpenUntil: e.target.value})} className="w-full p-4 rounded-2xl border-none font-bold shadow-inner" />
+                <input type="date" value={tempSettings.agendaOpenUntil} onChange={e => setTempSettings({...tempSettings, agendaOpenUntil: e.target.value})} className="w-full p-4 rounded-2xl border-none font-bold" />
              </div>
           </div>
        </div>
-       <button onClick={() => saveSettings(tempSettings)} className="bg-tea-900 text-white px-10 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all">Atualizar Operação</button>
+       <button onClick={() => saveSettings(tempSettings)} className="bg-tea-900 text-white px-10 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Atualizar Operação</button>
     </div>
   );
 
@@ -135,12 +125,12 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   type="text" 
                   value={(tempSettings.socialLinks as any)[platform]} 
                   onChange={e => setTempSettings({...tempSettings, socialLinks: {...tempSettings.socialLinks, [platform]: e.target.value}})}
-                  className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none shadow-inner"
+                  className="w-full p-4 bg-gray-50 rounded-2xl font-bold border-2 border-transparent focus:border-tea-100 outline-none"
                 />
              </div>
           ))}
        </div>
-       <button onClick={() => saveSettings(tempSettings)} className="bg-tea-900 text-white px-10 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all">Salvar Redes Sociais</button>
+       <button onClick={() => saveSettings(tempSettings)} className="bg-tea-900 text-white px-10 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Salvar Redes Sociais</button>
     </div>
   );
 
@@ -150,7 +140,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           <p className="text-xs text-gray-400 italic font-light">Gerencie quem acessa o painel e quais serviços realizam.</p>
           <button 
             onClick={() => setMemberInEdit({ id: `tm-${Date.now()}`, name: '', username: '', password: '', role: 'staff', assignedServiceIds: [] })}
-            className="text-[9px] font-bold text-tea-700 uppercase tracking-widest border-2 border-tea-100 px-4 py-2 rounded-xl hover:bg-tea-50 shadow-sm"
+            className="text-[9px] font-bold text-tea-700 uppercase tracking-widest border-2 border-tea-100 px-4 py-2 rounded-xl hover:bg-tea-50"
           >
             + Adicionar Colaboradora
           </button>
@@ -219,11 +209,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
            <div className="space-y-4 text-left max-w-xs mx-auto">
               <div className="space-y-1">
                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Seu Nome</label>
-                 <input type="text" readOnly value={loggedMember.name} className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-gray-400 outline-none shadow-inner" />
+                 <input type="text" readOnly value={loggedMember.name} className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-gray-400 outline-none" />
               </div>
               <div className="space-y-1">
                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Usuário de Login</label>
-                 <input type="text" readOnly value={loggedMember.username} className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-gray-400 outline-none shadow-inner" />
+                 <input type="text" readOnly value={loggedMember.username} className="w-full p-4 bg-gray-50 rounded-2xl font-bold text-gray-400 outline-none" />
               </div>
            </div>
            <p className="text-xs text-gray-400 italic">Para alterar seus dados de acesso, solicite à Moriá (Proprietária).</p>
@@ -234,13 +224,14 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
   return (
     <div className="space-y-8 pb-32 animate-fade-in">
+      {/* Header Moriá */}
       <div className="bg-tea-900 p-10 md:p-14 rounded-[4rem] text-white flex flex-col md:flex-row justify-between items-center gap-8 relative overflow-hidden shadow-2xl">
          <div className="absolute top-0 left-0 w-64 h-64 bg-white/5 rounded-full -ml-32 -mt-32 blur-3xl"></div>
          <div className="relative z-10 text-center md:text-left">
             <span className="bg-white/10 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-[0.2em] border border-white/10">Gestão Master Moriá</span>
             <h2 className="text-4xl font-serif font-bold italic mt-4">Configurações Studio</h2>
          </div>
-         <div className="flex bg-white/5 backdrop-blur-md p-1.5 rounded-[2rem] border border-white/10 relative z-10 overflow-x-auto no-scrollbar max-w-full">
+         <div className="flex bg-white/5 backdrop-blur-md p-1.5 rounded-[2rem] border border-white/10 relative z-10">
             {[
               { id: 'identity', label: 'Identidade', icon: '🎨' },
               { id: 'operational', label: 'Operação', icon: '⚙️' },
@@ -250,7 +241,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               <button 
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id as any)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeSubTab === tab.id ? 'bg-white text-tea-900 shadow-xl' : 'text-white/60 hover:text-white'}`}
+                className={`flex items-center gap-2 px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all ${activeSubTab === tab.id ? 'bg-white text-tea-900 shadow-xl' : 'text-white/60 hover:text-white'}`}
               >
                 <span className="hidden sm:inline">{tab.icon}</span> {tab.label}
               </button>
@@ -265,6 +256,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
          {activeSubTab === 'social' && renderSocial()}
       </div>
 
+      {/* Modal Edição Equipe */}
       {memberInEdit && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-xl animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[3.5rem] p-10 md:p-14 shadow-3xl animate-slide-up space-y-8 border-4 border-tea-100">
@@ -280,7 +272,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     type="text" 
                     value={memberInEdit.name} 
                     onChange={e => setMemberInEdit({...memberInEdit, name: e.target.value})}
-                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none focus:bg-white border-2 border-transparent focus:border-tea-100 shadow-inner" 
+                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none focus:bg-white border-2 border-transparent focus:border-tea-100" 
                    />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -290,7 +282,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                         type="text" 
                         value={memberInEdit.username} 
                         onChange={e => setMemberInEdit({...memberInEdit, username: e.target.value})}
-                        className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
+                        className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" 
                       />
                    </div>
                    <div className="space-y-1">
@@ -299,15 +291,15 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                         type="text" 
                         value={memberInEdit.password} 
                         onChange={e => setMemberInEdit({...memberInEdit, password: e.target.value})}
-                        className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
+                        className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none" 
                       />
                    </div>
                 </div>
                 <div className="space-y-1">
                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Serviços que realiza</label>
-                   <div className="p-6 bg-gray-50 rounded-3xl grid grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scroll shadow-inner">
+                   <div className="p-6 bg-gray-50 rounded-3xl grid grid-cols-2 gap-2 max-h-40 overflow-y-auto custom-scroll">
                       {services.map(s => (
-                        <label key={s.id} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-xl transition-colors">
+                        <label key={s.id} className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded-xl">
                            <input 
                             type="checkbox" 
                             checked={memberInEdit.assignedServiceIds.includes(s.id)} 
@@ -326,7 +318,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
              </div>
 
              <div className="flex flex-col gap-3">
-                <button onClick={handleMemberSave} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all">Salvar Colaboradora</button>
+                <button onClick={handleMemberSave} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Salvar Colaboradora</button>
                 <button onClick={() => setMemberInEdit(null)} className="w-full py-2 text-gray-400 font-bold uppercase text-[9px]">Descartar</button>
              </div>
           </div>

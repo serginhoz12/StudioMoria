@@ -23,11 +23,11 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
     type: 'terms'
   });
 
-  // Verificação de CPF Duplicado (Apenas se o CPF for informado)
+  // Verificação de CPF Duplicado em Tempo Real
   const isDuplicateCpf = useMemo(() => {
     const cleanCpf = cpf.replace(/\D/g, '');
-    if (cleanCpf.length < 1) return false;
-    return customers.some(c => c.cpf && c.cpf.replace(/\D/g, '') === cleanCpf);
+    if (cleanCpf.length < 11) return false;
+    return customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf);
   }, [cpf, customers]);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -36,15 +36,13 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
       alert("Este CPF já possui um cadastro no Studio Moriá.");
       return;
     }
-    
-    // CPF é opcional, mas nome, whatsapp, senha e termos são obrigatórios
-    if (name && whatsapp && password && agreedToTerms) {
+    if (name && whatsapp && cpf && password && agreedToTerms) {
       onRegister(name, whatsapp, cpf, password, receivesNotifications);
     } else {
       if (!agreedToTerms) {
         alert("Para sua segurança, é necessário aceitar os termos de uso.");
       } else {
-        alert("Por favor, preencha todos os campos obrigatórios.");
+        alert("Por favor, preencha todos os campos.");
       }
     }
   };
@@ -66,14 +64,14 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
         </button>
         
         <div className="mb-12">
-          <h2 className="text-4xl font-serif text-tea-900 mb-4 italic font-bold">Nova Conta</h2>
-          <p className="text-gray-500 font-light text-lg italic leading-relaxed">Cadastre-se para agendar seus procedimentos no Studio Moriá.</p>
+          <h2 className="text-4xl font-serif text-tea-900 mb-4 italic">Sua Conta Moriá</h2>
+          <p className="text-gray-500 font-light text-lg italic leading-relaxed">Cadastre-se para agendar seus procedimentos e acessar seu histórico de beleza.</p>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-8">
           <div className="space-y-4">
             <div className="relative group">
-              <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Nome Completo *</label>
+              <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Nome Completo</label>
               <input 
                 type="text" 
                 required
@@ -86,7 +84,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative group">
-                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Celular / WhatsApp *</label>
+                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">WhatsApp</label>
                 <input 
                   type="tel" 
                   required
@@ -97,20 +95,21 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
                 />
               </div>
               <div className="relative group">
-                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">CPF (Opcional)</label>
+                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Seu CPF</label>
                 <input 
                   type="text" 
+                  required
                   value={cpf}
                   onChange={(e) => setCpf(e.target.value)}
                   className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all placeholder-gray-300 shadow-inner ${isDuplicateCpf ? 'border-red-300 bg-red-50' : 'border-transparent focus:bg-white focus:border-tea-200'}`}
                   placeholder="000.000.000-00"
                 />
-                {isDuplicateCpf && <p className="text-[10px] text-red-600 font-bold mt-2 ml-2 uppercase animate-pulse">Este CPF já possui cadastro.</p>}
+                {isDuplicateCpf && <p className="text-[10px] text-red-600 font-bold mt-2 ml-2 uppercase animate-pulse">CPF já cadastrado! Tente fazer login.</p>}
               </div>
             </div>
 
             <div className="relative group">
-              <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Crie uma Senha *</label>
+              <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Crie uma Senha</label>
               <input 
                 type="password" 
                 required
@@ -122,7 +121,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
             </div>
           </div>
 
-          <div className="p-8 bg-tea-50/50 rounded-[2.5rem] border border-tea-100 space-y-6 shadow-sm">
+          <div className="p-8 bg-tea-50/50 rounded-[2.5rem] border border-tea-100 space-y-6">
             <label className="flex items-start gap-5 cursor-pointer group">
               <div className="relative mt-1">
                 <input 
@@ -135,7 +134,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
               </div>
               <div className="flex-1">
                 <span className="text-sm font-bold text-tea-900 block mb-1">Receber lembretes via WhatsApp</span>
-                <span className="text-xs text-tea-700/70 font-medium italic">Avisos de agendamentos e novidades.</span>
+                <span className="text-xs text-tea-700/70 font-medium italic">Avisos de horários e promoções.</span>
               </div>
             </label>
 
@@ -163,7 +162,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
             disabled={isDuplicateCpf || !agreedToTerms}
             className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${!isDuplicateCpf && agreedToTerms ? 'bg-tea-800 text-white hover:bg-tea-900 shadow-tea-200 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70'}`}
           >
-            Concluir Cadastro
+            {isDuplicateCpf ? 'CPF já em uso' : 'Concluir Cadastro'}
           </button>
         </form>
       </div>

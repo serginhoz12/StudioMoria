@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, TeamMember } from './types.ts';
-import { DEFAULT_SETTINGS } from './constants.ts';
+import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
 import { db } from './firebase.ts';
 import { 
   collection, 
@@ -29,17 +29,13 @@ import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
 
 const App: React.FC = () => {
-  // SEGURANÇA MÁXIMA: Estados iniciam rigorosamente vazios.
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loggedAdminMember, setLoggedAdminMember] = useState<TeamMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Public Data
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
   const [services, setServices] = useState<Service[]>([]);
-  
-  // Private Data (Loaded on demand after explicit login or for verification)
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -47,52 +43,43 @@ const App: React.FC = () => {
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
-  const cleanData = (data: any) => JSON.parse(JSON.stringify(data));
-
-  // 1. INITIALIZATION: Sincroniza com o banco e garante limpeza
   useEffect(() => {
-    // Dupla camada de limpeza por precaução (Microsoft Edge Fix)
-    sessionStorage.clear();
-    localStorage.clear();
-
-    // Carrega Configurações Públicas
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
-        setSettings(prev => ({...prev, ...snap.data() as SalonSettings}));
+        const remoteSettings = snap.data() as SalonSettings;
+        
+        let team = remoteSettings.teamMembers || [];
+        const masterAdmin = team.find(m => m.id === 'tm1') || DEFAULT_SETTINGS.teamMembers[0];
+        const otherMembers = team.filter(m => m.id !== 'tm1');
+        
+        // Mantém a Moriá sempre como tm1 e garante que ela não tenha serviços se for apenas admin
+        const correctedTeam = [
+          { 
+            ...masterAdmin, 
+            id: 'tm1', 
+            username: 'admin', 
+            password: '460206', 
+            role: 'owner' as const,
+            assignedServiceIds: masterAdmin.assignedServiceIds || [] 
+          },
+          ...otherMembers
+        ];
+
+        setSettings({ ...remoteSettings, teamMembers: correctedTeam });
+        setIsLoading(false);
       } else {
-        setDoc(doc(db, "settings", "main"), cleanData(DEFAULT_SETTINGS));
+        setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
       }
-      setIsLoading(false);
-    }, (error) => {
-      console.error("Firestore Settings Error:", error);
-      setIsLoading(false);
     });
 
-    // Carrega Serviços Públicos
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
-      setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
-    }, (error) => console.error("Firestore Services Error:", error));
-
-    return () => { unsubSettings(); unsubServices(); };
-  }, []);
-
-  // 2. PRIVATE DATA LOADING: Habilitado para Login ou se autenticado
-  useEffect(() => {
-    // Carregamos clientes se estiver na tela de login/registro para validação rápida
-    const isLoginOrRegister = currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_REGISTER;
-    if (!isAdmin && !currentUser && !isLoginOrRegister) return;
+      const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
+      setServices(data);
+    });
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
-      setCustomers(data);
-      if (currentUser) {
-        const updated = data.find(c => c.id === currentUser.id);
-        if (updated) setCurrentUser(updated);
-      }
+      setCustomers(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
     });
-
-    // Outros dados privados apenas após login
-    if (!isAdmin && !currentUser) return;
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
@@ -111,78 +98,28 @@ const App: React.FC = () => {
     });
 
     return () => {
-      unsubCustomers(); unsubBookings(); unsubTransactions();
-      unsubWaitlist(); unsubPromotions();
+      unsubSettings(); unsubServices(); unsubCustomers();
+      unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
     };
-  }, [isAdmin, currentUser?.id, currentView]);
+  }, []);
 
   const handleAdminLogin = (member: TeamMember) => {
     setLoggedAdminMember(member);
     setIsAdmin(true);
-    sessionStorage.setItem('moria_admin_session', JSON.stringify(member));
+    localStorage.setItem('moria_admin_session', JSON.stringify(member));
     setCurrentView(View.ADMIN_DASHBOARD);
   };
 
   const handleAdminLogout = () => {
     setLoggedAdminMember(null);
     setIsAdmin(false);
-    sessionStorage.clear();
-    localStorage.clear();
+    localStorage.removeItem('moria_admin_session');
     setCurrentView(View.CUSTOMER_HOME);
   };
 
-  const handleCustomerLogin = (identifier: string, pass: string) => {
-    const cleanInput = identifier.replace(/\D/g, '');
-    const lowerInput = identifier.toLowerCase().trim();
-
-    const user = customers.find(c => {
-      const cleanCpf = (c.cpf || "").replace(/\D/g, '');
-      const cleanWa = (c.whatsapp || "").replace(/\D/g, '');
-      const lowerName = (c.name || "").toLowerCase().trim();
-      
-      // Validação por CPF/WhatsApp (se numérico) OU Nome (texto exato)
-      const matchesIdentifier = (cleanInput !== '' && (cleanCpf === cleanInput || cleanWa === cleanInput)) || 
-                                (lowerName === lowerInput);
-                                
-      return matchesIdentifier && c.password === pass;
-    });
-
-    if (user) {
-      setCurrentUser(user);
-      sessionStorage.setItem('moria_user_session', JSON.stringify(user));
-      setCurrentView(View.CUSTOMER_DASHBOARD);
-    } else {
-      throw new Error("Dados de acesso incorretos. Verifique o identificador e a senha.");
-    }
-  };
-
-  const handleCustomerRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
-    try {
-      const newCustomer = cleanData({
-        name, whatsapp, cpf: cpf || "", password,
-        receivesNotifications, agreedToTerms: true,
-        history: [], createdAt: new Date().toISOString()
-      });
-      const docRef = await addDoc(collection(db, "customers"), newCustomer);
-      const created = { ...newCustomer, id: docRef.id } as Customer;
-      setCurrentUser(created);
-      sessionStorage.setItem('moria_user_session', JSON.stringify(created));
-      setCurrentView(View.CUSTOMER_DASHBOARD);
-    } catch (e) {
-      alert("Erro ao criar cadastro.");
-    }
-  };
-
   const renderView = () => {
-    // Fluxo Administrativo
     if (isAdmin) {
-      if (!loggedAdminMember) {
-        return <AdminLogin 
-          teamMembers={settings.teamMembers} 
-          onLogin={handleAdminLogin} 
-          onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} 
-        />;
-      }
+      if (!loggedAdminMember) return <AdminLogin teamMembers={settings.teamMembers} onLogin={handleAdminLogin} onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} />;
       
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} loggedMember={loggedAdminMember} />;
@@ -195,30 +132,34 @@ const App: React.FC = () => {
       }
     }
 
-    // Fluxo do Cliente Autenticado
-    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_PROFILE)) {
-       if (currentView === View.CUSTOMER_PROFILE) {
-         return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
-       }
+    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN)) {
        return (
          <CustomerDashboard 
-            customer={currentUser} bookings={bookings} services={services} settings={settings}
-            onBook={() => {}} onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
-            onLogout={() => { setCurrentUser(null); sessionStorage.clear(); setCurrentView(View.CUSTOMER_HOME); }}
+            customer={currentUser} 
+            bookings={bookings} 
+            services={services}
+            settings={settings}
+            onBook={() => {}}
+            onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
+            onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }}
             onCancelBooking={(id) => updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
             onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
-            waitlist={waitlist.filter(w => w.customerId === currentUser.id)} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} promotions={promotions}
+            waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
+            onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
          />
        );
     }
 
-    // Fluxo Público
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleCustomerRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={(n, w, c, p, not) => {}} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={(c, p) => {}} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 
-          settings={settings} services={services} bookings={bookings} onBook={() => {}} onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} onAddToWaitlist={() => {}} currentUser={currentUser} 
+          settings={settings} services={services} bookings={bookings} 
+          onBook={() => {}} 
+          onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} 
+          onAddToWaitlist={() => {}} 
+          currentUser={currentUser} 
         />
       );
     }
@@ -228,32 +169,25 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-white">
       {currentView !== View.CUSTOMER_DASHBOARD && (
         <Navbar 
-          view={currentView} setView={setCurrentView} isAdmin={isAdmin} 
+          view={currentView} 
+          setView={setCurrentView} 
+          isAdmin={isAdmin} 
           onToggleAdmin={() => { 
-            if (isAdmin && loggedAdminMember) handleAdminLogout();
-            else { 
-              setIsAdmin(true);
-              setCurrentView(View.ADMIN_LOGIN); 
-            }
+            if (isAdmin) handleAdminLogout();
+            else { setCurrentView(View.ADMIN_LOGIN); setIsAdmin(true); }
           }} 
-          salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
-          onLogout={() => { 
-            setCurrentUser(null); 
-            sessionStorage.clear(); 
-            setCurrentView(View.CUSTOMER_HOME); 
-          }} 
+          salonName={settings.name} 
+          logo={settings.logo} 
+          currentUser={currentUser} 
+          onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }} 
           onAdminLogout={handleAdminLogout} 
           isAdminAuthenticated={!!loggedAdminMember} 
         />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-8 animate-fade-in">
-            <div className="relative">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-tea-900"></div>
-              <div className="absolute inset-0 flex items-center justify-center text-xs font-serif font-bold italic text-tea-950">M</div>
-            </div>
-            <p className="text-tea-950 font-serif italic text-sm animate-pulse tracking-widest uppercase">Studio Moriá Estética...</p>
+          <div className="flex items-center justify-center py-40">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-900"></div>
           </div>
         ) : renderView()}
       </main>
