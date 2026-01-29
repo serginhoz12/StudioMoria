@@ -86,7 +86,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative group">
-                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">WhatsApp *</label>
+                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Celular / WhatsApp *</label>
                 <input 
                   type="tel" 
                   required
@@ -97,7 +97,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
                 />
               </div>
               <div className="relative group">
-                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">Seu CPF (Opcional)</label>
+                <label className="block text-[11px] font-bold text-tea-700 uppercase tracking-[0.2em] mb-2 ml-2">CPF (Opcional)</label>
                 <input 
                   type="text" 
                   value={cpf}
