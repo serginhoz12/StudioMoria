@@ -29,7 +29,7 @@ import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
 
 const App: React.FC = () => {
-  // SEGURANÇA: Sempre inicia na Home Page deslogado
+  // SEGURANÇA MÁXIMA: Estados iniciam rigorosamente vazios.
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loggedAdminMember, setLoggedAdminMember] = useState<TeamMember | null>(null);
@@ -39,7 +39,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
   const [services, setServices] = useState<Service[]>([]);
   
-  // Private Data (Loaded on demand after login)
+  // Private Data (Loaded on demand after explicit login or for verification)
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -49,15 +49,13 @@ const App: React.FC = () => {
 
   const cleanData = (data: any) => JSON.parse(JSON.stringify(data));
 
-  // 1. INITIALIZATION & FORCED LOGOUT
+  // 1. INITIALIZATION: Sincroniza com o banco e garante limpeza
   useEffect(() => {
-    // SEGURANÇA: Limpa sessões anteriores ao carregar para garantir login obrigatório
-    sessionStorage.removeItem('moria_admin_session');
-    sessionStorage.removeItem('moria_user_session');
-    localStorage.removeItem('moria_admin_session');
-    localStorage.removeItem('moria_user_session');
+    // Dupla camada de limpeza por precaução (Microsoft Edge Fix)
+    sessionStorage.clear();
+    localStorage.clear();
 
-    // Load Critical Settings (Public)
+    // Carrega Configurações Públicas
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         setSettings(prev => ({...prev, ...snap.data() as SalonSettings}));
@@ -70,7 +68,7 @@ const App: React.FC = () => {
       setIsLoading(false);
     });
 
-    // Load Public Services
+    // Carrega Serviços Públicos
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
     }, (error) => console.error("Firestore Services Error:", error));
@@ -78,10 +76,11 @@ const App: React.FC = () => {
     return () => { unsubSettings(); unsubServices(); };
   }, []);
 
-  // 2. PRIVATE DATA LOADING (Apenas com sessão ativa em memória)
+  // 2. PRIVATE DATA LOADING: Habilitado para Login ou se autenticado
   useEffect(() => {
-    // O carregamento só ocorre se houver um membro ou usuário logado NESTA SESSÃO
-    if (!isAdmin && !currentUser) return;
+    // Carregamos clientes se estiver na tela de login/registro para validação rápida
+    const isLoginOrRegister = currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_REGISTER;
+    if (!isAdmin && !currentUser && !isLoginOrRegister) return;
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
@@ -91,6 +90,9 @@ const App: React.FC = () => {
         if (updated) setCurrentUser(updated);
       }
     });
+
+    // Outros dados privados apenas após login
+    if (!isAdmin && !currentUser) return;
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
@@ -112,12 +114,11 @@ const App: React.FC = () => {
       unsubCustomers(); unsubBookings(); unsubTransactions();
       unsubWaitlist(); unsubPromotions();
     };
-  }, [isAdmin, currentUser?.id]);
+  }, [isAdmin, currentUser?.id, currentView]);
 
   const handleAdminLogin = (member: TeamMember) => {
     setLoggedAdminMember(member);
     setIsAdmin(true);
-    // sessionStorage morre quando fecha a aba/navegador
     sessionStorage.setItem('moria_admin_session', JSON.stringify(member));
     setCurrentView(View.ADMIN_DASHBOARD);
   };
@@ -125,16 +126,25 @@ const App: React.FC = () => {
   const handleAdminLogout = () => {
     setLoggedAdminMember(null);
     setIsAdmin(false);
-    sessionStorage.removeItem('moria_admin_session');
+    sessionStorage.clear();
+    localStorage.clear();
     setCurrentView(View.CUSTOMER_HOME);
   };
 
-  const handleCustomerLogin = (cpfOrWhatsapp: string, pass: string) => {
-    const cleanInput = cpfOrWhatsapp.replace(/\D/g, '');
+  const handleCustomerLogin = (identifier: string, pass: string) => {
+    const cleanInput = identifier.replace(/\D/g, '');
+    const lowerInput = identifier.toLowerCase().trim();
+
     const user = customers.find(c => {
       const cleanCpf = (c.cpf || "").replace(/\D/g, '');
       const cleanWa = (c.whatsapp || "").replace(/\D/g, '');
-      return (cleanCpf === cleanInput || cleanWa === cleanInput) && c.password === pass;
+      const lowerName = (c.name || "").toLowerCase().trim();
+      
+      // Validação por CPF/WhatsApp (se numérico) OU Nome (texto exato)
+      const matchesIdentifier = (cleanInput !== '' && (cleanCpf === cleanInput || cleanWa === cleanInput)) || 
+                                (lowerName === lowerInput);
+                                
+      return matchesIdentifier && c.password === pass;
     });
 
     if (user) {
@@ -142,7 +152,7 @@ const App: React.FC = () => {
       sessionStorage.setItem('moria_user_session', JSON.stringify(user));
       setCurrentView(View.CUSTOMER_DASHBOARD);
     } else {
-      throw new Error("Credenciais inválidas ou cadastro não localizado.");
+      throw new Error("Dados de acesso incorretos. Verifique o identificador e a senha.");
     }
   };
 
@@ -159,22 +169,21 @@ const App: React.FC = () => {
       sessionStorage.setItem('moria_user_session', JSON.stringify(created));
       setCurrentView(View.CUSTOMER_DASHBOARD);
     } catch (e) {
-      console.error("Register Error:", e);
-      alert("Falha ao criar cadastro.");
+      alert("Erro ao criar cadastro.");
     }
   };
 
   const renderView = () => {
-    // Se marcou que é admin mas não logou no estado, pede login obrigatoriamente
-    if (isAdmin && !loggedAdminMember) {
-      return <AdminLogin 
-        teamMembers={settings.teamMembers} 
-        onLogin={handleAdminLogin} 
-        onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} 
-      />;
-    }
-
-    if (isAdmin && loggedAdminMember) {
+    // Fluxo Administrativo
+    if (isAdmin) {
+      if (!loggedAdminMember) {
+        return <AdminLogin 
+          teamMembers={settings.teamMembers} 
+          onLogin={handleAdminLogin} 
+          onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} 
+        />;
+      }
+      
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} loggedMember={loggedAdminMember} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} loggedMember={loggedAdminMember} />;
@@ -186,7 +195,7 @@ const App: React.FC = () => {
       }
     }
 
-    // Área do Cliente
+    // Fluxo do Cliente Autenticado
     if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_PROFILE)) {
        if (currentView === View.CUSTOMER_PROFILE) {
          return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
@@ -195,7 +204,7 @@ const App: React.FC = () => {
          <CustomerDashboard 
             customer={currentUser} bookings={bookings} services={services} settings={settings}
             onBook={() => {}} onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
-            onLogout={() => { setCurrentUser(null); sessionStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }}
+            onLogout={() => { setCurrentUser(null); sessionStorage.clear(); setCurrentView(View.CUSTOMER_HOME); }}
             onCancelBooking={(id) => updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
             onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id)} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} promotions={promotions}
@@ -203,7 +212,7 @@ const App: React.FC = () => {
        );
     }
 
-    // Telas Públicas
+    // Fluxo Público
     switch (currentView) {
       case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleCustomerRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleCustomerLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
@@ -230,7 +239,7 @@ const App: React.FC = () => {
           salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
           onLogout={() => { 
             setCurrentUser(null); 
-            sessionStorage.removeItem('moria_user_session'); 
+            sessionStorage.clear(); 
             setCurrentView(View.CUSTOMER_HOME); 
           }} 
           onAdminLogout={handleAdminLogout} 
