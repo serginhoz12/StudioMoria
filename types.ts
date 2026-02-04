@@ -75,6 +75,23 @@ export interface Booking {
   finalPrice?: number;
 }
 
+export interface Transaction {
+  id: string;
+  type: 'payable' | 'receivable';
+  description: string;
+  amount: number;
+  date: string;
+  dueDate?: string;
+  status: 'pending' | 'paid';
+  customerId?: string;
+  customerName?: string;
+  bookingId?: string;
+  serviceName?: string;
+  procedureDate?: string;
+  promotionId?: string;
+  paidAt?: string;
+}
+
 export interface WaitlistEntry {
   id: string;
   customerId: string;
@@ -101,20 +118,6 @@ export interface Promotion {
   endDate: string;
   createdAt: string;
   isActive: boolean;
-}
-
-export interface Transaction {
-  id: string;
-  type: 'payable' | 'receivable';
-  description: string;
-  amount: number;
-  date: string;
-  dueDate?: string;
-  status: 'pending' | 'paid';
-  customerId?: string;
-  customerName?: string;
-  promotionId?: string;
-  paidAt?: string;
 }
 
 export interface SalonSettings {

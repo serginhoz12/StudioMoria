@@ -26,7 +26,7 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
     });
   };
 
-  const myTransactions = transactions.filter(t => t.customerId === customer.id);
+  const myTransactions = transactions.filter(t => t.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const myBookings = bookings.filter(b => b.customerId === customer.id);
   
   const totalPaid = myTransactions
@@ -39,10 +39,10 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
 
   const nextDueDate = myTransactions
     .filter(t => t.status === 'pending')
-    .sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime())[0];
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const isDueToday = nextDueDate && nextDueDate.dueDate === todayStr;
+  const isDueToday = nextDueDate && nextDueDate.date === todayStr;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-16 animate-fade-in">
@@ -74,7 +74,6 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
         </div>
 
         <div className="p-10 space-y-12">
-          {/* Dashboard Financeiro */}
           <section>
             <h3 className="text-xl font-bold text-tea-900 mb-6 flex items-center gap-3">
               <span className="w-8 h-8 rounded-full bg-tea-50 flex items-center justify-center text-sm">💰</span>
@@ -92,33 +91,42 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
             </div>
 
             <div className="overflow-hidden border border-gray-100 rounded-2xl">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  <tr>
-                    <th className="px-6 py-4">Data/Venc.</th>
-                    <th className="px-6 py-4">Procedimento</th>
-                    <th className="px-6 py-4 text-right">Valor</th>
-                    <th className="px-6 py-4 text-center">Situação</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {myTransactions.map(t => (
-                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 text-gray-500">{new Date(t.dueDate || t.date).toLocaleDateString()}</td>
-                      <td className="px-6 py-4 font-bold text-gray-800">{t.description}</td>
-                      <td className="px-6 py-4 text-right font-bold text-tea-900">R$ {t.amount.toFixed(2)}</td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${t.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                          {t.status === 'paid' ? 'Pago' : 'Pendente'}
-                        </span>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    <tr>
+                      <th className="px-6 py-4">Data Pagto.</th>
+                      <th className="px-6 py-4">Procedimento / Detalhes</th>
+                      <th className="px-6 py-4 text-right">Valor</th>
+                      <th className="px-6 py-4 text-center">Situação</th>
                     </tr>
-                  ))}
-                  {myTransactions.length === 0 && (
-                    <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">Nenhum lançamento financeiro registrado.</td></tr>
-                  )}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {myTransactions.map(t => (
+                      <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4 text-gray-500 font-medium">{new Date(t.date).toLocaleDateString()}</td>
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-gray-800">{t.description}</p>
+                          {t.serviceName && (
+                            <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter mt-0.5">
+                              Sessão de {t.serviceName} em {t.procedureDate}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-right font-bold text-tea-900">R$ {t.amount.toFixed(2)}</td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest ${t.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                            {t.status === 'paid' ? 'Pago' : 'Pendente'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {myTransactions.length === 0 && (
+                      <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">Nenhum lançamento financeiro registrado.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </section>
 
@@ -128,11 +136,11 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
               Meus Agendamentos
             </h3>
             <div className="space-y-4">
-              {myBookings.map(b => (
+              {myBookings.sort((a,b) => new Date(b.dateTime).getTime() - new Date(a.dateTime).getTime()).map(b => (
                  <div key={b.id} className="p-6 border border-gray-100 rounded-[1.5rem] flex justify-between items-center bg-white shadow-sm">
                     <div>
                       <p className="font-bold text-tea-900 text-lg">{b.serviceName}</p>
-                      <p className="text-xs text-gray-400">Data: {new Date(b.dateTime).toLocaleDateString()} às {new Date(b.dateTime).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</p>
+                      <p className="text-xs text-gray-400">Data: {new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} às {b.dateTime.split(' ')[1]}</p>
                     </div>
                     <span className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                       b.status === 'completed' ? 'bg-green-50 text-green-600' : 
