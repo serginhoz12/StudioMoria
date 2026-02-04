@@ -127,12 +127,10 @@ const App: React.FC = () => {
             bookings={bookings} 
             services={services}
             settings={settings}
-            onBook={() => {}}
-            // FIX: Using (db as any) for _isMock checks
+            // FIX: Removed onBook and onAddToWaitlist as they were not defined in CustomerDashboardProps
             onUpdateProfile={(upd) => !(db as any)._isMock && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
             onCancelBooking={(id) => !(db as any)._isMock && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
-            onAddToWaitlist={() => {}}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !(db as any)._isMock && deleteDoc(doc(db, "waitlist", id))}
             promotions={promotions}
