@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, Customer, Booking } from '../types';
 import { db } from '../firebase.ts';
-import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
 
 interface AdminFinanceProps {
   transactions: Transaction[];
@@ -13,8 +13,9 @@ interface AdminFinanceProps {
   onDelete?: (id: string) => void;
 }
 
-const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, customers }) => {
-  const [showAddForm, setShowAddForm] = useState(false);
+const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, customers, onUpdate, onDelete }) => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState({
     type: 'receivable' as 'payable' | 'receivable',
     description: '',
@@ -27,8 +28,36 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
 
   const [customerSearch, setCustomerSearch] = useState('');
 
+  const handleEdit = (t: Transaction) => {
+    setEditingId(t.id);
+    setNewTrans({
+      type: t.type,
+      description: t.description,
+      amount: t.amount,
+      date: t.date,
+      customerId: t.customerId || '',
+      bookingId: t.bookingId || '',
+      status: t.status
+    });
+    setCustomerSearch(t.customerName || '');
+    setShowForm(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("Deseja realmente excluir este lançamento financeiro? Esta ação não pode ser desfeita.")) {
+      try {
+        if (!(db as any)._isMock) {
+          await deleteDoc(doc(db, "transactions", id));
+        }
+        if (onDelete) onDelete(id);
+      } catch (error) {
+        alert("Erro ao excluir transação.");
+      }
+    }
+  };
+
   const handleSave = async () => {
-    if (!newTrans.description || newTrans.amount <= 0) return alert("Dados insuficientes.");
+    if (!newTrans.description || newTrans.amount <= 0) return alert("Preencha a descrição e o valor.");
     
     const customer = customers.find(c => c.id === newTrans.customerId);
     const booking = bookings.find(b => b.id === newTrans.bookingId);
@@ -38,15 +67,22 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
       customerName: customer?.name || '',
       serviceName: booking?.serviceName || '',
       procedureDate: booking?.dateTime || '',
-      paidAt: newTrans.status === 'paid' ? new Date().toISOString() : null,
-      createdAt: new Date().toISOString()
+      paidAt: newTrans.status === 'paid' ? (new Date().toISOString()) : null,
+      updatedAt: new Date().toISOString()
     };
 
     try {
       if (!(db as any)._isMock) {
-        await addDoc(collection(db, "transactions"), transData);
+        if (editingId) {
+          await updateDoc(doc(db, "transactions", editingId), transData);
+        } else {
+          await addDoc(collection(db, "transactions"), {
+            ...transData,
+            createdAt: new Date().toISOString()
+          });
+        }
         
-        // Vínculo inteligente: Atualiza agendamento se for um recebimento liquidado
+        // Vínculo inteligente: Se for um agendamento sendo pago agora
         if (newTrans.bookingId && newTrans.status === 'paid' && newTrans.type === 'receivable') {
           const bookingRef = doc(db, "bookings", newTrans.bookingId);
           await updateDoc(bookingRef, { 
@@ -57,7 +93,12 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
           });
         }
       }
-      setShowAddForm(false);
+
+      if (editingId && onUpdate) {
+        onUpdate(editingId, transData);
+      }
+
+      setShowForm(false);
       resetForm();
     } catch (error) {
       console.error("Erro ao salvar transação:", error);
@@ -66,6 +107,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setNewTrans({ 
       type: 'receivable', 
       description: '', 
@@ -92,7 +134,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
           <h2 className="text-3xl font-bold text-tea-950 font-serif italic">Caixa Moriá</h2>
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Ganhos e Despesas</p>
         </div>
-        <button onClick={() => setShowAddForm(true)} className="w-full md:w-auto bg-tea-900 text-white px-10 py-5 rounded-2xl font-bold uppercase text-[11px] tracking-widest hover:bg-black transition-all shadow-xl">+ Lançar Movimentação</button>
+        <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto bg-tea-900 text-white px-10 py-5 rounded-2xl font-bold uppercase text-[11px] tracking-widest hover:bg-black transition-all shadow-xl">+ Lançar Movimentação</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -122,8 +164,8 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
               <tr>
                 <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Data</th>
                 <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Descrição</th>
-                <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Procedimento</th>
                 <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Valor</th>
+                <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -132,20 +174,31 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
                   <td className="px-10 py-8 text-xs font-bold text-gray-500">{new Date(t.date).toLocaleDateString()}</td>
                   <td className="px-10 py-8">
                     <p className="font-bold text-tea-950 text-sm">{t.description}</p>
-                    {t.customerName && <p className="text-[9px] text-tea-600 font-bold uppercase mt-1 tracking-tighter">{t.customerName}</p>}
-                  </td>
-                  <td className="px-10 py-8">
-                    {t.serviceName ? (
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-bold text-gray-700">{t.serviceName}</p>
-                        <p className="text-[8px] text-gray-400 font-bold uppercase italic">{t.procedureDate}</p>
-                      </div>
-                    ) : (
-                      <span className="text-gray-300 italic text-[10px]">Lançamento Avulso</span>
-                    )}
+                    <div className="flex gap-2 mt-1">
+                      {t.customerName && <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter">{t.customerName}</p>}
+                      {t.status === 'pending' && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>}
+                    </div>
                   </td>
                   <td className={`px-10 py-8 text-right font-bold text-base ${t.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
                     {t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}
+                  </td>
+                  <td className="px-10 py-8 text-center">
+                    <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEdit(t)} 
+                        className="p-2 bg-tea-50 text-tea-700 rounded-lg hover:bg-tea-100 transition-colors"
+                        title="Editar"
+                      >
+                        ✏️
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(t.id)} 
+                        className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                        title="Excluir"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -157,10 +210,12 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
         </div>
       </div>
 
-      {showAddForm && (
+      {showForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 shadow-3xl space-y-8 max-h-[90vh] overflow-y-auto custom-scroll">
-            <h3 className="text-3xl font-serif text-tea-950 font-bold italic text-center">Novo Lançamento</h3>
+            <h3 className="text-3xl font-serif text-tea-950 font-bold italic text-center">
+              {editingId ? 'Editar Lançamento' : 'Novo Lançamento'}
+            </h3>
             
             <div className="space-y-6">
                <div className="flex bg-gray-100 p-1.5 rounded-2xl">
@@ -170,7 +225,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
 
                <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Descrição</label>
-                  <input type="text" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" placeholder="Ex: Procedimento Estético ou Luz" />
+                  <input type="text" value={newTrans.description} onChange={e => setNewTrans({...newTrans, description: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner border-2 border-transparent focus:border-tea-100 focus:bg-white" placeholder="Ex: Procedimento Estético ou Aluguel" />
                </div>
 
                <div className="grid grid-cols-2 gap-5">
@@ -184,6 +239,18 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
                   </div>
                </div>
 
+               <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Status do Pagamento</label>
+                  <select 
+                    value={newTrans.status} 
+                    onChange={e => setNewTrans({...newTrans, status: e.target.value as 'paid' | 'pending'})}
+                    className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner"
+                  >
+                    <option value="paid">Confirmado (Já recebido/pago)</option>
+                    <option value="pending">Pendente (A receber/pagar)</option>
+                  </select>
+               </div>
+
                {newTrans.type === 'receivable' && (
                  <div className="p-8 bg-tea-50/50 rounded-[2.5rem] border border-tea-100 space-y-5">
                     <p className="text-[10px] font-bold text-tea-900 uppercase tracking-widest text-center mb-2">Vincular Cliente & Agenda</p>
@@ -194,7 +261,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
                       ))}
                     </div>
 
-                    {newTrans.customerId && (
+                    {newTrans.customerId && !editingId && (
                       <div className="space-y-2 animate-fade-in pt-4 border-t border-tea-100">
                         <label className="text-[10px] font-bold text-gray-400 uppercase ml-2">Qual agendamento foi pago?</label>
                         <select value={newTrans.bookingId} onChange={e => setNewTrans({...newTrans, bookingId: e.target.value})} className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-[11px] outline-none font-bold appearance-none">
@@ -209,8 +276,10 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, cus
                )}
 
                <div className="pt-6 space-y-4">
-                 <button onClick={handleSave} className="w-full py-6 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[11px] tracking-widest shadow-2xl hover:bg-black transition-all transform active:scale-95">Salvar e Baixar Agenda</button>
-                 <button onClick={() => setShowAddForm(false)} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
+                 <button onClick={handleSave} className="w-full py-6 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[11px] tracking-widest shadow-2xl hover:bg-black transition-all transform active:scale-95">
+                    {editingId ? 'Confirmar Alterações' : 'Salvar e Registrar'}
+                 </button>
+                 <button onClick={() => { setShowForm(false); resetForm(); }} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
                </div>
             </div>
           </div>
