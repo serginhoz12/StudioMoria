@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, TeamMember } from './types.ts';
+import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
 import { db } from './firebase.ts';
 import { 
@@ -10,7 +10,9 @@ import {
   setDoc, 
   addDoc, 
   updateDoc, 
-  deleteDoc
+  deleteDoc,
+  increment,
+  getDoc
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -27,16 +29,15 @@ import AdminConfirmations from './components/AdminConfirmations.tsx';
 import AdminSettingsView from './components/AdminSettingsView.tsx';
 import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
-import AdminVeo from './components/AdminVeo.tsx';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [loggedAdminMember, setLoggedAdminMember] = useState<TeamMember | null>(null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
-  const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
+  const [services, setServices] = useState<Service[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -45,42 +46,25 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
   useEffect(() => {
-    // SE ESTIVERMOS NO EDITOR (MOCK), PULAMOS O FIREBASE E CARREGAMOS O VISUAL
-    if (db._isMock) {
-      console.log("Modo Visual Ativado: Dados locais carregados.");
-      setIsLoading(false);
-      return;
-    }
-
-    const savedUser = localStorage.getItem('moria_user_session');
-    if (savedUser) setCurrentUser(JSON.parse(savedUser));
-    
-    const savedAdmin = localStorage.getItem('moria_admin_session');
-    if (savedAdmin) {
-      setLoggedAdminMember(JSON.parse(savedAdmin));
-      setIsAdmin(true);
-    }
-
-    // Monitoramento Firestore Real (apenas se disponível)
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
-        const remoteSettings = snap.data() as SalonSettings;
-        setSettings(prev => ({ ...prev, ...remoteSettings }));
+        setSettings(snap.data() as SalonSettings);
         setIsLoading(false);
       } else {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
       }
-    }, () => setIsLoading(false));
+    });
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
-      if (!snapshot.empty) {
-        setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
+      const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
+      if (data.length === 0 && !isLoading) {
+        INITIAL_SERVICES.forEach(s => setDoc(doc(db, "services", s.id), s));
       }
+      setServices(data);
     });
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-      const allCustomers = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
-      setCustomers(allCustomers);
+      setCustomers(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
     });
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
@@ -105,112 +89,180 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // Lógica de Renderização e Eventos...
-  const handleAdminLogin = (member: TeamMember) => {
-    setLoggedAdminMember(member);
-    setIsAdmin(true);
-    localStorage.setItem('moria_admin_session', JSON.stringify(member));
-    setCurrentView(View.ADMIN_DASHBOARD);
-  };
+  useEffect(() => {
+    if (!isLoading && currentView === View.CUSTOMER_HOME) {
+      updateDoc(doc(db, "settings", "main"), {
+        visitCount: increment(1)
+      }).catch(() => {});
+    }
+  }, [isLoading, currentView]);
 
-  const handleAdminLogout = () => {
-    setLoggedAdminMember(null);
-    setIsAdmin(false);
-    localStorage.removeItem('moria_admin_session');
-    setCurrentView(View.CUSTOMER_HOME);
-  };
+  useEffect(() => {
+    const savedUser = localStorage.getItem('moria_user_session');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed && typeof parsed === 'object') setCurrentUser(parsed);
+      } catch (e) { console.error("Error loading session"); }
+    }
+    if (localStorage.getItem('moria_admin_session') === 'true') setIsAdminAuthenticated(true);
+  }, []);
 
-  const handleCustomerLogin = (id: string, pass: string) => {
-    const cleanId = id.replace(/\D/g, ''); 
-    const user = customers.find(c => {
-      const uCpf = (c.cpf || '').replace(/\D/g, '');
-      const uWa = (c.whatsapp || '').replace(/\D/g, '');
-      return (uCpf === cleanId || uWa === cleanId) && c.password === pass;
-    });
-
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem('moria_user_session', JSON.stringify(user));
-      setCurrentView(View.CUSTOMER_DASHBOARD);
+  useEffect(() => {
+    if (currentUser) {
+      const cleanUser = {
+        id: currentUser.id,
+        name: currentUser.name,
+        whatsapp: currentUser.whatsapp,
+        cpf: currentUser.cpf,
+        profilePhoto: currentUser.profilePhoto,
+        receivesNotifications: !!currentUser.receivesNotifications
+      };
+      localStorage.setItem('moria_user_session', JSON.stringify(cleanUser));
     } else {
-      alert("Acesso não encontrado. Verifique seu CPF/WhatsApp ou sua senha.");
+      localStorage.removeItem('moria_user_session');
+    }
+    localStorage.setItem('moria_admin_session', isAdminAuthenticated.toString());
+  }, [currentUser, isAdminAuthenticated]);
+
+  const handleRegister = async (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => {
+    if (customers.some(c => c.cpf === cpf)) {
+      alert("Este CPF já está cadastrado.");
+      return;
+    }
+    const id = Math.random().toString(36).substr(2, 9);
+    const newCustomer: Customer = { id, name, whatsapp, cpf, password, receivesNotifications, agreedToTerms: true, history: [] };
+    await setDoc(doc(db, "customers", id), newCustomer);
+    setCurrentUser(newCustomer);
+    setCurrentView(View.CUSTOMER_DASHBOARD);
+  };
+
+  const handleLogin = (cpf: string, pass: string) => {
+    const user = customers.find(c => c.cpf === cpf && c.password === pass);
+    if (user) { setCurrentUser(user); setCurrentView(View.CUSTOMER_DASHBOARD); }
+    else alert("Dados incorretos.");
+  };
+
+  const handleBook = async (sid: string, dt: string, mid: string) => {
+    if (!currentUser) { setCurrentView(View.CUSTOMER_LOGIN); return; }
+    const srv = services.find(s => s.id === sid);
+    const booking = {
+      customerId: currentUser.id,
+      customerName: currentUser.name,
+      serviceId: sid,
+      serviceName: srv?.name || '',
+      dateTime: dt,
+      duration: srv?.duration || 30,
+      status: 'pending',
+      depositStatus: 'pending',
+      teamMemberId: mid,
+      teamMemberName: settings.teamMembers.find(m => m.id === mid)?.name,
+      agreedToCancellationPolicy: true,
+      policyAgreedAt: new Date().toISOString()
+    };
+    await addDoc(collection(db, "bookings"), booking);
+  };
+
+  const handleAddToWaitlist = async (sid: string, dt: string) => {
+    if (!currentUser) return;
+    const srv = services.find(s => s.id === sid);
+    await addDoc(collection(db, "waitlist"), {
+      customerId: currentUser.id,
+      customerName: currentUser.name,
+      customerWhatsapp: currentUser.whatsapp,
+      serviceId: sid,
+      serviceName: srv?.name || '',
+      preferredDate: dt,
+      status: 'active',
+      createdAt: new Date().toISOString()
+    });
+  };
+
+  const handleUpdateStatus = async (id: string, status: any) => {
+    const updateData: any = { status };
+    if (status === 'cancelled') updateData.cancelledAt = new Date().toISOString();
+    await updateDoc(doc(db, "bookings", id), updateData);
+  };
+
+  const handleUpdateDeposit = async (id: string, depositStatus: 'paid' | 'pending') => {
+    await updateDoc(doc(db, "bookings", id), { depositStatus });
+  };
+
+  const handleCancelBooking = async (id: string) => {
+    if (confirm("Deseja cancelar este agendamento? O registro será mantido no histórico da equipe.")) {
+      await updateDoc(doc(db, "bookings", id), { 
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString()
+      });
     }
   };
+
+  const handleCancelWaitlist = async (id: string) => {
+    await updateDoc(doc(db, "waitlist", id), { 
+      status: 'cancelled',
+      cancelledAt: new Date().toISOString()
+    });
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    if (confirm("ATENÇÃO: Isso excluirá PERMANENTEMENTE o cadastro da cliente e seu acesso ao app. Deseja continuar?")) {
+      await deleteDoc(doc(db, "customers", id));
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-tea-950 flex flex-col items-center justify-center space-y-6">
+        <div className="w-16 h-16 border-4 border-tea-400 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-center">
+           <p className="text-tea-100 font-serif italic text-xl animate-pulse">Sincronizando Studio Moriá...</p>
+        </div>
+      </div>
+    );
+  }
 
   const renderView = () => {
     if (isAdmin) {
-      if (!loggedAdminMember) return <AdminLogin teamMembers={settings.teamMembers} onLogin={handleAdminLogin} onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} />;
-      
+      if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
-        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} loggedMember={loggedAdminMember} />;
-        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} loggedMember={loggedAdminMember} />;
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} waitlist={waitlist} onUpdateStatus={(id, s) => !db._isMock && updateDoc(doc(db, "bookings", id), {status: s})} onUpdateDeposit={(id, d) => !db._isMock && updateDoc(doc(db, "bookings", id), {depositStatus: d})} onDeleteBooking={(id) => !db._isMock && deleteDoc(doc(db, "bookings", id))} onRemoveWaitlist={(id) => !db._isMock && deleteDoc(doc(db, "waitlist", id))} />;
-        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => !db._isMock && deleteDoc(doc(db, "customers", id))} onUpdate={(id, d) => !db._isMock && updateDoc(doc(db, "customers", id), d)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={async (d) => { if(!db._isMock) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !db._isMock && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !db._isMock && deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
+        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} />;
+        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={handleCancelBooking} waitlist={waitlist} onRemoveWaitlist={handleCancelWaitlist} onReactivateWaitlist={(id) => updateDoc(doc(db, "waitlist", id), { status: 'active', cancelledAt: null })} />;
+        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={handleDeleteCustomer} onUpdate={(id, data) => updateDoc(doc(db, "customers", id), data)} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
-        case View.ADMIN_VEO: return <AdminVeo />;
-        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} loggedMember={loggedAdminMember} />;
+        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} />;
       }
     }
 
-    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_PROFILE)) {
-       if (currentView === View.CUSTOMER_PROFILE) return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => !db._isMock && updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
+    if (currentUser && currentView === View.CUSTOMER_DASHBOARD) {
        return (
          <CustomerDashboard 
             customer={currentUser} 
             bookings={bookings} 
             services={services}
             settings={settings}
-            onBook={() => {}}
-            onUpdateProfile={(upd) => !db._isMock && updateDoc(doc(db, "customers", currentUser.id), upd)}
-            onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }}
-            onCancelBooking={(id) => !db._isMock && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
-            onAddToWaitlist={(srvId, date) => !db._isMock && addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
-            waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
-            onRemoveWaitlist={(id) => !db._isMock && deleteDoc(doc(db, "waitlist", id))}
+            onBook={handleBook}
+            onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
+            onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
+            onCancelBooking={handleCancelBooking}
+            onAddToWaitlist={handleAddToWaitlist}
+            waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
+            onRemoveWaitlist={handleCancelWaitlist}
             promotions={promotions}
          />
        );
     }
 
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return (
-        <CustomerRegister 
-          onRegister={async (n, w, c, p, not) => {
-            if (db._isMock) return alert("Modo visual: Cadastro simulado.");
-            try {
-              const newCustomer = {
-                name: n, whatsapp: w, cpf: c, password: p, receivesNotifications: not,
-                agreedToTerms: true, history: [], createdAt: new Date().toISOString()
-              };
-              const docRef = await addDoc(collection(db, "customers"), newCustomer);
-              const userWithId = { ...newCustomer, id: docRef.id } as Customer;
-              setCurrentUser(userWithId);
-              localStorage.setItem('moria_user_session', JSON.stringify(userWithId));
-              setCurrentView(View.CUSTOMER_DASHBOARD);
-            } catch (err) {
-              alert("Erro ao realizar cadastro.");
-            }
-          }} 
-          customers={customers} 
-          onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
-        />
-      );
-      case View.CUSTOMER_LOGIN: return (
-        <CustomerLoginView 
-          onLogin={handleCustomerLogin} 
-          onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} 
-          onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
-        />
-      );
+      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={handleRegister} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={handleLogin} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
       default: return (
         <CustomerHome 
-          settings={settings} 
-          services={services} 
-          bookings={bookings} 
-          onBook={() => {}} 
+          settings={settings} services={services} bookings={bookings} 
+          onBook={handleBook} 
           onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} 
-          onAddToWaitlist={() => {}} 
+          onAddToWaitlist={handleAddToWaitlist} 
           currentUser={currentUser} 
         />
       );
@@ -220,30 +272,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-white">
       {currentView !== View.CUSTOMER_DASHBOARD && (
-        <Navbar 
-          view={currentView} 
-          setView={setCurrentView} 
-          isAdmin={isAdmin} 
-          onToggleAdmin={() => { 
-            if (isAdmin) handleAdminLogout();
-            else { setCurrentView(View.ADMIN_LOGIN); setIsAdmin(true); }
-          }} 
-          salonName={settings.name} 
-          logo={settings.logo} 
-          currentUser={currentUser} 
-          onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }} 
-          onAdminLogout={handleAdminLogout} 
-          isAdminAuthenticated={!!loggedAdminMember} 
-          pendingBookingsCount={bookings.filter(b => b.status === 'pending').length}
-        />
+        <Navbar view={currentView} setView={setCurrentView} isAdmin={isAdmin} onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setCurrentView(View.ADMIN_LOGIN); else setCurrentView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} salonName={settings.name} logo={settings.logo} currentUser={currentUser} onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }} onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} isAdminAuthenticated={isAdminAuthenticated} pendingBookingsCount={bookings.filter(b => b.status === 'pending').length} />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-40 gap-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-600"></div>
-            <p className="text-tea-800 font-serif italic">Studio Moriá Estética...</p>
-          </div>
-        ) : renderView()}
+        {renderView()}
       </main>
     </div>
   );

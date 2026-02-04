@@ -1,5 +1,5 @@
 
-import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -12,23 +12,5 @@ const firebaseConfig = {
   measurementId: "G-WR9LLBT9HE"
 };
 
-// Singleton para o App
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-
-// Inicialização segura para ambiente de Preview/Editor
-let dbInstance: any;
-
-try {
-  // Tenta inicializar o Firestore real
-  dbInstance = getFirestore(app);
-  dbInstance._isMock = false;
-} catch (e) {
-  console.warn("Firestore inacessível no editor. Ativando modo visual-only.");
-  // Mock mínimo para não quebrar as referências no App.tsx
-  dbInstance = {
-    _isMock: true,
-    type: 'firestore-demo'
-  };
-}
-
-export const db = dbInstance;
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);

@@ -15,18 +15,11 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   name: "Studio Moriá Estética",
   primaryColor: "tea", 
   logo: "https://lh3.googleusercontent.com/d/15KFidcKVQniucz9tEtmgKWLLKttnrGgd",
-  address: "Rua Santa Monica, Sítio Novo - Cubatão SP",
+  address: "Rua Santa Monica, Sítio Novo - Cubatão SP, próximo ao material de construção do Fabio",
   googleMapsLink: "https://www.google.com/maps/search/?api=1&query=-23.9004600,-46.4425140",
   lastUpdated: Date.now(),
   teamMembers: [
-    { 
-      id: 'tm1', 
-      name: "Moriá (Proprietária)", 
-      username: "admin",
-      role: 'owner', 
-      password: "460206",
-      assignedServiceIds: [] // Somente administrativa, sem serviços atribuídos
-    }
+    { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
   ],
   businessHours: {
     start: "08:00",

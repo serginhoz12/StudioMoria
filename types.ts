@@ -12,8 +12,7 @@ export enum View {
   ADMIN_CLIENTS = 'ADMIN_CLIENTS',
   ADMIN_CONFIRMATIONS = 'ADMIN_CONFIRMATIONS',
   ADMIN_SETTINGS = 'ADMIN_SETTINGS',
-  ADMIN_MARKETING = 'ADMIN_MARKETING',
-  ADMIN_VEO = 'ADMIN_VEO'
+  ADMIN_MARKETING = 'ADMIN_MARKETING'
 }
 
 export interface Customer {
@@ -47,9 +46,6 @@ export interface BusinessHours {
 export interface TeamMember {
   id: string;
   name: string;
-  username: string;
-  password?: string;
-  role: 'owner' | 'staff';
   assignedServiceIds: string[];
   businessHours?: BusinessHours;
   offDays?: number[]; 
@@ -59,14 +55,13 @@ export interface Booking {
   id: string;
   customerId: string;
   customerName: string;
-  customerWhatsapp?: string;
   serviceId: string;
   serviceName: string;
   teamMemberId?: string;
   teamMemberName?: string;
   dateTime: string;
   duration: number;
-  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked' | 'liberated';
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
   depositStatus: 'pending' | 'paid'; 
   rescheduledCount?: number; 
   agreedToCancellationPolicy: boolean;
@@ -118,7 +113,6 @@ export interface Transaction {
   status: 'pending' | 'paid';
   customerId?: string;
   customerName?: string;
-  teamMemberId?: string; 
   promotionId?: string;
   paidAt?: string;
 }
