@@ -27,6 +27,7 @@ import AdminConfirmations from './components/AdminConfirmations.tsx';
 import AdminSettingsView from './components/AdminSettingsView.tsx';
 import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
+import AdminVeo from './components/AdminVeo.tsx';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
@@ -44,28 +45,19 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
   useEffect(() => {
+    const savedUser = localStorage.getItem('moria_user_session');
+    if (savedUser) setCurrentUser(JSON.parse(savedUser));
+    
+    const savedAdmin = localStorage.getItem('moria_admin_session');
+    if (savedAdmin) {
+      setLoggedAdminMember(JSON.parse(savedAdmin));
+      setIsAdmin(true);
+    }
+
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         const remoteSettings = snap.data() as SalonSettings;
-        
-        let team = remoteSettings.teamMembers || [];
-        const masterAdmin = team.find(m => m.id === 'tm1') || DEFAULT_SETTINGS.teamMembers[0];
-        const otherMembers = team.filter(m => m.id !== 'tm1');
-        
-        // Mantém a Moriá sempre como tm1 e garante que ela não tenha serviços se for apenas admin
-        const correctedTeam = [
-          { 
-            ...masterAdmin, 
-            id: 'tm1', 
-            username: 'admin', 
-            password: '460206', 
-            role: 'owner' as const,
-            assignedServiceIds: masterAdmin.assignedServiceIds || [] 
-          },
-          ...otherMembers
-        ];
-
-        setSettings({ ...remoteSettings, teamMembers: correctedTeam });
+        setSettings(prev => ({ ...prev, ...remoteSettings }));
         setIsLoading(false);
       } else {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
@@ -73,12 +65,19 @@ const App: React.FC = () => {
     });
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
-      const data = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service));
-      setServices(data);
+      setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
     });
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
-      setCustomers(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
+      const allCustomers = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
+      setCustomers(allCustomers);
+      
+      const savedUser = localStorage.getItem('moria_user_session');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        const updated = allCustomers.find(c => c.id === parsed.id);
+        if (updated) setCurrentUser(updated);
+      }
     });
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
@@ -117,6 +116,24 @@ const App: React.FC = () => {
     setCurrentView(View.CUSTOMER_HOME);
   };
 
+  const handleCustomerLogin = (id: string, pass: string) => {
+    const cleanId = id.replace(/\D/g, ''); 
+    
+    const user = customers.find(c => {
+      const uCpf = (c.cpf || '').replace(/\D/g, '');
+      const uWa = (c.whatsapp || '').replace(/\D/g, '');
+      return (uCpf === cleanId || uWa === cleanId) && c.password === pass;
+    });
+
+    if (user) {
+      setCurrentUser(user);
+      localStorage.setItem('moria_user_session', JSON.stringify(user));
+      setCurrentView(View.CUSTOMER_DASHBOARD);
+    } else {
+      alert("Acesso não encontrado. Verifique seu CPF/WhatsApp ou sua senha.");
+    }
+  };
+
   const renderView = () => {
     if (isAdmin) {
       if (!loggedAdminMember) return <AdminLogin teamMembers={settings.teamMembers} onLogin={handleAdminLogin} onBack={() => { setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} />;
@@ -126,13 +143,15 @@ const App: React.FC = () => {
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} loggedMember={loggedAdminMember} />;
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} waitlist={waitlist} onUpdateStatus={(id, s) => updateDoc(doc(db, "bookings", id), {status: s})} onUpdateDeposit={(id, d) => updateDoc(doc(db, "bookings", id), {depositStatus: d})} onDeleteBooking={(id) => deleteDoc(doc(db, "bookings", id))} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, d) => updateDoc(doc(db, "customers", id), d)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={(d) => addDoc(collection(db, "transactions"), d)} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={async (d) => { await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
+        case View.ADMIN_VEO: return <AdminVeo />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} loggedMember={loggedAdminMember} />;
       }
     }
 
-    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN)) {
+    if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_PROFILE)) {
+       if (currentView === View.CUSTOMER_PROFILE) return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
        return (
          <CustomerDashboard 
             customer={currentUser} 
@@ -146,16 +165,51 @@ const App: React.FC = () => {
             onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
             onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
+            promotions={promotions}
          />
        );
     }
 
     switch (currentView) {
-      case View.CUSTOMER_REGISTER: return <CustomerRegister onRegister={(n, w, c, p, not) => {}} customers={customers} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
-      case View.CUSTOMER_LOGIN: return <CustomerLoginView onLogin={(c, p) => {}} onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} onBack={() => setCurrentView(View.CUSTOMER_HOME)} />;
+      case View.CUSTOMER_REGISTER: return (
+        <CustomerRegister 
+          onRegister={async (n, w, c, p, not) => {
+            try {
+              const newCustomer = {
+                name: n,
+                whatsapp: w,
+                cpf: c,
+                password: p,
+                receivesNotifications: not,
+                agreedToTerms: true,
+                history: [],
+                createdAt: new Date().toISOString()
+              };
+              const docRef = await addDoc(collection(db, "customers"), newCustomer);
+              const userWithId = { ...newCustomer, id: docRef.id } as Customer;
+              setCurrentUser(userWithId);
+              localStorage.setItem('moria_user_session', JSON.stringify(userWithId));
+              setCurrentView(View.CUSTOMER_DASHBOARD);
+            } catch (err) {
+              alert("Erro ao realizar cadastro. Tente novamente.");
+            }
+          }} 
+          customers={customers} 
+          onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
+        />
+      );
+      case View.CUSTOMER_LOGIN: return (
+        <CustomerLoginView 
+          onLogin={handleCustomerLogin} 
+          onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} 
+          onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
+        />
+      );
       default: return (
         <CustomerHome 
-          settings={settings} services={services} bookings={bookings} 
+          settings={settings} 
+          services={services} 
+          bookings={bookings} 
           onBook={() => {}} 
           onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} 
           onAddToWaitlist={() => {}} 
@@ -182,12 +236,14 @@ const App: React.FC = () => {
           onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }} 
           onAdminLogout={handleAdminLogout} 
           isAdminAuthenticated={!!loggedAdminMember} 
+          pendingBookingsCount={bookings.filter(b => b.status === 'pending').length}
         />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-40">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-900"></div>
+          <div className="flex flex-col items-center justify-center py-40 gap-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-tea-600"></div>
+            <p className="text-tea-800 font-serif italic">Studio Moriá Estética...</p>
           </div>
         ) : renderView()}
       </main>

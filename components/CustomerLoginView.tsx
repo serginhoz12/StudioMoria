@@ -2,13 +2,13 @@
 import React, { useState } from 'react';
 
 interface CustomerLoginViewProps {
-  onLogin: (cpf: string, pass: string) => void;
+  onLogin: (id: string, pass: string) => void;
   onRegisterClick: () => void;
   onBack: () => void;
 }
 
 const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegisterClick, onBack }) => {
-  const [cpf, setCpf] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -16,14 +16,10 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
     e.preventDefault();
     setError(null);
     
-    if (cpf && password) {
-      try {
-        onLogin(cpf, password);
-      } catch (err: any) {
-        setError(err.message || "Erro ao tentar acessar. Verifique seus dados.");
-      }
+    if (loginId && password) {
+      onLogin(loginId, password);
     } else {
-      setError("Por favor, preencha CPF e Senha.");
+      setError("Por favor, preencha seus dados de acesso.");
     }
   };
 
@@ -31,19 +27,20 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-gray-50">
       <div className="max-w-md w-full bg-white rounded-[3rem] shadow-2xl p-10 md:p-14 border border-tea-50 animate-slide-up">
         <div className="text-center mb-10">
-          <h2 className="text-3xl font-serif text-tea-900 mb-2">Bem-vinda de volta!</h2>
-          <p className="text-gray-500 font-light text-sm italic">Acesse seu perfil e extrato do Studio Moriá.</p>
+          <div className="w-20 h-20 bg-tea-50 text-tea-900 rounded-[2rem] flex items-center justify-center text-4xl mx-auto mb-6 shadow-inner">🌿</div>
+          <h2 className="text-3xl font-serif text-tea-900 mb-2 italic">Bem-vinda de volta!</h2>
+          <p className="text-gray-500 font-light text-sm italic">Acesse seu perfil do Studio Moriá usando seu CPF ou WhatsApp.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Seu CPF</label>
+            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">CPF ou WhatsApp</label>
             <input 
               type="text" 
-              placeholder="000.000.000-00"
+              placeholder="Digite seu CPF ou Celular"
               className={`w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 outline-none transition-all text-gray-800 ${error ? 'border-red-200 bg-red-50' : 'border-transparent focus:border-tea-200 focus:bg-white'}`}
-              value={cpf}
-              onChange={(e) => setCpf(e.target.value)}
+              value={loginId}
+              onChange={(e) => setLoginId(e.target.value)}
               required
             />
           </div>
@@ -67,7 +64,7 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
 
           <button 
             type="submit"
-            className="w-full bg-[#23492d] text-white py-5 rounded-2xl font-bold text-lg hover:bg-tea-900 transition-all shadow-xl shadow-tea-100 mt-4"
+            className="w-full bg-tea-900 text-white py-5 rounded-2xl font-bold text-lg hover:bg-tea-950 transition-all shadow-xl shadow-tea-100 mt-4 uppercase tracking-widest text-sm"
           >
             Entrar no Perfil
           </button>
@@ -77,7 +74,7 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
           <p className="text-sm text-gray-500 mb-4">Ainda não é cadastrada?</p>
           <button 
             onClick={onRegisterClick}
-            className="text-tea-600 font-bold hover:underline"
+            className="text-tea-600 font-bold hover:underline uppercase text-[10px] tracking-widest"
           >
             Criar minha conta agora
           </button>
@@ -85,7 +82,7 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
 
         <button 
           onClick={onBack}
-          className="mt-6 w-full text-xs text-gray-400 font-bold hover:text-gray-600 transition-colors"
+          className="mt-6 w-full text-[10px] text-gray-400 font-bold hover:text-gray-600 transition-colors uppercase tracking-widest"
         >
           Voltar para o site
         </button>

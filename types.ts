@@ -12,7 +12,8 @@ export enum View {
   ADMIN_CLIENTS = 'ADMIN_CLIENTS',
   ADMIN_CONFIRMATIONS = 'ADMIN_CONFIRMATIONS',
   ADMIN_SETTINGS = 'ADMIN_SETTINGS',
-  ADMIN_MARKETING = 'ADMIN_MARKETING'
+  ADMIN_MARKETING = 'ADMIN_MARKETING',
+  ADMIN_VEO = 'ADMIN_VEO'
 }
 
 export interface Customer {
@@ -46,7 +47,7 @@ export interface BusinessHours {
 export interface TeamMember {
   id: string;
   name: string;
-  username: string; // Novo campo para login digitado
+  username: string;
   password?: string;
   role: 'owner' | 'staff';
   assignedServiceIds: string[];
@@ -58,6 +59,7 @@ export interface Booking {
   id: string;
   customerId: string;
   customerName: string;
+  customerWhatsapp?: string;
   serviceId: string;
   serviceName: string;
   teamMemberId?: string;
