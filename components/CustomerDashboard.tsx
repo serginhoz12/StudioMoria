@@ -57,7 +57,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ customer, booking
                 <button key={s.id} onClick={() => setSelectedService(s)} className={`w-full p-8 rounded-[2.5rem] border-2 transition-all flex justify-between items-center ${selectedService?.id === s.id ? 'bg-tea-50 border-tea-500' : 'bg-white border-gray-50'}`}>
                    <div className="text-left">
                       <p className="font-bold text-tea-950 text-lg">{s.name}</p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">R$ {s.price.toFixed(2)} • {s.duration}min</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">A partir de R$ {s.price.toFixed(2)} • {s.duration}min</p>
                    </div>
                    <div className="text-2xl">🌿</div>
                 </button>

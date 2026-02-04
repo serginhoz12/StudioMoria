@@ -235,7 +235,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               <select className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.category} onChange={e => setNewService({...newService, category: e.target.value})}>
                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
-              <input type="number" placeholder="Preço R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
+              <input type="number" placeholder="Preço Inicial R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
               <input type="number" placeholder="Duração (minutos)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
            </div>
            <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar no Catálogo</button>
@@ -257,7 +257,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     <p className="font-bold text-lg text-tea-950">{s.name}</p>
                     <span className="text-[8px] bg-tea-100 text-tea-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{s.category}</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">R$ {s.price.toFixed(2)} • {s.duration} min</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">A partir de R$ {s.price.toFixed(2)} • {s.duration} min</p>
                 </div>
               </div>
               <div className="flex gap-2 items-center">
@@ -286,7 +286,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     </select>
                  </div>
                  <div className="space-y-1">
-                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Preço R$</label>
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Preço Inicial R$</label>
                     <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
                  </div>
               </div>

@@ -95,9 +95,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               </div>
               <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
                 <div>
-                   <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">Investimento</p>
-                   {/* Preço oculto conforme solicitado */}
-                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">Valor para Clientes</span>
+                   <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">Investimento Inicial</p>
+                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">A partir de R$ {service.price.toFixed(2)}</span>
                 </div>
                 <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
               </div>
@@ -204,8 +203,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                     <p className="text-xl font-serif text-tea-900 font-bold italic">{selectedServiceDetail.duration} min</p>
                  </div>
                  <div className="p-6 bg-tea-900 rounded-3xl text-white">
-                    <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor</p>
-                    <p className="text-sm font-bold uppercase tracking-widest">Para Clientes</p>
+                    <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor Inicial</p>
+                    <p className="text-sm font-bold uppercase tracking-widest">A partir de R$ {selectedServiceDetail.price.toFixed(2)}</p>
                  </div>
               </div>
             </div>
@@ -215,7 +214,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                  onClick={() => { onAuthClick(); setSelectedServiceDetail(null); }} 
                  className="w-full py-6 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
                >
-                 Ver Valor & Agendar
+                 Ver Horários & Agendar
                </button>
                <button 
                  onClick={() => setSelectedServiceDetail(null)} 
