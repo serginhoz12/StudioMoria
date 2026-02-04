@@ -36,7 +36,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
-  const [services, setServices] = useState<Service[]>([]);
+  const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -45,6 +45,13 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<Customer | null>(null);
 
   useEffect(() => {
+    // SE ESTIVERMOS NO EDITOR (MOCK), PULAMOS O FIREBASE E CARREGAMOS O VISUAL
+    if (db._isMock) {
+      console.log("Modo Visual Ativado: Dados locais carregados.");
+      setIsLoading(false);
+      return;
+    }
+
     const savedUser = localStorage.getItem('moria_user_session');
     if (savedUser) setCurrentUser(JSON.parse(savedUser));
     
@@ -54,6 +61,7 @@ const App: React.FC = () => {
       setIsAdmin(true);
     }
 
+    // Monitoramento Firestore Real (apenas se disponível)
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         const remoteSettings = snap.data() as SalonSettings;
@@ -62,22 +70,17 @@ const App: React.FC = () => {
       } else {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
       }
-    });
+    }, () => setIsLoading(false));
 
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
-      setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
+      if (!snapshot.empty) {
+        setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
+      }
     });
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       const allCustomers = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer));
       setCustomers(allCustomers);
-      
-      const savedUser = localStorage.getItem('moria_user_session');
-      if (savedUser) {
-        const parsed = JSON.parse(savedUser);
-        const updated = allCustomers.find(c => c.id === parsed.id);
-        if (updated) setCurrentUser(updated);
-      }
     });
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
@@ -102,6 +105,7 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // Lógica de Renderização e Eventos...
   const handleAdminLogin = (member: TeamMember) => {
     setLoggedAdminMember(member);
     setIsAdmin(true);
@@ -118,7 +122,6 @@ const App: React.FC = () => {
 
   const handleCustomerLogin = (id: string, pass: string) => {
     const cleanId = id.replace(/\D/g, ''); 
-    
     const user = customers.find(c => {
       const uCpf = (c.cpf || '').replace(/\D/g, '');
       const uWa = (c.whatsapp || '').replace(/\D/g, '');
@@ -141,9 +144,9 @@ const App: React.FC = () => {
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} loggedMember={loggedAdminMember} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} loggedMember={loggedAdminMember} />;
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} waitlist={waitlist} onUpdateStatus={(id, s) => updateDoc(doc(db, "bookings", id), {status: s})} onUpdateDeposit={(id, d) => updateDoc(doc(db, "bookings", id), {depositStatus: d})} onDeleteBooking={(id) => deleteDoc(doc(db, "bookings", id))} onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))} />;
-        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => deleteDoc(doc(db, "customers", id))} onUpdate={(id, d) => updateDoc(doc(db, "customers", id), d)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={async (d) => { await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} waitlist={waitlist} onUpdateStatus={(id, s) => !db._isMock && updateDoc(doc(db, "bookings", id), {status: s})} onUpdateDeposit={(id, d) => !db._isMock && updateDoc(doc(db, "bookings", id), {depositStatus: d})} onDeleteBooking={(id) => !db._isMock && deleteDoc(doc(db, "bookings", id))} onRemoveWaitlist={(id) => !db._isMock && deleteDoc(doc(db, "waitlist", id))} />;
+        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} onDelete={(id) => !db._isMock && deleteDoc(doc(db, "customers", id))} onUpdate={(id, d) => !db._isMock && updateDoc(doc(db, "customers", id), d)} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} onAdd={async (d) => { if(!db._isMock) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !db._isMock && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !db._isMock && deleteDoc(doc(db, "transactions", id))} customers={customers} services={services} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
         case View.ADMIN_VEO: return <AdminVeo />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} settings={settings} loggedMember={loggedAdminMember} />;
@@ -151,7 +154,7 @@ const App: React.FC = () => {
     }
 
     if (currentUser && (currentView === View.CUSTOMER_DASHBOARD || currentView === View.CUSTOMER_LOGIN || currentView === View.CUSTOMER_PROFILE)) {
-       if (currentView === View.CUSTOMER_PROFILE) return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
+       if (currentView === View.CUSTOMER_PROFILE) return <CustomerProfile customer={currentUser} transactions={transactions} bookings={bookings} onUpdateNotification={(v) => !db._isMock && updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: v })} onBack={() => setCurrentView(View.CUSTOMER_DASHBOARD)} />;
        return (
          <CustomerDashboard 
             customer={currentUser} 
@@ -159,12 +162,12 @@ const App: React.FC = () => {
             services={services}
             settings={settings}
             onBook={() => {}}
-            onUpdateProfile={(upd) => updateDoc(doc(db, "customers", currentUser.id), upd)}
+            onUpdateProfile={(upd) => !db._isMock && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); localStorage.removeItem('moria_user_session'); setCurrentView(View.CUSTOMER_HOME); }}
-            onCancelBooking={(id) => updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
-            onAddToWaitlist={(srvId, date) => addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
+            onCancelBooking={(id) => !db._isMock && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
+            onAddToWaitlist={(srvId, date) => !db._isMock && addDoc(collection(db, "waitlist"), { customerId: currentUser.id, customerName: currentUser.name, customerWhatsapp: currentUser.whatsapp, serviceId: srvId, serviceName: services.find(s=>s.id===srvId)?.name, preferredDate: date, status: 'active', createdAt: new Date().toISOString() })}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id)}
-            onRemoveWaitlist={(id) => deleteDoc(doc(db, "waitlist", id))}
+            onRemoveWaitlist={(id) => !db._isMock && deleteDoc(doc(db, "waitlist", id))}
             promotions={promotions}
          />
        );
@@ -174,16 +177,11 @@ const App: React.FC = () => {
       case View.CUSTOMER_REGISTER: return (
         <CustomerRegister 
           onRegister={async (n, w, c, p, not) => {
+            if (db._isMock) return alert("Modo visual: Cadastro simulado.");
             try {
               const newCustomer = {
-                name: n,
-                whatsapp: w,
-                cpf: c,
-                password: p,
-                receivesNotifications: not,
-                agreedToTerms: true,
-                history: [],
-                createdAt: new Date().toISOString()
+                name: n, whatsapp: w, cpf: c, password: p, receivesNotifications: not,
+                agreedToTerms: true, history: [], createdAt: new Date().toISOString()
               };
               const docRef = await addDoc(collection(db, "customers"), newCustomer);
               const userWithId = { ...newCustomer, id: docRef.id } as Customer;
@@ -191,7 +189,7 @@ const App: React.FC = () => {
               localStorage.setItem('moria_user_session', JSON.stringify(userWithId));
               setCurrentView(View.CUSTOMER_DASHBOARD);
             } catch (err) {
-              alert("Erro ao realizar cadastro. Tente novamente.");
+              alert("Erro ao realizar cadastro.");
             }
           }} 
           customers={customers} 
