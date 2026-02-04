@@ -39,8 +39,8 @@ export interface Service {
 }
 
 export interface BusinessHours {
-  start: string; // HH:mm
-  end: string;   // HH:mm
+  start: string; 
+  end: string;   
 }
 
 export interface TeamMember {
@@ -59,9 +59,9 @@ export interface Booking {
   serviceName: string;
   teamMemberId?: string;
   teamMemberName?: string;
-  dateTime: string;
+  dateTime: string; // ISO format
   duration: number;
-  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked';
+  status: 'pending' | 'scheduled' | 'completed' | 'cancelled' | 'blocked' | 'open'; 
   depositStatus: 'pending' | 'paid'; 
   rescheduledCount?: number; 
   agreedToCancellationPolicy: boolean;
@@ -73,6 +73,8 @@ export interface Booking {
   originalPrice?: number;
   discountApplied?: number;
   finalPrice?: number;
+  paymentReceived?: number;
+  paymentDate?: string;
 }
 
 export interface Transaction {
@@ -81,14 +83,13 @@ export interface Transaction {
   description: string;
   amount: number;
   date: string;
-  dueDate?: string;
+  dueDate?: string; // Added to fix missing property error
   status: 'pending' | 'paid';
   customerId?: string;
   customerName?: string;
   bookingId?: string;
   serviceName?: string;
   procedureDate?: string;
-  promotionId?: string;
   paidAt?: string;
 }
 
@@ -102,18 +103,18 @@ export interface WaitlistEntry {
   preferredDate: string;
   status: 'active' | 'cancelled' | 'notified';
   createdAt: string;
-  cancelledAt?: string | null;
 }
 
+// Added Promotion interface to fix import errors
 export interface Promotion {
   id: string;
   title: string;
   content: string;
   type: 'promotion' | 'tip';
-  discountPercentage: number; 
-  applicableServiceIds: string[]; 
-  linkedServiceId?: string; 
-  targetCustomerIds: string[]; 
+  discountPercentage: number;
+  linkedServiceId?: string;
+  applicableServiceIds: string[];
+  targetCustomerIds: string[];
   startDate: string;
   endDate: string;
   createdAt: string;
@@ -127,18 +128,18 @@ export interface SalonSettings {
   address?: string;
   googleMapsLink?: string;
   lastUpdated: number;
-  visitCount?: number;
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
   agendaOpenUntil?: string;
+  // Added missing properties to fix SalonSettings assignment errors
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
-  usefulLinks?: { label: string; url: string }[];
-  comments?: { author: string; text: string }[];
-  photos?: string[];
   socialLinks: {
-    instagram: string;
-    facebook: string;
+    instagram?: string;
+    facebook?: string;
     whatsapp: string;
   };
+  usefulLinks?: { label: string; url: string; }[];
+  comments?: { author: string; text: string; }[];
+  photos?: string[];
 }

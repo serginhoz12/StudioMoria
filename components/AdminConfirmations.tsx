@@ -1,150 +1,110 @@
 
 import React, { useState } from 'react';
-import { Booking, Customer, WaitlistEntry } from '../types';
+import { Booking, Customer, WaitlistEntry, Service } from '../types';
+import { db } from '../firebase.ts';
+import { collection, addDoc, deleteDoc, doc } from "firebase/firestore";
 
 interface AdminConfirmationsProps {
   bookings: Booking[];
   customers: Customer[];
-  onUpdateStatus: (id: string, status: 'scheduled' | 'cancelled' | 'completed') => void;
-  onUpdateDeposit: (id: string, status: 'paid' | 'pending') => void;
-  onDeleteBooking: (id: string) => void;
   waitlist: WaitlistEntry[];
-  onRemoveWaitlist: (id: string) => void;
-  onReactivateWaitlist?: (id: string) => void;
+  services: Service[];
+  onUpdateStatus?: (id: string, status: any) => void;
+  onUpdateDeposit?: (id: string, status: any) => void;
+  onDeleteBooking?: (id: string) => void;
+  onRemoveWaitlist?: (id: string) => void;
 }
 
-const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ 
-  bookings, 
-  onUpdateStatus, 
-  onUpdateDeposit, 
-  onDeleteBooking,
-  waitlist = [], 
-  onRemoveWaitlist,
-  onReactivateWaitlist
-}) => {
-  const [activeTab, setActiveTab] = useState<'pending' | 'waitlist' | 'history'>('pending');
-  
-  const pending = bookings.filter(b => b.status === 'pending');
-  const activeWaitlist = waitlist.filter(w => w.status !== 'cancelled');
-  const cancelledBookings = bookings.filter(b => b.status === 'cancelled');
+const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services }) => {
+  const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
+  const [showWaitlistForm, setShowWaitlistForm] = useState(false);
+  const [manualEntry, setManualEntry] = useState({ name: '', whatsapp: '', serviceId: '', date: '' });
 
-  const openWhatsApp = (whatsapp: string, message: string) => {
-    const cleanPhone = whatsapp.replace(/\D/g, '');
-    window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank');
+  const handleAddManualWaitlist = async () => {
+    if (!manualEntry.name || !manualEntry.whatsapp || !manualEntry.serviceId) return alert("Preencha todos os campos.");
+    
+    const service = services.find(s => s.id === manualEntry.serviceId);
+    
+    await addDoc(collection(db, "waitlist"), {
+      customerName: manualEntry.name,
+      customerWhatsapp: manualEntry.whatsapp,
+      serviceId: manualEntry.serviceId,
+      serviceName: service?.name || '',
+      preferredDate: manualEntry.date,
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      customerId: 'manual'
+    });
+
+    setShowWaitlistForm(false);
+    setManualEntry({ name: '', whatsapp: '', serviceId: '', date: '' });
   };
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div className="flex flex-wrap gap-3 border-b border-gray-100 pb-4 overflow-x-auto no-scrollbar">
-        <button onClick={() => setActiveTab('pending')} className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-tea-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Pedidos Pendentes ({pending.length})</button>
-        <button onClick={() => setActiveTab('waitlist')} className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'waitlist' ? 'bg-orange-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Lista de Espera ({activeWaitlist.length})</button>
-        <button onClick={() => setActiveTab('history')} className={`px-6 py-3 rounded-full text-[9px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-red-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}>Histórico / Cancelados</button>
+    <div className="space-y-8 animate-fade-in pb-20">
+      <div className="flex gap-4 border-b border-gray-100 pb-4">
+        <button onClick={() => setActiveTab('pending')} className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'pending' ? 'bg-tea-900 text-white' : 'bg-gray-100 text-gray-400'}`}>Pedidos Site</button>
+        <button onClick={() => setActiveTab('waitlist')} className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'waitlist' ? 'bg-tea-900 text-white' : 'bg-gray-100 text-gray-400'}`}>Lista de Espera</button>
       </div>
 
       {activeTab === 'pending' && (
-        <div className="grid grid-cols-1 gap-6">
-          {pending.map(booking => (
-            <div key={booking.id} className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100 flex flex-col md:flex-row justify-between items-center gap-10 hover:border-tea-200 transition-all group relative overflow-hidden">
-              {booking.agreedToCancellationPolicy && (
-                <div className="absolute top-0 right-10 bg-tea-900 text-white px-6 py-1.5 rounded-b-2xl text-[8px] font-bold uppercase tracking-[0.2em] shadow-sm">
-                  Ciente da Taxa ✓
-                </div>
-              )}
-              
-              <div className="flex items-center gap-8">
-                <div className="w-24 h-24 bg-tea-50 rounded-[2.5rem] flex items-center justify-center text-tea-700 text-4xl font-serif font-bold group-hover:bg-tea-100 transition-colors">{booking.customerName.charAt(0)}</div>
-                <div className="space-y-2">
-                  <h3 className="text-2xl font-bold text-gray-800">{booking.customerName}</h3>
-                  <div className="flex flex-wrap gap-3 mt-2">
-                    <span className="text-[10px] text-tea-600 font-bold uppercase tracking-widest bg-tea-50 px-4 py-1.5 rounded-full border border-tea-100">{booking.serviceName}</span>
-                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest border border-gray-100 px-4 py-1.5 rounded-full">🗓️ {booking.dateTime}</span>
-                  </div>
+        <div className="space-y-6">
+          {bookings.filter(b => b.status === 'pending').map(b => (
+            <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6">
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center font-bold text-2xl">{b.customerName.charAt(0)}</div>
+                <div>
+                   <h3 className="text-xl font-bold text-tea-950">{b.customerName}</h3>
+                   <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{b.serviceName} • {b.dateTime}</p>
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto items-center">
-                {booking.depositStatus !== 'paid' && (
-                  <button 
-                    onClick={() => onUpdateDeposit(booking.id, 'paid')}
-                    className="px-8 py-4 bg-white border-2 border-orange-200 text-orange-700 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-orange-50 transition-all"
-                  >
-                    Confirmar Sinal
-                  </button>
-                )}
-                <button 
-                  onClick={() => onUpdateStatus(booking.id, 'scheduled')} 
-                  className={`px-10 py-5 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl transition-all ${booking.depositStatus === 'paid' ? 'bg-tea-800 text-white hover:bg-tea-950' : 'bg-gray-200 text-gray-400'}`}
-                >
-                  Aprovar Agenda
-                </button>
+              <div className="flex gap-4">
+                 <button className="px-6 py-3 bg-tea-800 text-white rounded-xl font-bold uppercase text-[9px] tracking-widest">Aprovar</button>
+                 <button className="px-6 py-3 bg-red-50 text-red-500 rounded-xl font-bold uppercase text-[9px] tracking-widest">Recusar</button>
               </div>
             </div>
           ))}
-          {pending.length === 0 && <p className="text-center py-24 text-gray-300 italic font-serif text-lg">Nenhum pedido aguardando sua análise.</p>}
+          {bookings.filter(b => b.status === 'pending').length === 0 && <p className="text-center py-20 opacity-30 italic">Nenhum pedido pendente.</p>}
         </div>
       )}
 
       {activeTab === 'waitlist' && (
-        <div className="grid grid-cols-1 gap-6 animate-slide-up">
-           {activeWaitlist.map(entry => (
-             <div key={entry.id} className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-orange-50 flex flex-col md:flex-row justify-between items-center gap-10 relative overflow-hidden group">
-                <div className="absolute top-0 right-10 bg-orange-500 text-white px-6 py-1.5 rounded-b-2xl text-[8px] font-bold uppercase tracking-[0.2em]">
-                  Em Espera ✨
-                </div>
-
-                <div className="flex items-center gap-8">
-                  <div className="w-24 h-24 bg-orange-50 rounded-[2.5rem] flex items-center justify-center text-orange-600 text-4xl font-serif font-bold">{entry.customerName.charAt(0)}</div>
-                  <div className="space-y-2">
-                    <h3 className="text-2xl font-bold text-gray-800">{entry.customerName}</h3>
-                    <div className="flex flex-wrap gap-3 mt-2">
-                       <span className="text-[10px] text-orange-700 font-bold uppercase tracking-widest bg-orange-50 px-4 py-1.5 rounded-full border border-orange-100">{entry.serviceName}</span>
-                       <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest border border-gray-100 px-4 py-1.5 rounded-full italic">Preferencia: {entry.preferredDate}</span>
-                    </div>
-                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-2">Registrado em: {new Date(entry.createdAt).toLocaleDateString()}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                   <button 
-                     onClick={() => openWhatsApp(entry.customerWhatsapp, `Olá ${entry.customerName}! Aqui é do Studio Moriá. Vimos que você está na nossa lista de espera para ${entry.serviceName}. Surgiu uma vaga, você tem interesse?`)}
-                     className="px-8 py-4 bg-orange-600 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-orange-700 transition-all flex items-center justify-center gap-2"
-                   >
-                     📱 Chamar Cliente
-                   </button>
-                   <button 
-                     onClick={() => onRemoveWaitlist(entry.id)}
-                     className="px-8 py-4 bg-white border-2 border-gray-100 text-gray-400 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:border-red-200 hover:text-red-500 transition-all"
-                   >
-                     Remover
-                   </button>
-                </div>
-             </div>
-           ))}
-           {activeWaitlist.length === 0 && <p className="text-center py-24 text-gray-300 italic font-serif text-lg">Nenhuma cliente na lista de espera no momento.</p>}
-        </div>
-      )}
-
-      {activeTab === 'history' && (
-        <div className="space-y-12">
-           <section>
-              <h4 className="text-[10px] font-bold text-red-900 uppercase tracking-[0.3em] mb-6 ml-4">Cancelados (Histórico para Auditoria)</h4>
-              <div className="grid grid-cols-1 gap-4">
-                {cancelledBookings.map(b => (
-                  <div key={b.id} className="bg-white p-8 rounded-[2.5rem] border border-red-50 flex justify-between items-center shadow-sm">
-                    <div className="flex items-center gap-6">
-                      <div className="text-3xl opacity-20">🚫</div>
-                      <div>
-                        <p className="font-bold text-gray-800 text-lg">{b.customerName}</p>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{b.serviceName} • {b.dateTime}</p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                       <p className="text-[8px] font-bold text-red-400 uppercase tracking-widest">Data do Cancelamento:</p>
-                       <p className="text-[10px] text-red-800 font-bold">{b.cancelledAt ? new Date(b.cancelledAt).toLocaleString() : 'Não registrado'}</p>
-                    </div>
-                  </div>
-                ))}
+        <div className="space-y-6">
+          <div className="flex justify-between items-center px-4">
+             <h3 className="text-xl font-serif font-bold text-tea-950 italic">Interesses de Encaixe</h3>
+             <button onClick={() => setShowWaitlistForm(true)} className="bg-tea-900 text-white px-6 py-3 rounded-xl font-bold uppercase text-[9px] tracking-widest">+ Adicionar Nome</button>
+          </div>
+          
+          <div className="grid grid-cols-1 gap-4">
+            {waitlist.map(w => (
+              <div key={w.id} className="bg-white p-8 rounded-[3rem] border border-orange-50 flex justify-between items-center shadow-sm">
+                 <div>
+                    <h4 className="font-bold text-tea-950">{w.customerName}</h4>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{w.serviceName} • Deseja em: {w.preferredDate}</p>
+                 </div>
+                 <button className="text-[9px] font-bold text-tea-700 uppercase hover:underline">📱 Chamar WhatsApp</button>
               </div>
-           </section>
+            ))}
+          </div>
+
+          {showWaitlistForm && (
+            <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+              <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-3xl space-y-6">
+                 <h3 className="text-2xl font-serif text-tea-950 font-bold italic text-center">Inclusão Manual na Espera</h3>
+                 <div className="space-y-4">
+                    <input placeholder="Nome da Cliente" value={manualEntry.name} onChange={e => setManualEntry({...manualEntry, name: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold" />
+                    <input placeholder="WhatsApp" value={manualEntry.whatsapp} onChange={e => setManualEntry({...manualEntry, whatsapp: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold" />
+                    <select value={manualEntry.serviceId} onChange={e => setManualEntry({...manualEntry, serviceId: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold">
+                       <option value="">Qual o procedimento?</option>
+                       {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    <input type="date" value={manualEntry.date} onChange={e => setManualEntry({...manualEntry, date: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold" />
+                    <button onClick={handleAddManualWaitlist} className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl">Salvar na Lista</button>
+                    <button onClick={() => setShowWaitlistForm(false)} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px]">Cancelar</button>
+                 </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
