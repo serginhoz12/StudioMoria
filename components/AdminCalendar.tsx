@@ -120,7 +120,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setModal({ open: false, hour: '', type: 'free' });
   };
 
-  const handleManualBooking = async () => {
+  const handleManualBooking = async (overrideHour?: string) => {
+    const hour = overrideHour || modal.hour;
     const customer = customers.find(c => c.id === selectedCustomerId);
     const service = services.find(s => s.id === selectedServiceId);
     if (!customer || !service) return alert("Selecione cliente e serviço.");
@@ -133,7 +134,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         serviceName: service.name,
         teamMemberId: selectedProId,
         teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
-        dateTime: `${selectedDate} ${modal.hour}`,
+        dateTime: `${selectedDate} ${hour}`,
         duration: service.duration,
         status: 'scheduled',
         depositStatus: 'paid',
@@ -142,8 +143,41 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       });
     }
     setModal({ open: false, hour: '', type: 'free' });
-    // Use the newly defined resetForm function
     resetForm();
+  };
+
+  const handleCompleteBooking = async (booking: Booking) => {
+    if (!(db as any)._isMock) {
+      try {
+        // 1. Update booking status
+        await updateDoc(doc(db, "bookings", booking.id), {
+          status: 'completed',
+          paymentReceived: services.find(s => s.id === booking.serviceId)?.price || 0,
+          paymentDate: new Date().toISOString()
+        });
+
+        // 2. Create transaction
+        await addDoc(collection(db, "transactions"), {
+          type: 'receivable',
+          description: `Atendimento: ${booking.serviceName} - ${booking.customerName}`,
+          amount: services.find(s => s.id === booking.serviceId)?.price || 0,
+          date: booking.dateTime.split(' ')[0],
+          status: 'paid',
+          customerId: booking.customerId,
+          customerName: booking.customerName,
+          bookingId: booking.id,
+          serviceName: booking.serviceName,
+          procedureDate: booking.dateTime,
+          paidAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        });
+
+        alert("Atendimento concluído e lançado no caixa!");
+      } catch (e) {
+        alert("Erro ao concluir atendimento.");
+      }
+    }
+    setModal({ open: false, hour: '', type: 'free' });
   };
 
   return (
@@ -174,6 +208,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             className="flex-1 bg-gray-100 text-gray-400 px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-red-50 hover:text-red-500 transition-all disabled:opacity-50"
           >
             Bloquear Dia
+          </button>
+          <button 
+            onClick={() => setModal({ open: true, hour: 'Extra', type: 'free' })} 
+            className="flex-1 bg-tea-950 text-white px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-lg"
+          >
+            + Lançar Extra
           </button>
         </div>
       </div>
@@ -234,6 +274,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                 <div className="p-8 bg-gray-50 rounded-[2.5rem] space-y-5 border border-gray-100">
                   <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center border-b border-gray-200 pb-3">Agendar Manualmente</p>
                   
+                  {modal.hour === 'Extra' && (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Horário do Atendimento</label>
+                      <input 
+                        type="time" 
+                        defaultValue={new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        onChange={e => setModal({...modal, hour: e.target.value})}
+                        className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold"
+                      />
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <input 
                       type="text" 
@@ -295,12 +347,21 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                      <p className="font-serif text-2xl font-bold italic">{getSlotData(modal.hour).booking?.customerName}</p>
                      <p className="text-xs text-tea-100 mt-2 font-medium">{getSlotData(modal.hour).booking?.serviceName}</p>
                   </div>
-                  <button 
-                    onClick={() => handleCloseSlot(getSlotData(modal.hour).booking!.id)} 
-                    className="w-full py-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-all"
-                  >
-                    Cancelar Agendamento
-                  </button>
+                  
+                  <div className="grid grid-cols-1 gap-3">
+                    <button 
+                      onClick={() => handleCompleteBooking(getSlotData(modal.hour).booking!)} 
+                      className="w-full py-5 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-200 transition-all shadow-md"
+                    >
+                      ✅ Concluir Atendimento
+                    </button>
+                    <button 
+                      onClick={() => handleCloseSlot(getSlotData(modal.hour).booking!.id)} 
+                      className="w-full py-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-all"
+                    >
+                      Cancelar Agendamento
+                    </button>
+                  </div>
                </div>
             )}
 

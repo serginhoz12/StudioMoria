@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Booking, Customer, WaitlistEntry, Service } from '../types';
+import { Booking, Customer, WaitlistEntry, Service, TeamMember } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
@@ -9,17 +9,80 @@ interface AdminConfirmationsProps {
   customers: Customer[];
   waitlist: WaitlistEntry[];
   services: Service[];
+  teamMembers: TeamMember[];
   onUpdateStatus?: (id: string, status: any) => void;
   onUpdateDeposit?: (id: string, status: any) => void;
   onDeleteBooking?: (id: string) => void;
   onRemoveWaitlist?: (id: string) => void;
 }
 
-const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, onUpdateStatus }) => {
+const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, teamMembers, onUpdateStatus }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WaitlistEntry | null>(null);
   const [manualEntry, setManualEntry] = useState({ name: '', whatsapp: '', serviceId: '', date: '' });
+  
+  const [performingService, setPerformingService] = useState<WaitlistEntry | null>(null);
+  const [performanceData, setPerformanceData] = useState({
+    teamMemberId: teamMembers[0]?.id || '',
+    date: new Date().toISOString().split('T')[0],
+    time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    price: 0
+  });
+
+  const handleCompleteService = async () => {
+    if (!performingService || !performanceData.teamMemberId || !performanceData.price) return alert("Preencha todos os campos.");
+
+    const teamMember = teamMembers.find(m => m.id === performanceData.teamMemberId);
+    const service = services.find(s => s.id === performingService.serviceId);
+    
+    try {
+      if (!(db as any)._isMock) {
+        // 1. Create completed booking
+        const bookingRef = await addDoc(collection(db, "bookings"), {
+          customerId: performingService.customerId || 'manual',
+          customerName: performingService.customerName,
+          serviceId: performingService.serviceId,
+          serviceName: performingService.serviceName,
+          teamMemberId: performanceData.teamMemberId,
+          teamMemberName: teamMember?.name || '',
+          dateTime: `${performanceData.date} ${performanceData.time}`,
+          duration: service?.duration || 30,
+          status: 'completed',
+          depositStatus: 'paid',
+          paymentReceived: performanceData.price,
+          paymentDate: new Date().toISOString(),
+          agreedToCancellationPolicy: true,
+          policyAgreedAt: new Date().toISOString()
+        });
+
+        // 2. Create transaction
+        await addDoc(collection(db, "transactions"), {
+          type: 'receivable',
+          description: `Atendimento: ${performingService.serviceName} - ${performingService.customerName}`,
+          amount: performanceData.price,
+          date: performanceData.date,
+          status: 'paid',
+          customerId: performingService.customerId || 'manual',
+          customerName: performingService.customerName,
+          bookingId: bookingRef.id,
+          serviceName: performingService.serviceName,
+          procedureDate: `${performanceData.date} ${performanceData.time}`,
+          paidAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        });
+
+        // 3. Remove from waitlist
+        await deleteDoc(doc(db, "waitlist", performingService.id));
+      }
+      
+      setPerformingService(null);
+      alert("Atendimento registrado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao registrar atendimento:", error);
+      alert("Erro ao salvar. Tente novamente.");
+    }
+  };
 
   const handleAddManualWaitlist = async () => {
     if (!manualEntry.name || !manualEntry.whatsapp || !manualEntry.serviceId) return alert("Preencha todos os campos.");
@@ -164,33 +227,48 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                         </div>
                       </div>
                    </div>
-                   <div className="mt-8 pt-4 border-t border-gray-50 flex justify-between items-center relative z-10">
-                      <div className="flex gap-4">
-                        <a 
-                          href={`https://wa.me/${w.customerWhatsapp.replace(/\D/g, '')}`} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="text-[9px] font-bold text-tea-800 uppercase tracking-widest hover:underline"
-                        >
-                          📱 Whats
-                        </a>
+                   <div className="mt-8 pt-4 border-t border-gray-50 flex flex-col gap-4 relative z-10">
+                      <button 
+                        onClick={() => {
+                          const service = services.find(s => s.id === w.serviceId);
+                          setPerformingService(w);
+                          setPerformanceData({
+                            ...performanceData,
+                            price: service?.price || 0
+                          });
+                        }}
+                        className="w-full py-3 bg-tea-900 text-white rounded-xl font-bold uppercase text-[9px] tracking-widest hover:bg-black transition-all shadow-md"
+                      >
+                        ✨ Realizar Atendimento
+                      </button>
+                      <div className="flex justify-between items-center">
+                        <div className="flex gap-4">
+                          <a 
+                            href={`https://wa.me/${w.customerWhatsapp.replace(/\D/g, '')}`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="text-[9px] font-bold text-tea-800 uppercase tracking-widest hover:underline"
+                          >
+                            📱 Whats
+                          </a>
+                          <button 
+                            onClick={() => setEditingEntry(w)}
+                            className="text-[9px] font-bold text-gray-400 uppercase tracking-widest hover:text-tea-900"
+                          >
+                            Editar
+                          </button>
+                        </div>
                         <button 
-                          onClick={() => setEditingEntry(w)}
-                          className="text-[9px] font-bold text-gray-400 uppercase tracking-widest hover:text-tea-900"
+                          onClick={async () => {
+                            if (confirm("Remover esta cliente da lista de espera?")) {
+                              !(db as any)._isMock && await deleteDoc(doc(db, "waitlist", w.id));
+                            }
+                          }}
+                          className="text-[9px] font-bold text-red-200 uppercase hover:text-red-500 transition-colors"
                         >
-                          Editar
+                          Excluir
                         </button>
                       </div>
-                      <button 
-                        onClick={async () => {
-                          if (confirm("Remover esta cliente da lista de espera?")) {
-                            !(db as any)._isMock && await deleteDoc(doc(db, "waitlist", w.id));
-                          }
-                        }}
-                        className="text-[9px] font-bold text-red-200 uppercase hover:text-red-500 transition-colors"
-                      >
-                        Excluir
-                      </button>
                    </div>
                 </div>
               );
@@ -201,6 +279,62 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                </div>
             )}
           </div>
+
+          {/* Modal Realizar Atendimento */}
+          {performingService && (
+            <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+              <div className="bg-white w-full max-w-md rounded-[3.5rem] p-12 shadow-3xl space-y-8 animate-slide-up">
+                 <div className="text-center">
+                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic">Registrar Atendimento</h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">{performingService.customerName}</p>
+                 </div>
+                 
+                 <div className="space-y-5">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Profissional</label>
+                      <select 
+                        value={performanceData.teamMemberId} 
+                        onChange={e => setPerformanceData({...performanceData, teamMemberId: e.target.value})} 
+                        className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner appearance-none"
+                      >
+                         {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      </select>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Data</label>
+                        <input type="date" value={performanceData.date} onChange={e => setPerformanceData({...performanceData, date: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Hora</label>
+                        <input type="time" value={performanceData.time} onChange={e => setPerformanceData({...performanceData, time: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Valor Recebido (R$)</label>
+                      <input 
+                        type="number" 
+                        value={performanceData.price} 
+                        onChange={e => setPerformanceData({...performanceData, price: parseFloat(e.target.value)})} 
+                        className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-lg text-tea-900 shadow-inner" 
+                      />
+                    </div>
+                    
+                    <div className="pt-4 space-y-3">
+                      <button 
+                        onClick={handleCompleteService} 
+                        className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+                      >
+                        Concluir e Lançar no Caixa
+                      </button>
+                      <button onClick={() => setPerformingService(null)} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
+                    </div>
+                 </div>
+              </div>
+            </div>
+          )}
 
           {/* Modal Adicionar Cliente Manualmente na Espera */}
           {showWaitlistForm && (
