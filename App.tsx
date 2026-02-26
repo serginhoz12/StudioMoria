@@ -104,6 +104,18 @@ const App: React.FC = () => {
   }, [isAdminAuthenticated, currentUser]);
 
   useEffect(() => {
+    const handleGlobalPermissionError = () => {
+      if (!isMockMode) {
+        console.warn("Global permission error detected. Entering Demo Mode.");
+        setIsMockMode(true);
+        (db as any)._isMock = true;
+      }
+    };
+    window.addEventListener('moria_permission_denied', handleGlobalPermissionError);
+    return () => window.removeEventListener('moria_permission_denied', handleGlobalPermissionError);
+  }, [isMockMode]);
+
+  useEffect(() => {
     // FIX: Using (db as any) to check _isMock property which is not part of standard Firestore type
     if (isMockMode) {
       console.log("Modo Visual: Firestore Mock Ativo.");
@@ -124,18 +136,6 @@ const App: React.FC = () => {
         console.error(`Error fetching ${collectionName}:`, error);
       }
     };
-
-    useEffect(() => {
-      const handleGlobalPermissionError = () => {
-        if (!isMockMode) {
-          console.warn("Global permission error detected. Entering Demo Mode.");
-          setIsMockMode(true);
-          (db as any)._isMock = true;
-        }
-      };
-      window.addEventListener('moria_permission_denied', handleGlobalPermissionError);
-      return () => window.removeEventListener('moria_permission_denied', handleGlobalPermissionError);
-    }, [isMockMode]);
 
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
