@@ -13,8 +13,17 @@ interface AdminFinanceProps {
   onDelete?: (id: string) => void;
 }
 
-const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions, bookings, customers, onUpdate, onDelete }) => {
+const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactions, bookings, customers, onUpdate, onDelete }) => {
   const [showForm, setShowForm] = useState(false);
+  
+  // Identificar ID do cliente de teste
+  const testCustomerId = useMemo(() => customers.find(c => c.cpf === '33426618877')?.id, [customers]);
+
+  // Filtrar transações de teste
+  const transactions = useMemo(() => {
+    return allTransactions.filter(t => !testCustomerId || t.customerId !== testCustomerId);
+  }, [allTransactions, testCustomerId]);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState({
     type: 'receivable' as 'payable' | 'receivable',

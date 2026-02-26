@@ -27,11 +27,14 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
     password: ''
   });
 
-  const filtered = customers.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
-    c.whatsapp.includes(search) ||
-    c.cpf.includes(search)
-  );
+  const filtered = customers.filter(c => {
+    const isTestUser = c.cpf.replace(/\D/g, '') === '33426618877';
+    if (isTestUser) return false;
+    
+    return c.name.toLowerCase().includes(search.toLowerCase()) || 
+           c.whatsapp.includes(search) ||
+           c.cpf.includes(search);
+  });
 
   const handleEditClick = () => {
     if (selectedCustomer) {

@@ -36,6 +36,7 @@ export interface Service {
   category: string; 
   isVisible: boolean;
   isHighlighted?: boolean;
+  returnPeriodDays?: number; // Periodicidade de retorno em dias
 }
 
 export interface BusinessHours {

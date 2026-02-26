@@ -94,6 +94,28 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
   };
 
+  const lastProcedure = useMemo(() => {
+    return bookings
+      .filter(b => b.customerId === customer.id && b.status === 'completed')
+      .sort((a, b) => b.dateTime.localeCompare(a.dateTime))[0];
+  }, [bookings, customer.id]);
+
+  const nextEstimate = useMemo(() => {
+    if (!lastProcedure) return null;
+    const service = services.find(s => s.id === lastProcedure.serviceId);
+    if (!service || !service.returnPeriodDays) return null;
+
+    const lastDate = new Date(lastProcedure.dateTime.split(' ')[0] + 'T00:00:00');
+    const estimateDate = new Date(lastDate);
+    estimateDate.setDate(lastDate.getDate() + service.returnPeriodDays);
+    
+    return {
+      date: estimateDate,
+      serviceName: service.name,
+      isOverdue: estimateDate < new Date()
+    };
+  }, [lastProcedure, services]);
+
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in font-sans">
       <header className="bg-gradient-to-b from-tea-900 to-tea-950 pt-16 pb-28 px-8 rounded-b-[5rem] shadow-2xl relative overflow-hidden">
@@ -234,6 +256,34 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
         {activeTab === 'home' && (
           <div className="space-y-8 animate-slide-up">
+             {nextEstimate && (
+               <div className={`p-8 rounded-[3.5rem] border shadow-xl space-y-4 relative overflow-hidden transition-all ${nextEstimate.isOverdue ? 'bg-orange-50 border-orange-200' : 'bg-white border-tea-100'}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-tea-800 uppercase tracking-widest">Seu último cuidado</p>
+                      <h4 className="text-xl font-serif font-bold text-tea-950 italic leading-tight">{nextEstimate.serviceName}</h4>
+                    </div>
+                    <div className="text-3xl">✨</div>
+                  </div>
+                  
+                  <div className="pt-4 border-t border-tea-50 space-y-3">
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      {nextEstimate.isOverdue 
+                        ? "Já passou do tempo ideal para refazer seu procedimento! Que tal agendar agora?" 
+                        : `Sua estimativa de retorno para este procedimento é dia ${nextEstimate.date.toLocaleDateString()}.`}
+                    </p>
+                    {nextEstimate.isOverdue && (
+                      <button 
+                        onClick={() => setActiveTab('agendar')}
+                        className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-black transition-all"
+                      >
+                        Agendar Retorno Agora
+                      </button>
+                    )}
+                  </div>
+               </div>
+             )}
+
              {promotions.filter(p => p.isActive).length > 0 && (
                <div className="space-y-4">
                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-4">Destaques para Você</h4>

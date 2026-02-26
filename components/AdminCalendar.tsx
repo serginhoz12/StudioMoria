@@ -295,7 +295,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold" 
                     />
                     <div className="max-h-28 overflow-y-auto space-y-1 custom-scroll pr-2">
-                      {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).slice(0, 5).map(c => (
+                      {customers.filter(c => {
+                        const isMatch = c.name.toLowerCase().includes(customerSearch.toLowerCase());
+                        const isTestUser = c.cpf.replace(/\D/g, '') === '33426618877';
+                        return isMatch && !isTestUser;
+                      }).slice(0, 5).map(c => (
                         <button key={c.id} onClick={() => { setSelectedCustomerId(c.id); setCustomerSearch(c.name); }} className={`w-full p-3 text-left text-[10px] rounded-xl font-bold transition-all ${selectedCustomerId === c.id ? 'bg-tea-900 text-white' : 'bg-white hover:bg-tea-50 text-gray-600'}`}>
                           {c.name}
                         </button>

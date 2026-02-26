@@ -276,7 +276,13 @@ const App: React.FC = () => {
           salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
           onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }} 
           onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} 
-          isAdminAuthenticated={isAdminAuthenticated} pendingBookingsCount={bookings.filter(b => b.status === 'pending').length} 
+          isAdminAuthenticated={isAdminAuthenticated} 
+          pendingBookingsCount={bookings.filter(b => {
+            const isPending = b.status === 'pending';
+            const testCustomer = customers.find(c => c.cpf.replace(/\D/g, '') === '33426618877');
+            const isTestUser = testCustomer && b.customerId === testCustomer.id;
+            return isPending && !isTestUser;
+          }).length} 
         />
       )}
       <main className={currentView === View.CUSTOMER_DASHBOARD ? "" : "max-w-7xl mx-auto px-4 py-8"}>

@@ -25,16 +25,17 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [performingService, setPerformingService] = useState<WaitlistEntry | null>(null);
   const [performanceData, setPerformanceData] = useState({
     teamMemberId: teamMembers[0]?.id || '',
+    serviceId: '',
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     price: 0
   });
 
   const handleCompleteService = async () => {
-    if (!performingService || !performanceData.teamMemberId || !performanceData.price) return alert("Preencha todos os campos.");
+    if (!performingService || !performanceData.teamMemberId || !performanceData.serviceId || !performanceData.price) return alert("Preencha todos os campos.");
 
     const teamMember = teamMembers.find(m => m.id === performanceData.teamMemberId);
-    const service = services.find(s => s.id === performingService.serviceId);
+    const service = services.find(s => s.id === performanceData.serviceId);
     
     try {
       if (!(db as any)._isMock) {
@@ -42,8 +43,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
         const bookingRef = await addDoc(collection(db, "bookings"), {
           customerId: performingService.customerId || 'manual',
           customerName: performingService.customerName,
-          serviceId: performingService.serviceId,
-          serviceName: performingService.serviceName,
+          serviceId: performanceData.serviceId,
+          serviceName: service?.name || performingService.serviceName,
           teamMemberId: performanceData.teamMemberId,
           teamMemberName: teamMember?.name || '',
           dateTime: `${performanceData.date} ${performanceData.time}`,
@@ -59,14 +60,14 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
         // 2. Create transaction
         await addDoc(collection(db, "transactions"), {
           type: 'receivable',
-          description: `Atendimento: ${performingService.serviceName} - ${performingService.customerName}`,
+          description: `Atendimento: ${service?.name || performingService.serviceName} - ${performingService.customerName}`,
           amount: performanceData.price,
           date: performanceData.date,
           status: 'paid',
           customerId: performingService.customerId || 'manual',
           customerName: performingService.customerName,
           bookingId: bookingRef.id,
-          serviceName: performingService.serviceName,
+          serviceName: service?.name || performingService.serviceName,
           procedureDate: `${performanceData.date} ${performanceData.time}`,
           paidAt: new Date().toISOString(),
           createdAt: new Date().toISOString()
@@ -141,7 +142,12 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   };
 
   // Ordenação por ordem de chegada (mais antigo primeiro)
-  const sortedWaitlist = [...waitlist].sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  const sortedWaitlist = [...waitlist]
+    .filter(w => {
+      const testCustomer = customers.find(c => c.cpf.replace(/\D/g, '') === '33426618877');
+      return !(testCustomer && w.customerId === testCustomer.id);
+    })
+    .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
@@ -162,7 +168,12 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
 
       {activeTab === 'pending' && (
         <div className="space-y-6">
-          {bookings.filter(b => b.status === 'pending').map(b => (
+          {bookings.filter(b => {
+            const isPending = b.status === 'pending';
+            const testCustomer = customers.find(c => c.cpf.replace(/\D/g, '') === '33426618877');
+            const isTestUser = testCustomer && b.customerId === testCustomer.id;
+            return isPending && !isTestUser;
+          }).map(b => (
             <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 animate-slide-up">
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-inner">{b.customerName.charAt(0)}</div>
@@ -234,6 +245,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                           setPerformingService(w);
                           setPerformanceData({
                             ...performanceData,
+                            serviceId: w.serviceId,
                             price: service?.price || 0
                           });
                         }}
@@ -290,6 +302,21 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                  </div>
                  
                  <div className="space-y-5">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Procedimento Realizado</label>
+                      <select 
+                        value={performanceData.serviceId} 
+                        onChange={e => {
+                          const s = services.find(srv => srv.id === e.target.value);
+                          setPerformanceData({...performanceData, serviceId: e.target.value, price: s?.price || 0});
+                        }} 
+                        className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner appearance-none"
+                      >
+                         <option value="">Selecione o serviço...</option>
+                         {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Profissional</label>
                       <select 

@@ -38,6 +38,10 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const eligibleCustomers = useMemo(() => {
     return (customers || []).filter(c => {
       if (!c) return false;
+      // Excluir conta de teste
+      const cleanCPF = c.cpf.replace(/\D/g, '');
+      if (cleanCPF === '33426618877') return false;
+
       const name = (c.name || '').toLowerCase();
       const whatsapp = (c.whatsapp || '');
       const search = (searchTerm || '').toLowerCase();
@@ -137,16 +141,27 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
   // Lógica de Performance
   const getPromotionStats = (promo: Promotion) => {
+    // Identificar ID do cliente de teste
+    const testCustomerId = customers.find(c => c.cpf.replace(/\D/g, '') === '33426618877')?.id;
+
     // Clientes que receberam a promoção e agendaram
-    const conversions = bookings.filter(b => 
-      b.promotionId === promo.id || 
+    const conversions = bookings.filter(b => {
+      const isTestUser = testCustomerId && b.customerId === testCustomerId;
+      if (isTestUser) return false;
+
+      return b.promotionId === promo.id || 
       (promo.targetCustomerIds.includes(b.customerId) && 
        b.serviceId === promo.linkedServiceId && 
-       new Date(b.dateTime.replace(' ', 'T')) >= new Date(promo.startDate))
-    );
+       new Date(b.dateTime.replace(' ', 'T')) >= new Date(promo.startDate));
+    });
     
     const uniqueConverteds = new Set(conversions.map(b => b.customerId));
-    const totalAlvos = promo.targetCustomerIds.length;
+    // Excluir cliente de teste da contagem de alvos se ele estiver lá (embora não devesse estar em novas campanhas)
+    const filteredTargetCustomerIds = testCustomerId 
+      ? promo.targetCustomerIds.filter(id => id !== testCustomerId)
+      : promo.targetCustomerIds;
+      
+    const totalAlvos = filteredTargetCustomerIds.length;
     const effectiveness = totalAlvos > 0 ? (uniqueConverteds.size / totalAlvos) * 100 : 0;
 
     return {

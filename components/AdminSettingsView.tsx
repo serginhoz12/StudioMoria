@@ -17,7 +17,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   services = [],
 }) => {
   const categories = ['Olhar', 'Rosto', 'Mãos', 'Unhas', 'Corpo', 'Outros'];
-  const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false });
+  const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
 
@@ -82,7 +82,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     if (newService.name && newService.price > 0) {
       const id = Math.random().toString(36).substr(2, 9);
       await setDoc(doc(db, "services", id), { ...newService, id });
-      setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false });
+      setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
     }
   };
 
@@ -94,7 +94,8 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         price: editingService.price,
         duration: editingService.duration,
         description: editingService.description,
-        category: editingService.category
+        category: editingService.category,
+        returnPeriodDays: editingService.returnPeriodDays || 0
       });
       setEditingService(null);
     }
@@ -230,13 +231,14 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         
         <div className="bg-tea-50/50 p-8 rounded-3xl mb-10 border border-tea-100">
            <h4 className="text-[10px] font-bold text-tea-700 uppercase tracking-widest mb-6 ml-1">Adicionar Novo Procedimento</h4>
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
               <input placeholder="Nome do Procedimento" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.name} onChange={e => setNewService({...newService, name: e.target.value})} />
               <select className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.category} onChange={e => setNewService({...newService, category: e.target.value})}>
                  {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
               </select>
               <input type="number" placeholder="Preço Inicial R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
               <input type="number" placeholder="Duração (minutos)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
+              <input type="number" placeholder="Retorno (dias)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.returnPeriodDays || ''} onChange={e => setNewService({...newService, returnPeriodDays: parseInt(e.target.value)})} />
            </div>
            <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar no Catálogo</button>
         </div>
@@ -253,11 +255,14 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                   ⭐
                 </button>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="space-y-1">
                     <p className="font-bold text-lg text-tea-950">{s.name}</p>
                     <span className="text-[8px] bg-tea-100 text-tea-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{s.category}</span>
                   </div>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase">A partir de R$ {s.price.toFixed(2)} • {s.duration} min</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">
+                    A partir de R$ {s.price.toFixed(2)} • {s.duration} min 
+                    {s.returnPeriodDays ? ` • Retorno: ${s.returnPeriodDays} dias` : ''}
+                  </p>
                 </div>
               </div>
               <div className="flex gap-2 items-center">
@@ -290,9 +295,15 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.price} onChange={e => setEditingService({...editingService, price: parseFloat(e.target.value)})} />
                  </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Duração (min)</label>
-                <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: parseInt(e.target.value)})} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Duração (min)</label>
+                  <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.duration} onChange={e => setEditingService({...editingService, duration: parseInt(e.target.value)})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Retorno (dias)</label>
+                  <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.returnPeriodDays || 0} onChange={e => setEditingService({...editingService, returnPeriodDays: parseInt(e.target.value)})} />
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Descrição</label>

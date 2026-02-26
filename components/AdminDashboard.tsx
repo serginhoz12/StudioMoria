@@ -37,19 +37,24 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
   const filteredData = useMemo(() => {
     const start = new Date(dateRange.start + 'T00:00:00').getTime();
     const end = new Date(dateRange.end + 'T23:59:59').getTime();
+    
+    // Identificar ID do cliente de teste
+    const testCustomerId = customers.find(c => c.cpf === '33426618877')?.id;
 
     const fTransactions = transactions.filter(t => {
       const d = new Date(t.dueDate || t.date).getTime();
-      return d >= start && d <= end;
+      const isTestUser = testCustomerId && t.customerId === testCustomerId;
+      return d >= start && d <= end && !isTestUser;
     });
 
     const fBookings = bookings.filter(b => {
       const d = new Date(b.dateTime.replace(' ', 'T')).getTime();
-      return d >= start && d <= end;
+      const isTestUser = testCustomerId && b.customerId === testCustomerId;
+      return d >= start && d <= end && !isTestUser;
     });
 
     return { transactions: fTransactions, bookings: fBookings };
-  }, [transactions, bookings, dateRange]);
+  }, [transactions, bookings, dateRange, customers]);
 
   // Cálculos de KPIs Avançados
   const totalReceivable = filteredData.transactions
