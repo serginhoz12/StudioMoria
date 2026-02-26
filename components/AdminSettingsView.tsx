@@ -136,18 +136,23 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
         const serviceRef = doc(db, "services", editingService.id);
         
-        // Usar setDoc com merge: true é mais robusto que updateDoc
-        await setDoc(serviceRef, {
-          name: editingService.name,
-          price: editingService.price,
-          duration: editingService.duration,
-          description: editingService.description,
-          category: editingService.category,
+        // Saneamento de dados para evitar 'invalid-argument' (campos undefined)
+        const sanitizedData = {
+          name: editingService.name || "Procedimento sem nome",
+          price: Number(editingService.price) || 0,
+          duration: Number(editingService.duration) || 0,
+          description: editingService.description || "",
+          category: editingService.category || "Outros",
           returnPeriodDays: Number(editingService.returnPeriodDays) || 0,
-          isVisible: editingService.isVisible ?? true,
-          isHighlighted: editingService.isHighlighted ?? false,
+          isVisible: editingService.isVisible !== false, // Garante booleano
+          isHighlighted: !!editingService.isHighlighted,
           id: editingService.id
-        }, { merge: true });
+        };
+
+        console.log("Tentando salvar dados saneados:", sanitizedData);
+
+        // Usar setDoc com merge: true é mais robusto
+        await setDoc(serviceRef, sanitizedData, { merge: true });
 
         setEditingService(null);
         alert("Procedimento atualizado com sucesso!");
