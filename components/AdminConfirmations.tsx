@@ -79,9 +79,14 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
       
       setPerformingService(null);
       alert("Atendimento registrado com sucesso!");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao registrar atendimento:", error);
-      alert("Erro ao salvar. Tente novamente.");
+      if (error.code === 'permission-denied') {
+        window.dispatchEvent(new Event('moria_permission_denied'));
+        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+      } else {
+        alert("Erro ao salvar. Tente novamente.");
+      }
     }
   };
 
@@ -91,16 +96,27 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     const service = services.find(s => s.id === manualEntry.serviceId);
     
     if (!(db as any)._isMock) {
-      await addDoc(collection(db, "waitlist"), {
-        customerName: manualEntry.name,
-        customerWhatsapp: manualEntry.whatsapp,
-        serviceId: manualEntry.serviceId,
-        serviceName: service?.name || '',
-        preferredDate: manualEntry.date,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        customerId: 'manual'
-      });
+      try {
+        await addDoc(collection(db, "waitlist"), {
+          customerName: manualEntry.name,
+          customerWhatsapp: manualEntry.whatsapp,
+          serviceId: manualEntry.serviceId,
+          serviceName: service?.name || '',
+          preferredDate: manualEntry.date,
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          customerId: 'manual'
+        });
+      } catch (error: any) {
+        console.error("Erro ao adicionar à espera:", error);
+        if (error.code === 'permission-denied') {
+          window.dispatchEvent(new Event('moria_permission_denied'));
+          alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+        } else {
+          alert("Erro ao salvar. Tente novamente.");
+        }
+        return;
+      }
     }
 
     setShowWaitlistForm(false);

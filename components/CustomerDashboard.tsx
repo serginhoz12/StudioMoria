@@ -64,8 +64,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       });
       alert("Pedido de agendamento enviado! Aguarde a confirmação da Moriá.");
       setActiveTab('agenda');
-    } catch (e) {
-      alert("Erro ao realizar agendamento.");
+    } catch (e: any) {
+      console.error("Erro ao realizar agendamento:", e);
+      if (e.code === 'permission-denied') {
+        window.dispatchEvent(new Event('moria_permission_denied'));
+        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+      } else {
+        alert("Erro ao realizar agendamento.");
+      }
     } finally {
       setIsBooking(false);
     }
@@ -98,7 +104,12 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       setActiveTab('home');
     } catch (e: any) {
       console.error("Erro ao entrar na lista de espera:", e);
-      alert(`Erro ao entrar na lista de espera: ${e.message || 'Erro desconhecido'}`);
+      if (e.code === 'permission-denied') {
+        window.dispatchEvent(new Event('moria_permission_denied'));
+        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+      } else {
+        alert(`Erro ao entrar na lista de espera: ${e.message || 'Erro desconhecido'}`);
+      }
     } finally {
       setIsBooking(false);
     }

@@ -125,6 +125,18 @@ const App: React.FC = () => {
       }
     };
 
+    useEffect(() => {
+      const handleGlobalPermissionError = () => {
+        if (!isMockMode) {
+          console.warn("Global permission error detected. Entering Demo Mode.");
+          setIsMockMode(true);
+          (db as any)._isMock = true;
+        }
+      };
+      window.addEventListener('moria_permission_denied', handleGlobalPermissionError);
+      return () => window.removeEventListener('moria_permission_denied', handleGlobalPermissionError);
+    }, [isMockMode]);
+
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         setSettings(snap.data() as SalonSettings);
