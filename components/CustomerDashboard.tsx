@@ -44,53 +44,63 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
   const handleBookSlot = async (slot: Booking) => {
     if (!selectedService) return;
-    if (!(db as any)._isMock) {
-      setIsBooking(true);
-      try {
-        const bookingRef = doc(db, "bookings", slot.id);
-        await updateDoc(bookingRef, {
-          customerId: customer.id,
-          customerName: customer.name,
-          serviceId: selectedService.id,
-          serviceName: selectedService.name,
-          status: 'pending', // Vai para aprovação da Moriá
-          originalPrice: selectedService.price,
-          duration: selectedService.duration,
-          updatedAt: new Date().toISOString()
-        });
-        alert("Pedido de agendamento enviado! Aguarde a confirmação da Moriá.");
-        setActiveTab('agenda');
-      } catch (e) {
-        alert("Erro ao realizar agendamento.");
-      } finally {
-        setIsBooking(false);
-      }
+    if ((db as any)._isMock) {
+      alert("Modo de Demonstração: Agendamento simulado com sucesso!");
+      setActiveTab('agenda');
+      return;
+    }
+    setIsBooking(true);
+    try {
+      const bookingRef = doc(db, "bookings", slot.id);
+      await updateDoc(bookingRef, {
+        customerId: customer.id,
+        customerName: customer.name,
+        serviceId: selectedService.id,
+        serviceName: selectedService.name,
+        status: 'pending', // Vai para aprovação da Moriá
+        originalPrice: selectedService.price,
+        duration: selectedService.duration,
+        updatedAt: new Date().toISOString()
+      });
+      alert("Pedido de agendamento enviado! Aguarde a confirmação da Moriá.");
+      setActiveTab('agenda');
+    } catch (e) {
+      alert("Erro ao realizar agendamento.");
+    } finally {
+      setIsBooking(false);
     }
   };
 
   const handleJoinWaitlist = async () => {
     if (!selectedService) return;
-    if (!(db as any)._isMock) {
-      setIsBooking(true);
-      try {
-        await addDoc(collection(db, "waitlist"), {
-          customerId: customer.id,
-          customerName: customer.name,
-          customerWhatsapp: customer.whatsapp,
-          serviceId: selectedService.id,
-          serviceName: selectedService.name,
-          preferredDate: selectedDate,
-          status: 'active',
-          createdAt: new Date().toISOString()
-        });
-        alert("Você entrou na lista de espera para este dia! Avisaremos se surgir uma vaga.");
-        setSelectedService(null);
-        setActiveTab('home');
-      } catch (e) {
-        alert("Erro ao entrar na lista de espera.");
-      } finally {
-        setIsBooking(false);
-      }
+    if ((db as any)._isMock) {
+      alert("Modo de Demonstração: Você entrou na lista de espera simulada!");
+      setSelectedService(null);
+      setActiveTab('home');
+      return;
+    }
+    setIsBooking(true);
+    try {
+      if (!customer.id) throw new Error("ID do cliente não encontrado.");
+      
+      await addDoc(collection(db, "waitlist"), {
+        customerId: customer.id,
+        customerName: customer.name,
+        customerWhatsapp: customer.whatsapp,
+        serviceId: selectedService.id,
+        serviceName: selectedService.name,
+        preferredDate: selectedDate,
+        status: 'active',
+        createdAt: new Date().toISOString()
+      });
+      alert("Você entrou na lista de espera para este dia! Avisaremos se surgir uma vaga.");
+      setSelectedService(null);
+      setActiveTab('home');
+    } catch (e: any) {
+      console.error("Erro ao entrar na lista de espera:", e);
+      alert(`Erro ao entrar na lista de espera: ${e.message || 'Erro desconhecido'}`);
+    } finally {
+      setIsBooking(false);
     }
   };
 

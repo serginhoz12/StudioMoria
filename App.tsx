@@ -113,6 +113,18 @@ const App: React.FC = () => {
       return;
     }
 
+    const handlePermissionError = (error: any, collectionName: string) => {
+      if (error.code === 'permission-denied') {
+        if (!isMockMode) {
+          console.warn(`Firebase permissions restricted on ${collectionName}. Entering Demo Mode.`);
+          setIsMockMode(true);
+          (db as any)._isMock = true;
+        }
+      } else {
+        console.error(`Error fetching ${collectionName}:`, error);
+      }
+    };
+
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
         setSettings(snap.data() as SalonSettings);
@@ -121,15 +133,7 @@ const App: React.FC = () => {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
       }
     }, (error) => {
-      if (error.code === 'permission-denied') {
-        if (!isMockMode) {
-          console.warn("Firebase permissions restricted. Entering Demo Mode.");
-          setIsMockMode(true);
-          (db as any)._isMock = true;
-        }
-      } else {
-        console.error("Error fetching settings:", error);
-      }
+      handlePermissionError(error, "settings");
       setSettings(DEFAULT_SETTINGS);
       setIsLoading(false);
     });
@@ -140,38 +144,38 @@ const App: React.FC = () => {
     const unsubServices = onSnapshot(collection(db, "services"), (snapshot) => {
       setServices(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Service)));
     }, (error) => {
-      if (error.code !== 'permission-denied') console.error("Error fetching services:", error);
+      handlePermissionError(error, "services");
       if (!isMockMode) setServices(INITIAL_SERVICES);
     });
 
     const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
       setCustomers(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
     }, (error) => {
-      if (error.code !== 'permission-denied') console.error("Error fetching customers:", error);
+      handlePermissionError(error, "customers");
     });
 
     const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
     }, (error) => {
-      if (error.code !== 'permission-denied') console.error("Error fetching bookings:", error);
+      handlePermissionError(error, "bookings");
     });
 
     const unsubTransactions = onSnapshot(collection(db, "transactions"), (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)));
     }, (error) => {
-      if (error.code !== 'permission-denied') console.error("Error fetching transactions:", error);
+      handlePermissionError(error, "transactions");
     });
 
     const unsubWaitlist = onSnapshot(collection(db, "waitlist"), (snapshot) => {
       setWaitlist(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as WaitlistEntry)));
     }, (error) => {
-      if (error.code !== 'permission-denied') console.error("Error fetching waitlist:", error);
+      handlePermissionError(error, "waitlist");
     });
 
     const unsubPromotions = onSnapshot(collection(db, "promotions"), (snapshot) => {
       setPromotions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Promotion)));
     }, (error) => {
-      if (error.code !== 'permission-denied') console.error("Error fetching promotions:", error);
+      handlePermissionError(error, "promotions");
     });
 
     return () => {
@@ -246,8 +250,12 @@ const App: React.FC = () => {
       case View.CUSTOMER_LOGIN: return (
         <CustomerLoginView 
           onLogin={(cpf, pass) => {
-            const user = customers.find(c => c.cpf === cpf && c.password === pass);
-            if (user) { setCurrentUser(user); setCurrentView(View.CUSTOMER_DASHBOARD); }
+            const cleanInputCPF = cpf.replace(/\D/g, '');
+            const user = customers.find(c => c.cpf.replace(/\D/g, '') === cleanInputCPF && c.password === pass);
+            if (user) { 
+              setCurrentUser(user); 
+              setCurrentView(View.CUSTOMER_DASHBOARD); 
+            }
             else alert("Acesso inválido.");
           }} 
           onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} 
