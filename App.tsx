@@ -30,10 +30,18 @@ import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
 
 const App: React.FC = () => {
-  const [currentView, setCurrentView] = useState<View>(View.CUSTOMER_HOME);
+  // Load initial state from localStorage if available
+  const [currentView, setCurrentView] = useState<View>(() => {
+    const saved = localStorage.getItem('moria_view');
+    return saved ? (saved as View) : View.CUSTOMER_HOME;
+  });
   const [isMockMode, setIsMockMode] = useState((db as any)._isMock);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(() => {
+    return localStorage.getItem('moria_isAdmin') === 'true';
+  });
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
+    return localStorage.getItem('moria_isAdminAuth') === 'true';
+  });
   const [isLoading, setIsLoading] = useState(true);
   
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
@@ -43,7 +51,57 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
-  const [currentUser, setCurrentUser] = useState<Customer | null>(null);
+  const [currentUser, setCurrentUser] = useState<Customer | null>(() => {
+    const saved = localStorage.getItem('moria_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+
+  // Persist session state
+  useEffect(() => {
+    localStorage.setItem('moria_view', currentView);
+    localStorage.setItem('moria_isAdmin', String(isAdmin));
+    localStorage.setItem('moria_isAdminAuth', String(isAdminAuthenticated));
+    if (currentUser) {
+      localStorage.setItem('moria_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('moria_user');
+    }
+  }, [currentView, isAdmin, isAdminAuthenticated, currentUser]);
+
+  // Inactivity Logout (5 minutes)
+  useEffect(() => {
+    if (!isAdminAuthenticated && !currentUser) return;
+
+    let timeout: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        console.log("Inatividade detectada. Deslogando...");
+        handleLogout();
+      }, 5 * 60 * 1000); // 5 minutes
+    };
+
+    const handleLogout = () => {
+      setIsAdminAuthenticated(false);
+      setIsAdmin(false);
+      setCurrentUser(null);
+      setCurrentView(View.CUSTOMER_HOME);
+      localStorage.clear();
+      alert("Sessão expirada por inatividade. Por favor, faça login novamente.");
+    };
+
+    // Events to track interaction
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetTimer));
+
+    resetTimer();
+
+    return () => {
+      clearTimeout(timeout);
+      events.forEach(event => document.removeEventListener(event, resetTimer));
+    };
+  }, [isAdminAuthenticated, currentUser]);
 
   useEffect(() => {
     // FIX: Using (db as any) to check _isMock property which is not part of standard Firestore type
@@ -160,7 +218,7 @@ const App: React.FC = () => {
             settings={settings}
             // FIX: Removed onBook and onAddToWaitlist as they were not defined in CustomerDashboardProps
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
-            onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }}
+            onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
             onCancelBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))}
@@ -216,8 +274,8 @@ const App: React.FC = () => {
           isMockMode={isMockMode}
           onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setCurrentView(View.ADMIN_LOGIN); else setCurrentView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} 
           salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
-          onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); }} 
-          onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); }} 
+          onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }} 
+          onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} 
           isAdminAuthenticated={isAdminAuthenticated} pendingBookingsCount={bookings.filter(b => b.status === 'pending').length} 
         />
       )}
