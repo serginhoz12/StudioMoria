@@ -295,7 +295,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     <p className={`text-sm leading-relaxed ${nextEstimate.isOverdue ? 'text-orange-800 font-medium' : 'text-gray-500'}`}>
                       {nextEstimate.isOverdue 
                         ? "Já passou do tempo ideal para refazer seu procedimento! Sua pele e bem-estar agradecem a manutenção." 
-                        : `Sua estimativa de retorno para este procedimento é dia ${nextEstimate.date.toLocaleDateString()}.`}
+                        : (
+                          <>
+                            Oi, {customer.name.split(' ')[0]}! 💛<br/><br/>
+                            Passando para lembrar que já está chegando o momento ideal para fazer a manutenção do seu procedimento <strong>{nextEstimate.serviceName}</strong>.<br/><br/>
+                            Esse intervalo é importante para manter o resultado bonito e, principalmente, a saúde do seu cabelo em dia ✨<br/><br/>
+                            Se quiser, posso reservar um horário para você com calma 💆‍♀️
+                          </>
+                        )}
                     </p>
                     <button 
                       onClick={() => setActiveTab('agendar')}

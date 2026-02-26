@@ -65,6 +65,11 @@ const Navbar: React.FC<NavbarProps> = ({
                   ● Modo de Demonstração
                 </span>
               )}
+              {isAdmin && isAdminAuthenticated && (
+                <span className="text-[6px] font-bold text-tea-600 uppercase tracking-widest mt-0.5">
+                  v1.0.4 • Atualizado em 26/02
+                </span>
+              )}
             </div>
           </div>
           
