@@ -14,6 +14,7 @@ interface NavbarProps {
   onAdminLogout: () => void;
   isAdminAuthenticated: boolean;
   pendingBookingsCount?: number;
+  isMockMode?: boolean;
 }
 
 const Navbar: React.FC<NavbarProps> = ({ 
@@ -27,7 +28,8 @@ const Navbar: React.FC<NavbarProps> = ({
   onLogout, 
   onAdminLogout,
   isAdminAuthenticated,
-  pendingBookingsCount = 0
+  pendingBookingsCount = 0,
+  isMockMode = false
 }) => {
   const adminTabs = [
     { id: View.ADMIN_DASHBOARD, label: 'Início', icon: '🏠' },
@@ -58,6 +60,11 @@ const Navbar: React.FC<NavbarProps> = ({
               <span className="text-[7px] font-bold text-gray-400 uppercase tracking-[0.2em]">
                 Estética Avançada
               </span>
+              {isMockMode && (
+                <span className="text-[6px] font-bold text-orange-500 uppercase tracking-widest mt-0.5 animate-pulse">
+                  ● Modo de Demonstração
+                </span>
+              )}
             </div>
           </div>
           
