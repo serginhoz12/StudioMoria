@@ -11,9 +11,10 @@ interface AdminDashboardProps {
   transactions: Transaction[];
   customers: Customer[];
   settings: SalonSettings;
+  onLogout: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, settings }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, settings, onLogout }) => {
   const [period, setPeriod] = useState<'current' | 'next' | 'custom'>('current');
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
@@ -125,6 +126,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
         <div>
           <h1 className="text-3xl font-serif font-bold text-tea-950 italic">Inteligência Moriá</h1>
           <p className="text-gray-400 text-sm">Visão estratégica e comportamento das clientes.</p>
+          <button 
+            onClick={onLogout}
+            className="mt-4 lg:hidden bg-red-50 text-red-500 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest border border-red-100"
+          >
+            Encerrar Sessão
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">

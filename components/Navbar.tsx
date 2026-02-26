@@ -106,6 +106,17 @@ const Navbar: React.FC<NavbarProps> = ({
                   </button>
                </div>
             )}
+
+            {isAdmin && isAdminAuthenticated && (
+               <div className="hidden sm:flex items-center gap-4 mr-2">
+                  <button 
+                    onClick={onAdminLogout}
+                    className="text-[9px] text-red-400 font-bold uppercase tracking-widest hover:text-red-600 transition-colors"
+                  >
+                    Encerrar Sessão
+                  </button>
+               </div>
+            )}
             
             {/* Action Buttons: Cliente e Equipe sempre juntos */}
             <div className="flex gap-1.5 md:gap-2">
@@ -147,6 +158,13 @@ const Navbar: React.FC<NavbarProps> = ({
               ) : null}
             </button>
           ))}
+          <button 
+            onClick={onAdminLogout}
+            className="whitespace-nowrap px-4 py-2 rounded-xl text-[8px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 flex-shrink-0 bg-red-50 text-red-500 border border-red-100"
+          >
+            <span>🚪</span>
+            Sair
+          </button>
         </div>
       )}
     </header>

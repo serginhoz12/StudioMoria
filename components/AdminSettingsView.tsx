@@ -10,11 +10,13 @@ interface AdminSettingsViewProps {
   customers: any[];
   bookings: any[];
   transactions: any[];
+  isMockMode: boolean;
 }
 
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
   settings, 
   services = [],
+  isMockMode
 }) => {
   const categories = ['Olhar', 'Rosto', 'Mãos', 'Unhas', 'Corpo', 'Outros'];
   const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
@@ -22,7 +24,21 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newMemberName, setNewMemberName] = useState('');
 
   const updateGlobalSettings = async (newSet: SalonSettings) => {
-    await setDoc(doc(db, "settings", "main"), { ...newSet, lastUpdated: Date.now() });
+    if (isMockMode) {
+      console.log("Modo de Demonstração: Configurações globais não alteradas.");
+      return;
+    }
+    try {
+      await setDoc(doc(db, "settings", "main"), { ...newSet, lastUpdated: Date.now() });
+    } catch (error: any) {
+      console.error("Erro ao atualizar configurações globais:", error);
+      if (error.code === 'permission-denied') {
+        window.dispatchEvent(new Event('moria_permission_denied'));
+        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+      } else {
+        alert("Erro ao salvar configurações.");
+      }
+    }
   };
 
   const addTeamMember = () => {
@@ -80,38 +96,94 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
   const addService = async () => {
     if (newService.name && newService.price > 0) {
-      const id = Math.random().toString(36).substr(2, 9);
-      await setDoc(doc(db, "services", id), { ...newService, id });
-      setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
+      if (isMockMode) {
+        alert("Modo de Demonstração: Novos procedimentos não serão salvos no banco de dados real.");
+        setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
+        return;
+      }
+      try {
+        const id = Math.random().toString(36).substr(2, 9);
+        await setDoc(doc(db, "services", id), { ...newService, id });
+        setNewService({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
+        alert("Procedimento adicionado com sucesso!");
+      } catch (error: any) {
+        console.error("Erro ao adicionar serviço:", error);
+        if (error.code === 'permission-denied') {
+          window.dispatchEvent(new Event('moria_permission_denied'));
+          alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+        } else {
+          alert("Erro ao adicionar procedimento.");
+        }
+      }
     }
   };
 
   const saveEditedService = async () => {
     if (editingService && editingService.name && editingService.price > 0) {
-      const serviceRef = doc(db, "services", editingService.id);
-      await updateDoc(serviceRef, {
-        name: editingService.name,
-        price: editingService.price,
-        duration: editingService.duration,
-        description: editingService.description,
-        category: editingService.category,
-        returnPeriodDays: editingService.returnPeriodDays || 0
-      });
-      setEditingService(null);
+      if (isMockMode) {
+        alert("Modo de Demonstração: Alterações não serão salvas no banco de dados real.");
+        setEditingService(null);
+        return;
+      }
+      try {
+        const serviceRef = doc(db, "services", editingService.id);
+        await updateDoc(serviceRef, {
+          name: editingService.name,
+          price: editingService.price,
+          duration: editingService.duration,
+          description: editingService.description,
+          category: editingService.category,
+          returnPeriodDays: Number(editingService.returnPeriodDays) || 0
+        });
+        setEditingService(null);
+        alert("Procedimento atualizado com sucesso!");
+      } catch (error: any) {
+        console.error("Erro ao salvar serviço:", error);
+        if (error.code === 'permission-denied') {
+          window.dispatchEvent(new Event('moria_permission_denied'));
+          alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+        } else {
+          alert("Erro ao salvar as alterações.");
+        }
+      }
     }
   };
 
   const toggleServiceVisibility = async (id: string, current: boolean) => {
-    await updateDoc(doc(db, "services", id), { isVisible: !current });
+    try {
+      await updateDoc(doc(db, "services", id), { isVisible: !current });
+    } catch (error: any) {
+      console.error("Erro ao alternar visibilidade:", error);
+      if (error.code === 'permission-denied') {
+        window.dispatchEvent(new Event('moria_permission_denied'));
+        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+      }
+    }
   };
 
   const toggleServiceHighlight = async (id: string, current: boolean) => {
-    await updateDoc(doc(db, "services", id), { isHighlighted: !current });
+    try {
+      await updateDoc(doc(db, "services", id), { isHighlighted: !current });
+    } catch (error: any) {
+      console.error("Erro ao alternar destaque:", error);
+      if (error.code === 'permission-denied') {
+        window.dispatchEvent(new Event('moria_permission_denied'));
+        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+      }
+    }
   };
 
   const handleDeleteService = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir permanentemente este serviço?")) {
-      await deleteDoc(doc(db, "services", id));
+      try {
+        await deleteDoc(doc(db, "services", id));
+      } catch (error: any) {
+        console.error("Erro ao excluir serviço:", error);
+        if (error.code === 'permission-denied') {
+          window.dispatchEvent(new Event('moria_permission_denied'));
+          alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+        }
+      }
     }
   };
 
@@ -127,7 +199,12 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
   return (
     <div className="space-y-12 pb-32 animate-fade-in">
-      <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl">
+      <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl relative overflow-hidden">
+        {isMockMode && (
+          <div className="absolute top-0 right-0 bg-orange-500 text-white px-6 py-2 rounded-bl-2xl font-bold text-[10px] uppercase tracking-widest animate-pulse z-20">
+            Modo de Demonstração Ativo
+          </div>
+        )}
         <h2 className="text-3xl font-serif font-bold mb-2 italic">Configurações Studio Moriá</h2>
         <p className="text-tea-100 font-light text-sm italic">Gestão de profissionais, catálogo e controle de agenda.</p>
       </div>
@@ -238,7 +315,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               </select>
               <input type="number" placeholder="Preço Inicial R$" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.price || ''} onChange={e => setNewService({...newService, price: parseFloat(e.target.value)})} />
               <input type="number" placeholder="Duração (minutos)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.duration || ''} onChange={e => setNewService({...newService, duration: parseInt(e.target.value)})} />
-              <input type="number" placeholder="Retorno (dias)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.returnPeriodDays || ''} onChange={e => setNewService({...newService, returnPeriodDays: parseInt(e.target.value)})} />
+              <input type="number" placeholder="Retorno (dias)" className="p-4 rounded-xl bg-white outline-none font-bold shadow-inner" value={newService.returnPeriodDays === 0 ? '' : newService.returnPeriodDays} onChange={e => setNewService({...newService, returnPeriodDays: parseInt(e.target.value) || 0})} />
            </div>
            <button onClick={addService} className="w-full bg-tea-800 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-tea-950 transition-all shadow-lg">Salvar no Catálogo</button>
         </div>
@@ -302,7 +379,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                 </div>
                 <div className="space-y-1">
                   <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Retorno (dias)</label>
-                  <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.returnPeriodDays || 0} onChange={e => setEditingService({...editingService, returnPeriodDays: parseInt(e.target.value)})} />
+                  <input type="number" className="w-full p-4 rounded-2xl bg-gray-50 outline-none font-bold shadow-inner" value={editingService.returnPeriodDays ?? 0} onChange={e => setEditingService({...editingService, returnPeriodDays: parseInt(e.target.value) || 0})} />
                 </div>
               </div>
               <div className="space-y-1">

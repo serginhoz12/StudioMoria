@@ -278,29 +278,31 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {activeTab === 'home' && (
           <div className="space-y-8 animate-slide-up">
              {nextEstimate && (
-               <div className={`p-8 rounded-[3.5rem] border shadow-xl space-y-4 relative overflow-hidden transition-all ${nextEstimate.isOverdue ? 'bg-orange-50 border-orange-200' : 'bg-white border-tea-100'}`}>
+               <div className={`p-8 rounded-[3.5rem] border shadow-2xl space-y-4 relative overflow-hidden transition-all transform hover:scale-[1.02] ${nextEstimate.isOverdue ? 'bg-orange-50 border-orange-200 ring-4 ring-orange-100/50' : 'bg-white border-tea-100'}`}>
                   <div className="flex justify-between items-start">
                     <div className="space-y-1">
-                      <p className="text-[10px] font-bold text-tea-800 uppercase tracking-widest">Seu último cuidado</p>
-                      <h4 className="text-xl font-serif font-bold text-tea-950 italic leading-tight">{nextEstimate.serviceName}</h4>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest ${nextEstimate.isOverdue ? 'text-orange-600' : 'text-tea-800'}`}>
+                        {nextEstimate.isOverdue ? '⚠️ Atenção: Hora de Voltar!' : 'Seu próximo cuidado'}
+                      </p>
+                      <h4 className="text-2xl font-serif font-bold text-tea-950 italic leading-tight">{nextEstimate.serviceName}</h4>
                     </div>
-                    <div className="text-3xl">✨</div>
+                    <div className={`text-3xl ${nextEstimate.isOverdue ? 'animate-bounce' : ''}`}>
+                      {nextEstimate.isOverdue ? '⏰' : '✨'}
+                    </div>
                   </div>
                   
-                  <div className="pt-4 border-t border-tea-50 space-y-3">
-                    <p className="text-xs text-gray-500 leading-relaxed">
+                  <div className={`pt-4 border-t space-y-4 ${nextEstimate.isOverdue ? 'border-orange-100' : 'border-tea-50'}`}>
+                    <p className={`text-sm leading-relaxed ${nextEstimate.isOverdue ? 'text-orange-800 font-medium' : 'text-gray-500'}`}>
                       {nextEstimate.isOverdue 
-                        ? "Já passou do tempo ideal para refazer seu procedimento! Que tal agendar agora?" 
+                        ? "Já passou do tempo ideal para refazer seu procedimento! Sua pele e bem-estar agradecem a manutenção." 
                         : `Sua estimativa de retorno para este procedimento é dia ${nextEstimate.date.toLocaleDateString()}.`}
                     </p>
-                    {nextEstimate.isOverdue && (
-                      <button 
-                        onClick={() => setActiveTab('agendar')}
-                        className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-black transition-all"
-                      >
-                        Agendar Retorno Agora
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => setActiveTab('agendar')}
+                      className={`w-full py-5 rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg transition-all ${nextEstimate.isOverdue ? 'bg-orange-600 text-white hover:bg-orange-700' : 'bg-tea-900 text-white hover:bg-black'}`}
+                    >
+                      {nextEstimate.isOverdue ? 'Agendar Retorno Agora' : 'Ver Horários Disponíveis'}
+                    </button>
                   </div>
                </div>
              )}
