@@ -1,6 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD4Nna9NzeIdBcFbadUCLFxpF34tAmhI7U",
@@ -14,9 +15,9 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const firestore = getFirestore(app);
+const auth = getAuth(app);
 
-// Check if we should use mock mode (e.g. if the real project is not accessible)
-// We can set this manually or detect it. For now, we'll expose it so App.tsx can use it.
 export const db = firestore;
-(db as any)._isMock = false; // Set to true if you want to use mock mode by default
+export { auth };
+(db as any)._isMock = false;
 

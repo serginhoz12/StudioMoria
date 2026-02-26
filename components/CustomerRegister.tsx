@@ -17,6 +17,8 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
   const [receivesNotifications, setReceivesNotifications] = useState(true);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const [modalConfig, setModalConfig] = useState<{ open: boolean; title: string; type: 'terms' | 'privacy' }>({
     open: false,
     title: '',
@@ -30,14 +32,19 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
     return customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf);
   }, [cpf, customers]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isDuplicateCpf) {
       alert("Este CPF já possui um cadastro no Studio Moriá.");
       return;
     }
     if (name && whatsapp && cpf && password && agreedToTerms) {
-      onRegister(name, whatsapp, cpf, password, receivesNotifications);
+      setIsSubmitting(true);
+      try {
+        await onRegister(name, whatsapp, cpf, password, receivesNotifications);
+      } finally {
+        setIsSubmitting(false);
+      }
     } else {
       if (!agreedToTerms) {
         alert("Para sua segurança, é necessário aceitar os termos de uso.");
@@ -159,10 +166,10 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
           
           <button 
             type="submit"
-            disabled={isDuplicateCpf || !agreedToTerms}
-            className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${!isDuplicateCpf && agreedToTerms ? 'bg-tea-800 text-white hover:bg-tea-900 shadow-tea-200 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70'}`}
+            disabled={isDuplicateCpf || !agreedToTerms || isSubmitting}
+            className={`w-full py-6 rounded-[2rem] font-bold text-xl shadow-2xl transition-all duration-500 ${!isDuplicateCpf && agreedToTerms && !isSubmitting ? 'bg-tea-800 text-white hover:bg-tea-900 shadow-tea-200 hover:-translate-y-1' : 'bg-gray-100 text-gray-400 cursor-not-allowed opacity-70'}`}
           >
-            {isDuplicateCpf ? 'CPF já em uso' : 'Concluir Cadastro'}
+            {isSubmitting ? 'Processando...' : (isDuplicateCpf ? 'CPF já em uso' : 'Concluir Cadastro')}
           </button>
         </form>
       </div>

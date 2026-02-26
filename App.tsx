@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
-import { db } from './firebase.ts';
+import { db, auth } from './firebase.ts';
+import { signInAnonymously } from "firebase/auth";
 import { 
   collection, 
   onSnapshot, 
@@ -11,7 +12,11 @@ import {
   addDoc, 
   updateDoc, 
   deleteDoc,
-  increment
+  increment,
+  getDocs,
+  query,
+  where,
+  getDoc
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -55,6 +60,13 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('moria_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  // Firebase Auth Initialization
+  useEffect(() => {
+    if (!isMockMode) {
+      signInAnonymously(auth).catch(err => console.error("Erro no Auth Anônimo:", err));
+    }
+  }, [isMockMode]);
 
   // Persist session state
   useEffect(() => {
@@ -247,13 +259,34 @@ const App: React.FC = () => {
       case View.CUSTOMER_REGISTER: return (
         <CustomerRegister 
           onRegister={async (n, w, c, p, not) => {
-            // FIX: Using isMockMode for checks
             if(isMockMode) return;
-            const id = Math.random().toString(36).substr(2, 9);
-            const user = { id, name: n, whatsapp: w, cpf: c, password: p, receivesNotifications: not, agreedToTerms: true, history: [] };
-            await setDoc(doc(db, "customers", id), user);
-            setCurrentUser(user);
-            setCurrentView(View.CUSTOMER_DASHBOARD);
+            try {
+              const cleanCpf = c.replace(/\D/g, '');
+              
+              // Check for duplicate directly if global list is empty due to permissions
+              if (customers.length === 0) {
+                const q = query(collection(db, "customers"), where("cpf", "==", c));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                  alert("Este CPF já possui um cadastro no Studio Moriá.");
+                  return;
+                }
+              }
+
+              const id = Math.random().toString(36).substr(2, 9);
+              const user = { id, name: n, whatsapp: w, cpf: c, password: p, receivesNotifications: not, agreedToTerms: true, history: [] };
+              await setDoc(doc(db, "customers", id), user);
+              setCurrentUser(user);
+              setCurrentView(View.CUSTOMER_DASHBOARD);
+              alert("Cadastro realizado com sucesso!");
+            } catch (err: any) {
+              console.error("Erro no cadastro:", err);
+              if (err.code === 'permission-denied') {
+                alert("Erro de permissão no Firebase. Por favor, verifique as regras de segurança.");
+              } else {
+                alert("Erro ao realizar cadastro. Tente novamente.");
+              }
+            }
           }} 
           customers={customers} 
           onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
@@ -261,14 +294,33 @@ const App: React.FC = () => {
       );
       case View.CUSTOMER_LOGIN: return (
         <CustomerLoginView 
-          onLogin={(cpf, pass) => {
+          onLogin={async (cpf, pass) => {
             const cleanInputCPF = cpf.replace(/\D/g, '');
-            const user = customers.find(c => c.cpf.replace(/\D/g, '') === cleanInputCPF && c.password === pass);
+            
+            // Try local search first
+            let user = customers.find(c => c.cpf.replace(/\D/g, '') === cleanInputCPF && c.password === pass);
+            
+            // If not found and list might be empty due to permissions, try direct query
+            if (!user && !isMockMode) {
+              try {
+                const q = query(collection(db, "customers"), where("cpf", "==", cpf));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                  const found = snap.docs[0].data() as Customer;
+                  if (found.password === pass) {
+                    user = { ...found, id: snap.docs[0].id };
+                  }
+                }
+              } catch (err) {
+                console.error("Erro na consulta de login:", err);
+              }
+            }
+
             if (user) { 
               setCurrentUser(user); 
               setCurrentView(View.CUSTOMER_DASHBOARD); 
             }
-            else alert("Acesso inválido.");
+            else alert("Acesso inválido ou senha incorreta.");
           }} 
           onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} 
           onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
