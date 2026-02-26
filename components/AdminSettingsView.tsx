@@ -2,7 +2,9 @@
 import React, { useState } from 'react';
 import { SalonSettings, Service, TeamMember } from '../types.ts';
 import { db } from '../firebase.ts';
-import { doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { doc, setDoc, deleteDoc, updateDoc, getDoc } from "firebase/firestore";
+import { auth } from '../firebase.ts';
+import { signInAnonymously } from "firebase/auth";
 
 interface AdminSettingsViewProps {
   settings: SalonSettings;
@@ -125,25 +127,38 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         setEditingService(null);
         return;
       }
+      
       try {
+        // Garantir que estamos autenticados antes de salvar
+        if (!auth.currentUser) {
+          await signInAnonymously(auth);
+        }
+
         const serviceRef = doc(db, "services", editingService.id);
-        await updateDoc(serviceRef, {
+        
+        // Usar setDoc com merge: true é mais robusto que updateDoc
+        await setDoc(serviceRef, {
           name: editingService.name,
           price: editingService.price,
           duration: editingService.duration,
           description: editingService.description,
           category: editingService.category,
-          returnPeriodDays: Number(editingService.returnPeriodDays) || 0
-        });
+          returnPeriodDays: Number(editingService.returnPeriodDays) || 0,
+          isVisible: editingService.isVisible ?? true,
+          isHighlighted: editingService.isHighlighted ?? false,
+          id: editingService.id
+        }, { merge: true });
+
         setEditingService(null);
         alert("Procedimento atualizado com sucesso!");
       } catch (error: any) {
-        console.error("Erro ao salvar serviço:", error);
+        console.error("Erro detalhado ao salvar serviço:", error);
+        
         if (error.code === 'permission-denied') {
           window.dispatchEvent(new Event('moria_permission_denied'));
-          alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+          alert("Erro de permissão no Firebase. Verifique se as regras do banco de dados foram publicadas corretamente.");
         } else {
-          alert("Erro ao salvar as alterações.");
+          alert(`Erro ao salvar: ${error.code || 'Erro desconhecido'}. Verifique sua conexão ou as regras do Firebase.`);
         }
       }
     }
@@ -151,24 +166,26 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
   const toggleServiceVisibility = async (id: string, current: boolean) => {
     try {
-      await updateDoc(doc(db, "services", id), { isVisible: !current });
+      if (!auth.currentUser) await signInAnonymously(auth);
+      await setDoc(doc(db, "services", id), { isVisible: !current }, { merge: true });
     } catch (error: any) {
       console.error("Erro ao alternar visibilidade:", error);
       if (error.code === 'permission-denied') {
         window.dispatchEvent(new Event('moria_permission_denied'));
-        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+        alert("Erro de permissão no Firebase.");
       }
     }
   };
 
   const toggleServiceHighlight = async (id: string, current: boolean) => {
     try {
-      await updateDoc(doc(db, "services", id), { isHighlighted: !current });
+      if (!auth.currentUser) await signInAnonymously(auth);
+      await setDoc(doc(db, "services", id), { isHighlighted: !current }, { merge: true });
     } catch (error: any) {
       console.error("Erro ao alternar destaque:", error);
       if (error.code === 'permission-denied') {
         window.dispatchEvent(new Event('moria_permission_denied'));
-        alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+        alert("Erro de permissão no Firebase.");
       }
     }
   };
