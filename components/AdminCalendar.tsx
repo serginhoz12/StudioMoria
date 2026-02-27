@@ -22,11 +22,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
+  const [manualTime, setManualTime] = useState('');
+
   // Added resetForm function to fix "Cannot find name 'resetForm'" error
   const resetForm = () => {
     setCustomerSearch('');
     setSelectedCustomerId('');
     setSelectedServiceId('');
+    setManualTime('');
   };
 
   const startHourNum = parseInt((settings?.businessHours?.start || "08:00").split(':')[0]);
@@ -48,16 +51,21 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   const handleOpenSlot = async (hour: string) => {
     if ((db as any)._isMock) return alert("Modo visual: Horário liberado simulado.");
-    await addDoc(collection(db, "bookings"), {
-      dateTime: `${selectedDate} ${hour}`,
-      status: 'open',
-      teamMemberId: selectedProId,
-      teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
-      customerName: 'LIBERADO PARA CLIENTES',
-      customerId: 'none',
-      createdAt: new Date().toISOString()
-    });
-    setModal({ open: false, hour: '', type: 'free' });
+    try {
+      await addDoc(collection(db, "bookings"), {
+        dateTime: `${selectedDate} ${hour}`,
+        status: 'open',
+        teamMemberId: selectedProId,
+        teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
+        customerName: 'LIBERADO PARA CLIENTES',
+        customerId: 'none',
+        createdAt: new Date().toISOString()
+      });
+      alert("Horário liberado para clientes no site!");
+      setModal({ open: false, hour: '', type: 'free' });
+    } catch (e) {
+      alert("Erro ao liberar horário.");
+    }
   };
 
   const handleReleaseFullDay = async () => {
@@ -121,29 +129,35 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   };
 
   const handleManualBooking = async (overrideHour?: string) => {
-    const hour = overrideHour || modal.hour;
+    const hour = overrideHour || manualTime || modal.hour;
     const customer = customers.find(c => c.id === selectedCustomerId);
     const service = services.find(s => s.id === selectedServiceId);
     if (!customer || !service) return alert("Selecione cliente e serviço.");
+    if (hour === 'Extra' && !manualTime) return alert("Defina o horário do atendimento.");
 
-    if (!(db as any)._isMock) {
-      await addDoc(collection(db, "bookings"), {
-        customerId: customer.id,
-        customerName: customer.name,
-        serviceId: service.id,
-        serviceName: service.name,
-        teamMemberId: selectedProId,
-        teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
-        dateTime: `${selectedDate} ${hour}`,
-        duration: service.duration,
-        status: 'scheduled',
-        depositStatus: 'paid',
-        agreedToCancellationPolicy: true,
-        policyAgreedAt: new Date().toISOString()
-      });
+    try {
+      if (!(db as any)._isMock) {
+        await addDoc(collection(db, "bookings"), {
+          customerId: customer.id,
+          customerName: customer.name,
+          serviceId: service.id,
+          serviceName: service.name,
+          teamMemberId: selectedProId,
+          teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
+          dateTime: `${selectedDate} ${hour}`,
+          duration: service.duration,
+          status: 'scheduled',
+          depositStatus: 'paid',
+          agreedToCancellationPolicy: true,
+          policyAgreedAt: new Date().toISOString()
+        });
+      }
+      alert("Agendamento manual realizado com sucesso!");
+      setModal({ open: false, hour: '', type: 'free' });
+      resetForm();
+    } catch (e) {
+      alert("Erro ao realizar agendamento manual.");
     }
-    setModal({ open: false, hour: '', type: 'free' });
-    resetForm();
   };
 
   const handleCompleteBooking = async (booking: Booking) => {
@@ -279,8 +293,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Horário do Atendimento</label>
                       <input 
                         type="time" 
-                        defaultValue={new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        onChange={e => setModal({...modal, hour: e.target.value})}
+                        value={manualTime}
+                        onChange={e => setManualTime(e.target.value)}
                         className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold"
                       />
                     </div>

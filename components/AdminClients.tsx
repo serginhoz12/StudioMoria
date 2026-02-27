@@ -93,6 +93,19 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
     }
   };
 
+  const handleDeleteBooking = async (bookingId: string) => {
+    if (!(db as any)._isMock) {
+      if (!confirm("Deseja realmente excluir este registro de atendimento? Esta ação é irreversível e pode afetar as estatísticas financeiras se o atendimento já foi concluído.")) return;
+      
+      try {
+        await deleteDoc(doc(db, "bookings", bookingId));
+        alert("Registro excluído com sucesso.");
+      } catch (e) {
+        alert("Erro ao excluir registro.");
+      }
+    }
+  };
+
   const getClientStats = (customerId: string) => {
     const myBookings = bookings.filter(b => b.customerId === customerId);
     const myTransactions = transactions.filter(t => t.customerId === customerId);
@@ -245,7 +258,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-8 border-b border-gray-50 pb-4">Histórico Moriá</h4>
                   <div className="space-y-4">
                     {bookings.filter(b => b.customerId === selectedCustomer.id).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime()).map(booking => (
-                      <div key={booking.id} className="flex justify-between p-8 bg-white border border-gray-50 rounded-[2.5rem] items-center hover:border-tea-100 transition-all shadow-sm">
+                      <div key={booking.id} className="flex justify-between p-8 bg-white border border-gray-50 rounded-[2.5rem] items-center hover:border-tea-100 transition-all shadow-sm group/item">
                         <div>
                           <p className="font-bold text-tea-950 text-lg leading-tight">{booking.serviceName}</p>
                           <div className="flex items-center gap-4 mt-2">
@@ -253,13 +266,22 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                             {booking.rescheduledCount ? <span className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded italic">Remarcado {booking.rescheduledCount}x</span> : null}
                           </div>
                         </div>
-                        <span className={`px-5 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-sm ${
-                          booking.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' : 
-                          booking.status === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-100' : 
-                          'bg-tea-900 text-white'
-                        }`}>
-                          {booking.status === 'completed' ? 'Finalizado' : booking.status === 'cancelled' ? 'Cancelado' : 'Agendado'}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className={`px-5 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-sm ${
+                            booking.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' : 
+                            booking.status === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-100' : 
+                            'bg-tea-900 text-white'
+                          }`}>
+                            {booking.status === 'completed' ? 'Finalizado' : booking.status === 'cancelled' ? 'Cancelado' : 'Agendado'}
+                          </span>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id); }}
+                            className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-all"
+                            title="Excluir Registro"
+                          >
+                            🗑️
+                          </button>
+                        </div>
                       </div>
                     ))}
                     {bookings.filter(b => b.customerId === selectedCustomer.id).length === 0 && (
