@@ -33,16 +33,26 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda'>(initialTab);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isBooking, setIsBooking] = useState(false);
 
-  // Filtra slots abertos pela Moriá para a data selecionada
+  // Filtra slots abertos pela Moriá de hoje em diante
   const availableSlots = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
     return bookings.filter(b => 
       b.status === 'open' && 
-      b.dateTime.startsWith(selectedDate)
+      b.dateTime >= today
     ).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
-  }, [bookings, selectedDate]);
+  }, [bookings]);
+
+  const groupedSlots = useMemo(() => {
+    const groups: { [key: string]: Booking[] } = {};
+    availableSlots.forEach(slot => {
+      const date = slot.dateTime.split(' ')[0];
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(slot);
+    });
+    return groups;
+  }, [availableSlots]);
 
   const handleBookSlot = async (slot: Booking) => {
     if (!selectedService) return;
@@ -97,7 +107,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         customerWhatsapp: customer.whatsapp,
         serviceId: selectedService.id,
         serviceName: selectedService.name,
-        preferredDate: selectedDate,
+        preferredDate: new Date().toISOString().split('T')[0],
         status: 'active',
         createdAt: new Date().toISOString()
       });
@@ -185,33 +195,35 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 
                 <div className="p-8 bg-white rounded-[3rem] shadow-sm border border-gray-100 space-y-4 text-center">
                   <h3 className="text-2xl font-serif text-tea-950 font-bold italic">{selectedService.name}</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Selecione a Data Desejada</p>
-                  <input 
-                    type="date" 
-                    value={selectedDate} 
-                    min={new Date().toISOString().split('T')[0]}
-                    onChange={e => setSelectedDate(e.target.value)} 
-                    className="w-full p-5 bg-gray-50 border-2 border-transparent focus:border-tea-100 rounded-2xl font-bold outline-none text-center" 
-                  />
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Escolha o melhor horário para você</p>
                 </div>
 
-                <div className="space-y-6">
-                  {availableSlots.length > 0 ? (
-                    <div className="space-y-6">
-                      <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest text-center">Horários Disponíveis</h4>
-                      <div className="grid grid-cols-3 gap-3">
-                        {availableSlots.map(slot => (
-                          <button 
-                            key={slot.id} 
-                            disabled={isBooking}
-                            onClick={() => handleBookSlot(slot)}
-                            className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-xs shadow-lg hover:bg-black transition-all active:scale-95 disabled:opacity-50"
-                          >
-                            {slot.dateTime.split(' ')[1]}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[9px] text-gray-400 text-center italic">Toque no horário para confirmar seu agendamento.</p>
+                <div className="space-y-8">
+                  {Object.keys(groupedSlots).length > 0 ? (
+                    <div className="space-y-8 max-h-[50vh] overflow-y-auto pr-2 custom-scroll">
+                      {Object.entries(groupedSlots).map(([date, slots]: [string, any]) => (
+                        <div key={date} className="space-y-4">
+                          <div className="flex items-center gap-3">
+                            <div className="h-px flex-1 bg-gray-100"></div>
+                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+                              {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                            </span>
+                            <div className="h-px flex-1 bg-gray-100"></div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            {(slots as Booking[]).map(slot => (
+                              <button 
+                                key={slot.id} 
+                                disabled={isBooking}
+                                onClick={() => handleBookSlot(slot)}
+                                className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-xs shadow-lg hover:bg-black transition-all active:scale-95 disabled:opacity-50"
+                              >
+                                {slot.dateTime.split(' ')[1]}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="p-10 bg-tea-50 rounded-[3rem] border border-tea-100 text-center space-y-6">
@@ -219,7 +231,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                        <div className="space-y-2">
                           <h4 className="text-lg font-serif font-bold text-tea-900 italic">Nenhum horário livre</h4>
                           <p className="text-xs text-tea-700 leading-relaxed">
-                            Infelizmente não há horários liberados para <strong>{new Date(selectedDate + 'T00:00:00').toLocaleDateString()}</strong>.
+                            Infelizmente não há horários liberados no momento.
                           </p>
                        </div>
                        <button 
@@ -271,8 +283,37 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                    )}
                 </div>
              ))}
-             {bookings.filter(b => b.customerId === customer.id).length === 0 && (
-               <div className="text-center py-20 opacity-30 italic text-sm">Você ainda não tem agendamentos.</div>
+             {bookings.filter(b => b.customerId === customer.id).length === 0 && waitlist.length === 0 && (
+               <div className="text-center py-20 opacity-30 italic text-sm">Você ainda não tem agendamentos ou esperas.</div>
+             )}
+
+             {waitlist.length > 0 && (
+               <div className="space-y-4 pt-8 border-t border-gray-100">
+                 <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest text-center">Minha Lista de Espera</h4>
+                 {waitlist.map(w => {
+                   const service = services.find(s => s.id === w.serviceId);
+                   return (
+                     <div key={w.id} className="p-6 bg-tea-50/50 rounded-[2.5rem] border border-tea-100/50 space-y-3 relative">
+                       <div className="flex justify-between items-start">
+                         <div>
+                           <h5 className="text-sm font-serif font-bold text-tea-950 italic">{service?.name || 'Procedimento'}</h5>
+                           <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest">Aguardando vaga para {w.date}</p>
+                         </div>
+                         <button 
+                           onClick={() => onRemoveWaitlist(w.id)}
+                           className="text-tea-300 hover:text-red-400 transition-colors text-xs"
+                         >
+                           ✕
+                         </button>
+                       </div>
+                       <div className="flex items-center gap-2">
+                         <span className="w-2 h-2 bg-tea-400 rounded-full animate-pulse"></span>
+                         <span className="text-[9px] text-tea-700 font-bold uppercase tracking-widest">Status: Na fila</span>
+                       </div>
+                     </div>
+                   );
+                 })}
+               </div>
              )}
           </div>
         )}

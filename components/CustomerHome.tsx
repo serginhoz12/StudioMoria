@@ -8,18 +8,27 @@ interface CustomerHomeProps {
   bookings: Booking[];
   onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
   onAuthClick: () => void;
-  onQuickRegister: (name: string, whatsapp: string) => Promise<string | null>;
-  onAddToWaitlist: (serviceId: string, date: string) => void;
+  onLoginSuccess: () => void;
+  onQuickRegister: (name: string, whatsapp: string, bookingId?: string, serviceId?: string, isWaitlist?: boolean) => Promise<string | null>;
+  onAddToWaitlist: (serviceId: string) => void;
   currentUser: Customer | null;
 }
 
-const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthClick, onQuickRegister, currentUser }) => {
+const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, bookings, onAuthClick, onLoginSuccess, onQuickRegister, onAddToWaitlist, currentUser }) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
   const [selectedServiceDetail, setSelectedServiceDetail] = useState<Service | null>(null);
   const [showQuickAuth, setShowQuickAuth] = useState(false);
+  const [isWaitlistMode, setIsWaitlistMode] = useState(false);
   const [quickData, setQuickData] = useState({ name: '', whatsapp: '' });
   const [isProcessing, setIsProcessing] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<Booking | null>(null);
+
+  const availableSlots = useMemo(() => {
+    return bookings.filter(b => 
+      b.status === 'open'
+    ).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }, [bookings]);
   
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
@@ -32,6 +41,11 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
     if (e) e.preventDefault();
     const message = `Olá Moriá! Me chamo ${formData.name || 'uma cliente'} e gostaria de saber mais sobre o Studio.`;
     window.open(`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
+  const closeServiceModal = () => {
+    setSelectedServiceDetail(null);
+    setSelectedSlot(null);
   };
 
   return (
@@ -192,7 +206,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                     <span className="bg-tea-50 text-tea-700 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest inline-block border border-tea-100">Procedimento Studio Moriá</span>
                     <h3 className="text-3xl md:text-4xl font-serif text-tea-950 font-bold italic leading-tight">{selectedServiceDetail.name}</h3>
                  </div>
-                 <button onClick={() => setSelectedServiceDetail(null)} className="p-4 hover:bg-tea-50 rounded-2xl transition-all text-gray-300 hover:text-tea-900">✕</button>
+                 <button onClick={closeServiceModal} className="p-4 hover:bg-tea-50 rounded-2xl transition-all text-gray-300 hover:text-tea-900">✕</button>
               </div>
               
               <div className="space-y-4">
@@ -200,6 +214,70 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                  <p className="text-gray-600 text-lg font-light leading-relaxed whitespace-pre-line">
                    {selectedServiceDetail.description}
                  </p>
+              </div>
+
+              <div className="space-y-6">
+                <h4 className="text-[11px] font-bold text-tea-900 uppercase tracking-widest border-b border-gray-100 pb-2">Horários Disponíveis</h4>
+                {availableSlots.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {availableSlots.slice(0, 12).map(slot => (
+                      <button 
+                        key={slot.id} 
+                        onClick={() => {
+                          setSelectedSlot(slot);
+                          setIsWaitlistMode(false);
+                          if (currentUser) {
+                            onAuthClick(); 
+                            closeServiceModal();
+                          } else {
+                            setShowQuickAuth(true);
+                          }
+                        }}
+                        className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-[10px] shadow-lg hover:bg-black transition-all active:scale-95 flex flex-col items-center"
+                      >
+                        <span className="opacity-60 text-[8px] uppercase">{new Date(slot.dateTime.replace(' ', 'T')).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
+                        <span>{slot.dateTime.split(' ')[1]}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 bg-tea-50 rounded-3xl text-center space-y-4">
+                    <p className="text-xs text-tea-700 font-medium italic">Nenhum horário disponível no momento.</p>
+                    <button 
+                      onClick={() => {
+                        setIsWaitlistMode(true);
+                        if (currentUser) {
+                          onAddToWaitlist(selectedServiceDetail.id);
+                          closeServiceModal();
+                        } else {
+                          setShowQuickAuth(true);
+                        }
+                      }}
+                      className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+                    >
+                      Entrar na Lista de Espera
+                    </button>
+                  </div>
+                )}
+                {availableSlots.length > 0 && (
+                   <div className="pt-4">
+                      <p className="text-[9px] text-gray-400 text-center uppercase tracking-widest mb-4">Ou se preferir ser avisada de novos horários:</p>
+                      <button 
+                        onClick={() => {
+                          setIsWaitlistMode(true);
+                          if (currentUser) {
+                            onAddToWaitlist(selectedServiceDetail.id);
+                            closeServiceModal();
+                          } else {
+                            setShowQuickAuth(true);
+                          }
+                        }}
+                        className="w-full py-4 bg-white text-tea-900 border border-tea-100 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-50 transition-all"
+                      >
+                        Entrar na Lista de Espera
+                      </button>
+                   </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-6 pt-6">
@@ -214,22 +292,9 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               </div>
             </div>
             
-            <div className="p-10 bg-gray-50 border-t border-gray-100 space-y-4">
+            <div className="p-10 bg-gray-50 border-t border-gray-100">
                <button 
-                 onClick={() => { 
-                   if (currentUser) {
-                     onAuthClick(); 
-                     setSelectedServiceDetail(null);
-                   } else {
-                     setShowQuickAuth(true);
-                   }
-                 }} 
-                 className="w-full py-6 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
-               >
-                 Ver Horários & Agendar
-               </button>
-               <button 
-                 onClick={() => setSelectedServiceDetail(null)} 
+                 onClick={closeServiceModal} 
                  className="w-full py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest"
                >
                  Voltar para o Menu
@@ -246,9 +311,17 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
             <button onClick={() => setShowQuickAuth(false)} className="absolute top-8 right-8 text-gray-300 hover:text-tea-900 transition-colors">✕</button>
             
             <div className="text-center space-y-2">
-              <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-sm">💆‍♀️</div>
-              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Quase lá!</h3>
-              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest leading-relaxed">Informe seu nome e WhatsApp para ver os horários disponíveis.</p>
+              <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-sm">
+                {isWaitlistMode ? '📝' : '💆‍♀️'}
+              </div>
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">
+                {isWaitlistMode ? 'Lista de Espera' : 'Quase lá!'}
+              </h3>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest leading-relaxed">
+                {isWaitlistMode 
+                  ? 'Informe seus dados para ser avisada assim que surgir uma vaga.' 
+                  : 'Informe seu nome e WhatsApp para confirmar seu agendamento.'}
+              </p>
             </div>
 
             <div className="space-y-4">
@@ -279,12 +352,21 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               onClick={async () => {
                 setIsProcessing(true);
                 try {
-                  const password = await onQuickRegister(quickData.name, quickData.whatsapp);
+                  const password = await onQuickRegister(
+                    quickData.name, 
+                    quickData.whatsapp, 
+                    selectedSlot?.id, 
+                    selectedServiceDetail?.id,
+                    isWaitlistMode
+                  );
                   if (password) {
                     setGeneratedPassword(password);
                   } else {
+                    if (isWaitlistMode) {
+                      alert("Você foi adicionada à lista de espera com sucesso!");
+                    }
                     setShowQuickAuth(false);
-                    setSelectedServiceDetail(null);
+                    closeServiceModal();
                   }
                 } catch (e) {
                   alert("Erro ao processar seu acesso. Tente novamente.");
@@ -294,7 +376,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               }}
               className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-50"
             >
-              {isProcessing ? 'Processando...' : 'Ver Agenda & Reservar'}
+              {isProcessing ? 'Processando...' : (isWaitlistMode ? 'Entrar na Lista' : 'Confirmar Agendamento')}
             </button>
             
             <p className="text-[8px] text-gray-400 text-center uppercase tracking-widest font-bold">
@@ -328,7 +410,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
               onClick={() => {
                 setGeneratedPassword(null);
                 setShowQuickAuth(false);
-                setSelectedServiceDetail(null);
+                closeServiceModal();
+                onLoginSuccess();
               }}
               className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all"
             >

@@ -342,11 +342,12 @@ const App: React.FC = () => {
           settings={settings} services={services} bookings={bookings} 
           onBook={() => {}} 
           onAuthClick={() => setView(View.CUSTOMER_LOGIN)} 
-          onQuickRegister={async (name, whatsapp) => {
+          onLoginSuccess={() => setView(View.CUSTOMER_DASHBOARD)}
+          onQuickRegister={async (name, whatsapp, bookingId, serviceId, isWaitlist) => {
             if (isMockMode) {
               const mockUser = { id: 'mock', name, whatsapp, cpf: '000', password: '000', receivesNotifications: true, agreedToTerms: true, history: [] };
               setCurrentUser(mockUser);
-              setCustomerInitialTab('agendar');
+              setCustomerInitialTab('agenda');
               setView(View.CUSTOMER_DASHBOARD);
               return null;
             }
@@ -354,37 +355,83 @@ const App: React.FC = () => {
               const q = query(collection(db, "customers"), where("whatsapp", "==", whatsapp));
               const snap = await getDocs(q);
               
+              let user: Customer;
+              let isNew = false;
+              let randomPass = null;
+
               if (!snap.empty) {
-                const existingUser = { ...snap.docs[0].data(), id: snap.docs[0].id } as Customer;
-                setCurrentUser(existingUser);
-                setCustomerInitialTab('agendar');
-                setView(View.CUSTOMER_DASHBOARD);
-                return null;
+                user = { ...snap.docs[0].data(), id: snap.docs[0].id } as Customer;
+              } else {
+                isNew = true;
+                const id = Math.random().toString(36).substr(2, 9);
+                randomPass = Math.floor(1000 + Math.random() * 9000).toString();
+                user = {
+                  id,
+                  name,
+                  whatsapp,
+                  cpf: `S/C-${id.toUpperCase()}`,
+                  password: randomPass, 
+                  receivesNotifications: true,
+                  agreedToTerms: true,
+                  history: []
+                };
+                await setDoc(doc(db, "customers", id), user);
               }
 
-              const id = Math.random().toString(36).substr(2, 9);
-              const randomPass = Math.floor(1000 + Math.random() * 9000).toString();
-              const newUser: Customer = {
-                id,
-                name,
-                whatsapp,
-                cpf: `S/C-${id.toUpperCase()}`,
-                password: randomPass, 
-                receivesNotifications: true,
-                agreedToTerms: true,
-                history: []
-              };
-              await setDoc(doc(db, "customers", id), newUser);
-              setCurrentUser(newUser);
-              setCustomerInitialTab('agendar');
-              setView(View.CUSTOMER_DASHBOARD);
+              // Handle Booking
+              if (bookingId && serviceId && !isWaitlist) {
+                await updateDoc(doc(db, "bookings", bookingId), {
+                  customerId: user.id,
+                  serviceId: serviceId,
+                  status: 'pending',
+                  bookedAt: new Date().toISOString()
+                });
+              }
+
+              // Handle Waitlist if requested during quick register
+              if (isWaitlist && serviceId) {
+                const service = services.find(s => s.id === serviceId);
+                const waitlistId = Math.random().toString(36).substr(2, 9);
+                const waitlistEntry: WaitlistEntry = {
+                  id: waitlistId,
+                  customerId: user.id,
+                  customerName: user.name,
+                  customerWhatsapp: user.whatsapp,
+                  serviceId: serviceId,
+                  serviceName: service?.name || 'Serviço',
+                  preferredDate: 'Qualquer data',
+                  status: 'active',
+                  createdAt: new Date().toISOString()
+                };
+                await setDoc(doc(db, "waitlist", waitlistId), waitlistEntry);
+              }
+
+              setCurrentUser(user);
+              setCustomerInitialTab('agenda');
               return randomPass;
             } catch (err) {
               console.error("Quick Register Error:", err);
               throw err;
             }
           }}
-          onAddToWaitlist={() => {}} 
+          onAddToWaitlist={async (serviceId) => {
+            if (isMockMode || !currentUser) return;
+            const service = services.find(s => s.id === serviceId);
+            const id = Math.random().toString(36).substr(2, 9);
+            const entry: WaitlistEntry = {
+              id,
+              customerId: currentUser.id,
+              customerName: currentUser.name,
+              customerWhatsapp: currentUser.whatsapp,
+              serviceId,
+              serviceName: service?.name || 'Serviço',
+              preferredDate: 'Qualquer data',
+              status: 'active',
+              createdAt: new Date().toISOString()
+            };
+            await setDoc(doc(db, "waitlist", id), entry);
+            alert("Você foi adicionada à lista de espera com sucesso!");
+          }} 
           currentUser={currentUser} 
         />
       );
