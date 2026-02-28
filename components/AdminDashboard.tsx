@@ -48,7 +48,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
     const fTransactions = transactions.filter(t => {
       const d = new Date(t.dueDate || t.date).getTime();
       const isTestUser = testCustomerId && t.customerId === testCustomerId;
-      return d >= start && d <= end && !isTestUser;
+      
+      // Filter out transactions linked to cancelled bookings
+      const linkedBooking = t.bookingId ? bookings.find(b => b.id === t.bookingId) : null;
+      const isCancelledBooking = linkedBooking?.status === 'cancelled';
+      
+      return d >= start && d <= end && !isTestUser && !isCancelledBooking;
     });
 
     const fBookings = bookings.filter(b => {

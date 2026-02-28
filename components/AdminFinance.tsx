@@ -19,10 +19,18 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
   // Identificar ID do cliente de teste
   const testCustomerId = useMemo(() => customers.find(c => c.cpf === '33426618877')?.id, [customers]);
 
-  // Filtrar transações de teste
+  // Filtrar transações de teste e de agendamentos cancelados
   const transactions = useMemo(() => {
-    return allTransactions.filter(t => !testCustomerId || t.customerId !== testCustomerId);
-  }, [allTransactions, testCustomerId]);
+    return allTransactions.filter(t => {
+      const isTestUser = testCustomerId && t.customerId === testCustomerId;
+      
+      // Filter out transactions linked to cancelled bookings
+      const linkedBooking = t.bookingId ? bookings.find(b => b.id === t.bookingId) : null;
+      const isCancelledBooking = linkedBooking?.status === 'cancelled';
+      
+      return !isTestUser && !isCancelledBooking;
+    });
+  }, [allTransactions, testCustomerId, bookings]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState({
