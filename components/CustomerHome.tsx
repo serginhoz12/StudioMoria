@@ -8,13 +8,18 @@ interface CustomerHomeProps {
   bookings: Booking[];
   onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
   onAuthClick: () => void;
+  onQuickRegister: (name: string, whatsapp: string) => Promise<string | null>;
   onAddToWaitlist: (serviceId: string, date: string) => void;
   currentUser: Customer | null;
 }
 
-const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthClick, currentUser }) => {
+const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthClick, onQuickRegister, currentUser }) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
   const [selectedServiceDetail, setSelectedServiceDetail] = useState<Service | null>(null);
+  const [showQuickAuth, setShowQuickAuth] = useState(false);
+  const [quickData, setQuickData] = useState({ name: '', whatsapp: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
@@ -211,7 +216,14 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
             
             <div className="p-10 bg-gray-50 border-t border-gray-100 space-y-4">
                <button 
-                 onClick={() => { onAuthClick(); setSelectedServiceDetail(null); }} 
+                 onClick={() => { 
+                   if (currentUser) {
+                     onAuthClick(); 
+                     setSelectedServiceDetail(null);
+                   } else {
+                     setShowQuickAuth(true);
+                   }
+                 }} 
                  className="w-full py-6 bg-tea-950 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-xl hover:bg-black transition-all"
                >
                  Ver Horários & Agendar
@@ -223,6 +235,105 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, onAuthC
                  Voltar para o Menu
                </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cadastro Rápido */}
+      {showQuickAuth && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-xl animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[4rem] p-10 md:p-14 shadow-3xl animate-slide-up space-y-8 relative">
+            <button onClick={() => setShowQuickAuth(false)} className="absolute top-8 right-8 text-gray-300 hover:text-tea-900 transition-colors">✕</button>
+            
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-sm">💆‍♀️</div>
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Quase lá!</h3>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest leading-relaxed">Informe seu nome e WhatsApp para ver os horários disponíveis.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase ml-4">Seu Nome Completo</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Maria Silva"
+                  className="w-full p-6 bg-gray-50 rounded-3xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-bold shadow-inner"
+                  value={quickData.name}
+                  onChange={e => setQuickData({...quickData, name: e.target.value})}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase ml-4">WhatsApp (com DDD)</label>
+                <input 
+                  type="tel" 
+                  placeholder="Ex: 13997724238"
+                  className="w-full p-6 bg-gray-50 rounded-3xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-bold shadow-inner"
+                  value={quickData.whatsapp}
+                  onChange={e => setQuickData({...quickData, whatsapp: e.target.value})}
+                />
+              </div>
+            </div>
+
+            <button 
+              disabled={isProcessing || !quickData.name || !quickData.whatsapp}
+              onClick={async () => {
+                setIsProcessing(true);
+                try {
+                  const password = await onQuickRegister(quickData.name, quickData.whatsapp);
+                  if (password) {
+                    setGeneratedPassword(password);
+                  } else {
+                    setShowQuickAuth(false);
+                    setSelectedServiceDetail(null);
+                  }
+                } catch (e) {
+                  alert("Erro ao processar seu acesso. Tente novamente.");
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+              className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-50"
+            >
+              {isProcessing ? 'Processando...' : 'Ver Agenda & Reservar'}
+            </button>
+            
+            <p className="text-[8px] text-gray-400 text-center uppercase tracking-widest font-bold">
+              Ao continuar, você concorda com nossos termos de cuidado.
+            </p>
+          </div>
+        </div>
+      )}
+      {/* Modal de Senha Gerada */}
+      {generatedPassword && (
+        <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-tea-950/95 backdrop-blur-2xl animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[4rem] p-10 md:p-14 shadow-3xl animate-slide-up space-y-8 text-center">
+            <div className="w-20 h-20 bg-orange-50 text-orange-600 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-6 shadow-sm">🔐</div>
+            
+            <div className="space-y-2">
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Sua Senha de Acesso</h3>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest leading-relaxed">Guarde esta senha para acessar sua área exclusiva futuramente.</p>
+            </div>
+
+            <div className="p-8 bg-gray-50 rounded-[2.5rem] border-2 border-dashed border-tea-200">
+              <span className="text-4xl font-mono font-bold tracking-[0.5em] text-tea-900">{generatedPassword}</span>
+            </div>
+
+            <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
+              <p className="text-[10px] text-orange-800 font-bold uppercase tracking-widest leading-relaxed">
+                ⚠️ IMPORTANTE: Por segurança, recomendamos trocar esta senha assim que possível no seu perfil.
+              </p>
+            </div>
+
+            <button 
+              onClick={() => {
+                setGeneratedPassword(null);
+                setShowQuickAuth(false);
+                setSelectedServiceDetail(null);
+              }}
+              className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all"
+            >
+              Entendi, ir para Agenda
+            </button>
           </div>
         </div>
       )}

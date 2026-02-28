@@ -56,6 +56,15 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [customerInitialTab, setCustomerInitialTab] = useState<'home' | 'agendar' | 'agenda'>('home');
+
+  const setView = (v: View) => {
+    if (v !== View.CUSTOMER_DASHBOARD) {
+      setCustomerInitialTab('home');
+    }
+    setCurrentView(v);
+  };
+
   const [currentUser, setCurrentUser] = useState<Customer | null>(() => {
     const saved = localStorage.getItem('moria_user');
     return saved ? JSON.parse(saved) : null;
@@ -224,7 +233,7 @@ const App: React.FC = () => {
 
   const renderView = () => {
     if (isAdmin) {
-      if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setCurrentView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
+      if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} isMockMode={isMockMode} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
@@ -244,13 +253,13 @@ const App: React.FC = () => {
             bookings={bookings} 
             services={services}
             settings={settings}
-            // FIX: Removed onBook and onAddToWaitlist as they were not defined in CustomerDashboardProps
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
-            onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
+            onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
             onCancelBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))}
             promotions={promotions}
+            initialTab={customerInitialTab}
          />
        );
     }
@@ -277,7 +286,8 @@ const App: React.FC = () => {
               const user = { id, name: n, whatsapp: w, cpf: c, password: p, receivesNotifications: not, agreedToTerms: true, history: [] };
               await setDoc(doc(db, "customers", id), user);
               setCurrentUser(user);
-              setCurrentView(View.CUSTOMER_DASHBOARD);
+              setCustomerInitialTab('home');
+              setView(View.CUSTOMER_DASHBOARD);
               alert("Cadastro realizado com sucesso!");
             } catch (err: any) {
               console.error("Erro no cadastro:", err);
@@ -289,7 +299,7 @@ const App: React.FC = () => {
             }
           }} 
           customers={customers} 
-          onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
+          onBack={() => setView(View.CUSTOMER_HOME)} 
         />
       );
       case View.CUSTOMER_LOGIN: return (
@@ -318,19 +328,62 @@ const App: React.FC = () => {
 
             if (user) { 
               setCurrentUser(user); 
-              setCurrentView(View.CUSTOMER_DASHBOARD); 
+              setCustomerInitialTab('home');
+              setView(View.CUSTOMER_DASHBOARD); 
             }
             else alert("Acesso inválido ou senha incorreta.");
           }} 
-          onRegisterClick={() => setCurrentView(View.CUSTOMER_REGISTER)} 
-          onBack={() => setCurrentView(View.CUSTOMER_HOME)} 
+          onRegisterClick={() => setView(View.CUSTOMER_REGISTER)} 
+          onBack={() => setView(View.CUSTOMER_HOME)} 
         />
       );
       default: return (
         <CustomerHome 
           settings={settings} services={services} bookings={bookings} 
           onBook={() => {}} 
-          onAuthClick={() => setCurrentView(View.CUSTOMER_LOGIN)} 
+          onAuthClick={() => setView(View.CUSTOMER_LOGIN)} 
+          onQuickRegister={async (name, whatsapp) => {
+            if (isMockMode) {
+              const mockUser = { id: 'mock', name, whatsapp, cpf: '000', password: '000', receivesNotifications: true, agreedToTerms: true, history: [] };
+              setCurrentUser(mockUser);
+              setCustomerInitialTab('agendar');
+              setView(View.CUSTOMER_DASHBOARD);
+              return null;
+            }
+            try {
+              const q = query(collection(db, "customers"), where("whatsapp", "==", whatsapp));
+              const snap = await getDocs(q);
+              
+              if (!snap.empty) {
+                const existingUser = { ...snap.docs[0].data(), id: snap.docs[0].id } as Customer;
+                setCurrentUser(existingUser);
+                setCustomerInitialTab('agendar');
+                setView(View.CUSTOMER_DASHBOARD);
+                return null;
+              }
+
+              const id = Math.random().toString(36).substr(2, 9);
+              const randomPass = Math.floor(1000 + Math.random() * 9000).toString();
+              const newUser: Customer = {
+                id,
+                name,
+                whatsapp,
+                cpf: `S/C-${id.toUpperCase()}`,
+                password: randomPass, 
+                receivesNotifications: true,
+                agreedToTerms: true,
+                history: []
+              };
+              await setDoc(doc(db, "customers", id), newUser);
+              setCurrentUser(newUser);
+              setCustomerInitialTab('agendar');
+              setView(View.CUSTOMER_DASHBOARD);
+              return randomPass;
+            } catch (err) {
+              console.error("Quick Register Error:", err);
+              throw err;
+            }
+          }}
           onAddToWaitlist={() => {}} 
           currentUser={currentUser} 
         />
@@ -342,12 +395,12 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-white">
       {currentView !== View.CUSTOMER_DASHBOARD && (
         <Navbar 
-          view={currentView} setView={setCurrentView} isAdmin={isAdmin} 
+          view={currentView} setView={setView} isAdmin={isAdmin} 
           isMockMode={isMockMode}
-          onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setCurrentView(View.ADMIN_LOGIN); else setCurrentView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} 
+          onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setView(View.ADMIN_LOGIN); else setView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} 
           salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
-          onLogout={() => { setCurrentUser(null); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }} 
-          onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} 
+          onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }} 
+          onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} 
           isAdminAuthenticated={isAdminAuthenticated} 
           pendingBookingsCount={bookings.filter(b => {
             const isPending = b.status === 'pending';

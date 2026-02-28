@@ -15,6 +15,7 @@ interface CustomerDashboardProps {
   waitlist: WaitlistEntry[];
   onRemoveWaitlist: (id: string) => void;
   promotions: Promotion[];
+  initialTab?: 'home' | 'agendar' | 'agenda';
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -27,9 +28,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onCancelBooking,
   waitlist,
   onRemoveWaitlist,
-  promotions
+  promotions,
+  initialTab = 'home'
 }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda'>(initialTab);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [isBooking, setIsBooking] = useState(false);
@@ -298,7 +300,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         : (
                           <>
                             Oi, {customer.name.split(' ')[0]}! 💛<br/><br/>
-                            Passando para lembrar que já está chegando o momento ideal para fazer a manutenção do seu procedimento <strong>{nextEstimate.serviceName}</strong>.<br/><br/>
+                            Passando para lembrar que sua data ideal para manutenção do procedimento <strong>{nextEstimate.serviceName}</strong> é dia <strong>{nextEstimate.date.toLocaleDateString('pt-BR')}</strong>.<br/><br/>
                             Esse intervalo é importante para manter o resultado bonito e, principalmente, a saúde do seu cabelo em dia ✨<br/><br/>
                             Se quiser, posso reservar um horário para você com calma 💆‍♀️
                           </>
@@ -338,7 +340,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 </p>
                 <div className="pt-4 flex justify-center gap-6">
                    <a href={settings.socialLinks.instagram} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-tea-900 transition-colors">Instagram</a>
-                   <a href={settings.socialLinks.whatsapp} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-tea-900 transition-colors">WhatsApp</a>
+                   <a href={`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-tea-900 transition-colors">WhatsApp</a>
                 </div>
              </div>
           </div>

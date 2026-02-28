@@ -251,6 +251,30 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+           <span className="text-3xl">🔗</span> Redes Sociais & Contato
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+           <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Instagram (Link completo)</label>
+              <input 
+                className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
+                value={settings.socialLinks.instagram} 
+                onChange={e => updateGlobalSettings({...settings, socialLinks: {...settings.socialLinks, instagram: e.target.value}})} 
+              />
+           </div>
+           <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">WhatsApp (Apenas números com DDD)</label>
+              <input 
+                className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
+                value={settings.socialLinks.whatsapp} 
+                onChange={e => updateGlobalSettings({...settings, socialLinks: {...settings.socialLinks, whatsapp: e.target.value}})} 
+              />
+           </div>
+        </div>
+      </section>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
            <span className="text-3xl">👥</span> Gestão da Equipe & Folgas
         </h3>
         <div className="flex gap-4 mb-10">
