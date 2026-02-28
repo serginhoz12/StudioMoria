@@ -110,7 +110,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
   };
 
   const getClientStats = (customerId: string) => {
-    const myBookings = bookings.filter(b => b.customerId === customerId);
+    const myBookings = bookings.filter(b => b.customerId === customerId && b.status !== 'cancelled');
     const myTransactions = transactions.filter(t => t.customerId === customerId);
 
     const cancelledCount = myBookings.filter(b => b.status === 'cancelled').length;

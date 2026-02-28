@@ -348,8 +348,7 @@ const App: React.FC = () => {
               const mockUser = { id: 'mock', name, whatsapp, cpf: '000', password: '000', receivesNotifications: true, agreedToTerms: true, history: [] };
               setCurrentUser(mockUser);
               setCustomerInitialTab('agenda');
-              setView(View.CUSTOMER_DASHBOARD);
-              return null;
+              return "1234"; // Return mock password to show pop-up
             }
             try {
               const q = query(collection(db, "customers"), where("whatsapp", "==", whatsapp));

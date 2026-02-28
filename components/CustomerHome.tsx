@@ -367,6 +367,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                     }
                     setShowQuickAuth(false);
                     closeServiceModal();
+                    onLoginSuccess();
                   }
                 } catch (e) {
                   alert("Erro ao processar seu acesso. Tente novamente.");
