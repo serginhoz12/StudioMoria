@@ -52,21 +52,24 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
   };
 
   const handleManualRegister = async () => {
-    if (!newCustomer.name || !newCustomer.whatsapp || !newCustomer.cpf) {
-      return alert("Preencha ao menos Nome, WhatsApp e CPF.");
+    if (!newCustomer.name || !newCustomer.whatsapp) {
+      return alert("Preencha ao menos Nome e WhatsApp.");
     }
 
-    const cleanCpf = newCustomer.cpf.replace(/\D/g, '');
-    const exists = customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf);
-    if (exists) return alert("Este CPF já está cadastrado no sistema.");
-
     const id = Math.random().toString(36).substr(2, 9);
+    const cleanCpf = newCustomer.cpf ? newCustomer.cpf.replace(/\D/g, '') : `TEMP_${id}`;
+    
+    if (newCustomer.cpf) {
+      const exists = customers.some(c => c.cpf.replace(/\D/g, '') === cleanCpf);
+      if (exists) return alert("Este CPF já está cadastrado no sistema.");
+    }
+
     const customerData: Customer = {
       id,
       name: newCustomer.name,
       whatsapp: newCustomer.whatsapp,
-      cpf: newCustomer.cpf,
-      password: newCustomer.password || cleanCpf.substring(0, 4), // Senha padrão: 4 primeiros digitos CPF
+      cpf: newCustomer.cpf || `S/C-${id.toUpperCase()}`,
+      password: newCustomer.password || (newCustomer.cpf ? cleanCpf.substring(0, 4) : '1234'), 
       receivesNotifications: true,
       agreedToTerms: true,
       history: []

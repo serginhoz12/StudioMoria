@@ -1,6 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { Booking, Transaction, Customer, SalonSettings } from '../types';
+import { Booking, Transaction, Customer, SalonSettings, Service } from '../types';
+import { db } from '../firebase.ts';
+import { doc, updateDoc, addDoc, collection } from "firebase/firestore";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend 
@@ -10,11 +12,12 @@ interface AdminDashboardProps {
   bookings: Booking[];
   transactions: Transaction[];
   customers: Customer[];
+  services: Service[];
   settings: SalonSettings;
   onLogout: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, settings, onLogout }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, onLogout }) => {
   const [period, setPeriod] = useState<'current' | 'next' | 'custom'>('current');
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
@@ -112,6 +115,50 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
   const COLORS = ['#418d50', '#8ec99a', '#2a5b35', '#bbe1c2', '#1e3d28', '#5eaa6e'];
 
+  const handleCompleteBooking = async (booking: Booking) => {
+    if (!(db as any)._isMock) {
+      try {
+        const service = services.find(s => s.id === booking.serviceId);
+        const price = service?.price || 0;
+
+        // 1. Update booking status
+        await updateDoc(doc(db, "bookings", booking.id), {
+          status: 'completed',
+          paymentReceived: price,
+          paymentDate: new Date().toISOString()
+        });
+
+        // 2. Create transaction
+        await addDoc(collection(db, "transactions"), {
+          type: 'receivable',
+          description: `Atendimento: ${booking.serviceName} - ${booking.customerName}`,
+          amount: price,
+          date: booking.dateTime.split(' ')[0],
+          status: 'paid',
+          customerId: booking.customerId,
+          customerName: booking.customerName,
+          bookingId: booking.id,
+          serviceName: booking.serviceName,
+          procedureDate: booking.dateTime,
+          paidAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        });
+
+        alert("Atendimento concluído e lançado no caixa!");
+      } catch (e) {
+        console.error(e);
+        alert("Erro ao concluir atendimento.");
+      }
+    }
+  };
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayBookings = useMemo(() => {
+    return bookings
+      .filter(b => b.dateTime.startsWith(todayStr) && b.status === 'scheduled')
+      .sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }, [bookings, todayStr]);
+
   const stats = [
     { label: 'Visitas ao Site', value: totalVisits.toLocaleString(), icon: '👁️', color: 'bg-indigo-50 text-indigo-600' },
     { label: 'Ticket Médio', value: `R$ ${ticketMedio.toFixed(2)}`, icon: '📈', color: 'bg-blue-50 text-blue-600' },
@@ -167,6 +214,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
             <p className="text-2xl font-serif font-bold text-gray-900 italic">{stat.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Agenda do Dia */}
+      <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100">
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h3 className="text-xl font-bold text-tea-900 font-serif italic">Agenda do Dia</h3>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Atendimentos agendados para hoje</p>
+          </div>
+          <span className="bg-tea-50 text-tea-700 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest">
+            {todayBookings.length} agendados
+          </span>
+        </div>
+
+        <div className="space-y-4">
+          {todayBookings.map(booking => (
+            <div key={booking.id} className="flex flex-col sm:flex-row justify-between items-center p-6 bg-gray-50/50 rounded-3xl border border-gray-50 hover:bg-white hover:border-tea-100 transition-all gap-4">
+              <div className="flex items-center gap-6 w-full sm:w-auto">
+                <div className="w-16 h-16 bg-white rounded-2xl flex flex-col items-center justify-center shadow-sm border border-gray-100">
+                  <span className="text-lg font-serif font-bold text-tea-900 italic">{booking.dateTime.split(' ')[1]}</span>
+                  <span className="text-[7px] font-bold text-gray-400 uppercase tracking-tighter">Horário</span>
+                </div>
+                <div>
+                  <p className="font-bold text-tea-950 text-lg leading-tight">{booking.customerName}</p>
+                  <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest mt-1">{booking.serviceName}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 w-full sm:w-auto justify-end">
+                <div className="text-right hidden md:block">
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Profissional</p>
+                  <p className="text-[10px] font-bold text-tea-800">{booking.teamMemberName}</p>
+                </div>
+                <button 
+                  onClick={() => handleCompleteBooking(booking)}
+                  className="px-6 py-3 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest shadow-lg hover:bg-black transition-all whitespace-nowrap"
+                >
+                  Concluir Atendimento
+                </button>
+              </div>
+            </div>
+          ))}
+          {todayBookings.length === 0 && (
+            <div className="py-16 text-center">
+              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-2xl mx-auto mb-4 opacity-50">📅</div>
+              <p className="text-gray-300 italic font-serif">Nenhum agendamento para hoje.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Seção Central: Gráficos e Rankings */}
