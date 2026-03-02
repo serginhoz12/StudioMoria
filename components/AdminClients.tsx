@@ -38,7 +38,12 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
 
   const handleEditClick = () => {
     if (selectedCustomer) {
-      setEditData({ name: selectedCustomer.name, whatsapp: selectedCustomer.whatsapp, cpf: selectedCustomer.cpf });
+      setEditData({ 
+        name: selectedCustomer.name, 
+        whatsapp: selectedCustomer.whatsapp, 
+        cpf: selectedCustomer.cpf,
+        password: selectedCustomer.password
+      });
       setIsEditing(true);
     }
   };
@@ -390,12 +395,16 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                 <input type="text" value={editData.name} onChange={e => setEditData({...editData, name: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Whats</label>
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">WhatsApp</label>
                 <input type="text" value={editData.whatsapp} onChange={e => setEditData({...editData, whatsapp: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">CPF</label>
                 <input type="text" value={editData.cpf} onChange={e => setEditData({...editData, cpf: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Senha de Acesso</label>
+                <input type="text" value={editData.password} onChange={e => setEditData({...editData, password: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" placeholder="Alterar senha do cliente" />
               </div>
               <div className="pt-6 space-y-4">
                 <button onClick={handleSaveEdit} className="w-full py-6 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[11px] tracking-widest shadow-xl hover:bg-black transition-all">Salvar Alterações</button>

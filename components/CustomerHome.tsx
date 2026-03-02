@@ -9,7 +9,7 @@ interface CustomerHomeProps {
   onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
   onAuthClick: () => void;
   onLoginSuccess: () => void;
-  onQuickRegister: (name: string, whatsapp: string, bookingId?: string, serviceId?: string, isWaitlist?: boolean) => Promise<string | null>;
+  onQuickRegister: (name: string, whatsapp: string, bookingId?: string, serviceId?: string, isWaitlist?: boolean) => Promise<{ password: string | null; isNew: boolean }>;
   onAddToWaitlist: (serviceId: string) => void;
   currentUser: Customer | null;
 }
@@ -352,18 +352,20 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               onClick={async () => {
                 setIsProcessing(true);
                 try {
-                  const password = await onQuickRegister(
+                  const result = await onQuickRegister(
                     quickData.name, 
                     quickData.whatsapp, 
                     selectedSlot?.id, 
                     selectedServiceDetail?.id,
                     isWaitlistMode
                   );
-                  if (password) {
-                    setGeneratedPassword(password);
+                  if (result.isNew && result.password) {
+                    setGeneratedPassword(result.password);
                   } else {
                     if (isWaitlistMode) {
                       alert("Você foi adicionada à lista de espera com sucesso!");
+                    } else {
+                      alert("Bem-vinda de volta! Seu agendamento foi registrado.");
                     }
                     setShowQuickAuth(false);
                     closeServiceModal();
@@ -403,7 +405,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
 
             <div className="bg-orange-50 p-6 rounded-3xl border border-orange-100">
               <p className="text-[10px] text-orange-800 font-bold uppercase tracking-widest leading-relaxed">
-                ⚠️ IMPORTANTE: Por segurança, recomendamos trocar esta senha assim que possível no seu perfil.
+                ⚠️ IMPORTANTE: Esta é uma senha temporária. Por segurança, recomendamos trocá-la no seu perfil assim que acessar a área do cliente.
               </p>
             </div>
 
@@ -416,7 +418,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               }}
               className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all"
             >
-              Entendi, ir para Agenda
+              Entendi, Acessar Minha Área
             </button>
           </div>
         </div>

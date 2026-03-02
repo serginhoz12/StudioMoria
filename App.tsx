@@ -256,12 +256,39 @@ const App: React.FC = () => {
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
             onCancelBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
+            onGoToProfile={() => setView(View.CUSTOMER_PROFILE)}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))}
             promotions={promotions}
             initialTab={customerInitialTab}
          />
        );
+    }
+
+    if (currentUser && currentView === View.CUSTOMER_PROFILE) {
+      return (
+        <CustomerProfile 
+          customer={currentUser} 
+          transactions={transactions} 
+          bookings={bookings} 
+          onUpdateNotification={(val) => {
+            if (currentUser) {
+              const updated = { ...currentUser, receivesNotifications: val };
+              setCurrentUser(updated);
+              if (!isMockMode) updateDoc(doc(db, "customers", currentUser.id), { receivesNotifications: val });
+            }
+          }}
+          onUpdatePassword={async (newPass) => {
+            if (currentUser) {
+              const updated = { ...currentUser, password: newPass };
+              setCurrentUser(updated);
+              if (!isMockMode) await updateDoc(doc(db, "customers", currentUser.id), { password: newPass });
+              alert("Senha atualizada com sucesso!");
+            }
+          }}
+          onBack={() => setView(View.CUSTOMER_DASHBOARD)} 
+        />
+      );
     }
 
     switch (currentView) {
@@ -344,19 +371,20 @@ const App: React.FC = () => {
           onAuthClick={() => setView(View.CUSTOMER_LOGIN)} 
           onLoginSuccess={() => setView(View.CUSTOMER_DASHBOARD)}
           onQuickRegister={async (name, whatsapp, bookingId, serviceId, isWaitlist) => {
+            const cleanWhatsapp = whatsapp.replace(/\D/g, '');
             if (isMockMode) {
-              const mockUser = { id: 'mock', name, whatsapp, cpf: '000', password: '000', receivesNotifications: true, agreedToTerms: true, history: [] };
+              const mockUser = { id: 'mock', name, whatsapp: cleanWhatsapp, cpf: '000', password: '000', receivesNotifications: true, agreedToTerms: true, history: [] };
               setCurrentUser(mockUser);
               setCustomerInitialTab('agenda');
-              return "1234"; // Return mock password to show pop-up
+              return { password: "1234", isNew: true }; 
             }
             try {
-              const q = query(collection(db, "customers"), where("whatsapp", "==", whatsapp));
+              const q = query(collection(db, "customers"), where("whatsapp", "==", cleanWhatsapp));
               const snap = await getDocs(q);
               
               let user: Customer;
-              let isNew = false;
               let randomPass = null;
+              let isNew = false;
 
               if (!snap.empty) {
                 user = { ...snap.docs[0].data(), id: snap.docs[0].id } as Customer;
@@ -367,7 +395,7 @@ const App: React.FC = () => {
                 user = {
                   id,
                   name,
-                  whatsapp,
+                  whatsapp: cleanWhatsapp,
                   cpf: `S/C-${id.toUpperCase()}`,
                   password: randomPass, 
                   receivesNotifications: true,
@@ -375,6 +403,7 @@ const App: React.FC = () => {
                   history: []
                 };
                 await setDoc(doc(db, "customers", id), user);
+                console.log("Novo cliente cadastrado:", user.id);
               }
 
               // Handle Booking
@@ -387,7 +416,7 @@ const App: React.FC = () => {
                 });
               }
 
-              // Handle Waitlist if requested during quick register
+              // Handle Waitlist
               if (isWaitlist && serviceId) {
                 const service = services.find(s => s.id === serviceId);
                 const waitlistId = Math.random().toString(36).substr(2, 9);
@@ -407,7 +436,7 @@ const App: React.FC = () => {
 
               setCurrentUser(user);
               setCustomerInitialTab('agenda');
-              return randomPass;
+              return { password: randomPass, isNew };
             } catch (err) {
               console.error("Quick Register Error:", err);
               throw err;

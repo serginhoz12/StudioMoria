@@ -8,19 +8,23 @@ interface CustomerProfileProps {
   transactions: Transaction[];
   bookings: Booking[];
   onUpdateNotification: (val: boolean) => void;
+  onUpdatePassword: (newPass: string) => Promise<void>;
   onBack: () => void;
 }
 
-const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transactions, bookings, onBack }) => {
+const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transactions, bookings, onUpdateNotification, onUpdatePassword, onBack }) => {
   const [modalConfig, setModalConfig] = useState<{ open: boolean; title: string; type: 'terms' | 'privacy' }>({
     open: false,
     title: '',
     type: 'terms'
   });
+  const [newPassword, setNewPassword] = useState('');
+  const [isUpdatingPass, setIsUpdatingPass] = useState(false);
 
   const myTransactions = useMemo(() => 
     transactions.filter(t => t.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
   [transactions, customer.id]);
+
 
   const myBookings = useMemo(() => 
     bookings.filter(b => b.customerId === customer.id),
@@ -158,6 +162,58 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
                     </div>
                  </div>
               ))}
+            </div>
+          </section>
+
+          <section className="space-y-8">
+            <h3 className="text-2xl font-serif text-tea-950 font-bold italic border-b border-gray-100 pb-4">Preferências</h3>
+            <div className="bg-white p-10 rounded-[3rem] border border-gray-100 flex items-center justify-between shadow-sm">
+              <div>
+                <p className="text-sm font-bold text-tea-950">Notificações via WhatsApp</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Lembretes de agendamento e promoções</p>
+              </div>
+              <button 
+                onClick={() => onUpdateNotification(!customer.receivesNotifications)}
+                className={`w-16 h-8 rounded-full transition-all relative ${customer.receivesNotifications ? 'bg-tea-900' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${customer.receivesNotifications ? 'right-1' : 'left-1'}`}></div>
+              </button>
+            </div>
+          </section>
+
+          <section className="space-y-8">
+            <h3 className="text-2xl font-serif text-tea-950 font-bold italic border-b border-gray-100 pb-4">Segurança</h3>
+            <div className="bg-gray-50 p-10 rounded-[3rem] border border-gray-100 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Nova Senha de Acesso</label>
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <input 
+                    type="password" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Digite sua nova senha"
+                    className="flex-grow p-5 bg-white rounded-2xl outline-none font-bold text-sm shadow-sm border border-gray-100 focus:border-tea-200 transition-all"
+                  />
+                  <button 
+                    disabled={isUpdatingPass || !newPassword}
+                    onClick={async () => {
+                      setIsUpdatingPass(true);
+                      try {
+                        await onUpdatePassword(newPassword);
+                        setNewPassword('');
+                      } finally {
+                        setIsUpdatingPass(false);
+                      }
+                    }}
+                    className="px-10 py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-black transition-all disabled:opacity-50"
+                  >
+                    {isUpdatingPass ? 'Atualizando...' : 'Alterar Senha'}
+                  </button>
+                </div>
+                <p className="text-[9px] text-gray-400 mt-2 px-2 uppercase font-bold tracking-tighter italic">
+                  Recomendamos trocar a senha gerada automaticamente no seu primeiro acesso.
+                </p>
+              </div>
             </div>
           </section>
         </div>

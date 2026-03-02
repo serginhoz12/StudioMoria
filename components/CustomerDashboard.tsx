@@ -12,6 +12,7 @@ interface CustomerDashboardProps {
   onLogout: () => void;
   onUpdateProfile: (upd: any) => void;
   onCancelBooking: (id: string) => void;
+  onGoToProfile: () => void;
   waitlist: WaitlistEntry[];
   onRemoveWaitlist: (id: string) => void;
   promotions: Promotion[];
@@ -26,6 +27,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   onLogout,
   onUpdateProfile,
   onCancelBooking,
+  onGoToProfile,
   waitlist,
   onRemoveWaitlist,
   promotions,
@@ -393,6 +395,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
             <button onClick={() => setActiveTab('home')} className={`text-xl transition-all ${activeTab === 'home' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>🏠</button>
             <button onClick={() => setActiveTab('agendar')} className={`text-xl transition-all ${activeTab === 'agendar' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>✨</button>
             <button onClick={() => setActiveTab('agenda')} className={`text-xl transition-all ${activeTab === 'agenda' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>🗓️</button>
+            <button onClick={onGoToProfile} className="text-xl text-white/30 hover:text-tea-400 transition-all">👤</button>
             <button onClick={onLogout} className="text-xl text-red-900/40">👋</button>
          </div>
       </nav>
