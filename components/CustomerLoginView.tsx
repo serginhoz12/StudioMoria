@@ -2,21 +2,21 @@
 import React, { useState } from 'react';
 
 interface CustomerLoginViewProps {
-  onLogin: (cpf: string, pass: string) => void;
+  onLogin: (identifier: string, pass: string) => void;
   onRegisterClick: () => void;
   onBack: () => void;
 }
 
 const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegisterClick, onBack }) => {
-  const [cpf, setCpf] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (cpf && password) {
-      onLogin(cpf, password);
+    if (identifier && password) {
+      onLogin(identifier, password);
     } else {
-      alert("Por favor, preencha CPF e Senha.");
+      alert("Por favor, preencha CPF/WhatsApp e Senha.");
     }
   };
 
@@ -30,13 +30,13 @@ const CustomerLoginView: React.FC<CustomerLoginViewProps> = ({ onLogin, onRegist
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Seu CPF</label>
+            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">WhatsApp / Celular</label>
             <input 
               type="text" 
-              placeholder="000.000.000-00"
+              placeholder="(00) 00000-0000"
               className="w-full px-6 py-4 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-tea-200 focus:bg-white outline-none transition-all text-gray-800"
-              value={cpf}
-              onChange={(e) => setCpf(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
             />
           </div>

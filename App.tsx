@@ -331,21 +331,21 @@ const App: React.FC = () => {
       );
       case View.CUSTOMER_LOGIN: return (
         <CustomerLoginView 
-          onLogin={async (cpf, pass) => {
-            const cleanInputCPF = cpf.replace(/\D/g, '');
+          onLogin={async (identifier, pass) => {
+            const cleanInput = identifier.replace(/\D/g, '');
             
-            // Try local search first
-            let user = customers.find(c => c.cpf.replace(/\D/g, '') === cleanInputCPF && c.password === pass);
+            // Try local search first (WhatsApp)
+            let user = customers.find(c => c.whatsapp.replace(/\D/g, '') === cleanInput && c.password === pass);
             
             // If not found and list might be empty due to permissions, try direct query
             if (!user && !isMockMode) {
               try {
-                const q = query(collection(db, "customers"), where("cpf", "==", cpf));
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                  const found = snap.docs[0].data() as Customer;
+                const qWa = query(collection(db, "customers"), where("whatsapp", "==", cleanInput));
+                const snapWa = await getDocs(qWa);
+                if (!snapWa.empty) {
+                  const found = snapWa.docs[0].data() as Customer;
                   if (found.password === pass) {
-                    user = { ...found, id: snap.docs[0].id };
+                    user = { ...found, id: snapWa.docs[0].id };
                   }
                 }
               } catch (err) {
