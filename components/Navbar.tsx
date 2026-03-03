@@ -66,7 +66,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
               <span className="text-[6px] font-bold text-tea-600 uppercase tracking-widest mt-0.5">
-                v1.0.5 • Atualizado em 27/02
+                v1.0.6 • Atualizado em 02/03
               </span>
             </div>
           </div>
