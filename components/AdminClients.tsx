@@ -1,18 +1,20 @@
 
 import React, { useState } from 'react';
-import { Customer, Booking, Transaction } from '../types';
+import { Customer, Booking, Transaction, WaitlistEntry } from '../types';
 import { db } from '../firebase.ts';
 import { collection, setDoc, doc, deleteDoc, updateDoc } from "firebase/firestore";
+import CustomerHistoryContent from './CustomerHistoryContent';
 
 interface AdminClientsProps {
   customers: Customer[];
   bookings: Booking[];
   transactions: Transaction[];
+  waitlist: WaitlistEntry[];
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Customer>) => void;
 }
 
-const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transactions, onDelete, onUpdate }) => {
+const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transactions, waitlist, onDelete, onUpdate }) => {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -225,78 +227,13 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                 </div>
               </div>
 
-              <div className="p-10 flex-grow overflow-y-auto custom-scroll space-y-12">
-                <section>
-                  <div className="flex items-center justify-between mb-8 border-b border-gray-50 pb-4">
-                    <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em]">Resumo de Pontualidade</h4>
-                    <span className="text-[8px] bg-tea-950 text-white px-3 py-1 rounded-full font-bold uppercase tracking-widest">Dossiê Interno</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-50 text-center shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Cancelamentos</p>
-                      <p className={`text-4xl font-serif font-bold ${getClientStats(selectedCustomer.id).cancelledCount > 2 ? 'text-red-500' : 'text-tea-950'}`}>{getClientStats(selectedCustomer.id).cancelledCount}</p>
-                    </div>
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-50 text-center shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Remarcações</p>
-                      <p className="text-4xl font-serif font-bold text-tea-950">{getClientStats(selectedCustomer.id).reschedules}</p>
-                    </div>
-                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-50 text-center shadow-sm">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase mb-4 tracking-widest">Pagto Atrasado</p>
-                      <p className={`text-4xl font-serif font-bold ${getClientStats(selectedCustomer.id).latePayments > 0 ? 'text-orange-500' : 'text-tea-950'}`}>{getClientStats(selectedCustomer.id).latePayments}</p>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-8 border-b border-gray-50 pb-4">Posição Financeira</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="bg-tea-950 p-8 rounded-[2.5rem] text-white shadow-xl relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-4 opacity-10 text-5xl">✓</div>
-                      <p className="text-[10px] font-bold text-tea-300 uppercase mb-2 tracking-widest">Total Gasto</p>
-                      <p className="text-3xl font-serif font-bold">R$ {getClientStats(selectedCustomer.id).paid.toFixed(2)}</p>
-                    </div>
-                    <div className="bg-gray-50 p-8 rounded-[2.5rem] border border-gray-100 shadow-inner">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mb-2 tracking-widest">Dívida Atual</p>
-                      <p className="text-3xl font-serif font-bold text-tea-900">R$ {getClientStats(selectedCustomer.id).pending.toFixed(2)}</p>
-                    </div>
-                  </div>
-                </section>
-
-                <section>
-                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-8 border-b border-gray-50 pb-4">Histórico Moriá</h4>
-                  <div className="space-y-4">
-                    {bookings.filter(b => b.customerId === selectedCustomer.id).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime()).map(booking => (
-                      <div key={booking.id} className="flex justify-between p-8 bg-white border border-gray-50 rounded-[2.5rem] items-center hover:border-tea-100 transition-all shadow-sm group/item">
-                        <div>
-                          <p className="font-bold text-tea-950 text-lg leading-tight">{booking.serviceName}</p>
-                          <div className="flex items-center gap-4 mt-2">
-                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {booking.dateTime}</p>
-                            {booking.rescheduledCount ? <span className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded italic">Remarcado {booking.rescheduledCount}x</span> : null}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`px-5 py-2 rounded-full text-[9px] font-bold uppercase tracking-widest shadow-sm ${
-                            booking.status === 'completed' ? 'bg-green-100 text-green-700 border border-green-200' : 
-                            booking.status === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-100' : 
-                            'bg-tea-900 text-white'
-                          }`}>
-                            {booking.status === 'completed' ? 'Finalizado' : booking.status === 'cancelled' ? 'Cancelado' : 'Agendado'}
-                          </span>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleDeleteBooking(booking.id); }}
-                            className="p-2 text-gray-300 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-all"
-                            title="Excluir Registro"
-                          >
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                    {bookings.filter(b => b.customerId === selectedCustomer.id).length === 0 && (
-                      <p className="text-center py-10 text-gray-300 italic">Sem agendamentos registrados.</p>
-                    )}
-                  </div>
-                </section>
+              <div className="p-10 flex-grow overflow-y-auto custom-scroll">
+                <CustomerHistoryContent 
+                  customer={selectedCustomer}
+                  bookings={bookings}
+                  transactions={transactions}
+                  waitlist={waitlist}
+                />
               </div>
             </div>
           ) : (

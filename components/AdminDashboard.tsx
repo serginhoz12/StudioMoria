@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo } from 'react';
-import { Booking, Transaction, Customer, SalonSettings, Service } from '../types';
+import { Booking, Transaction, Customer, SalonSettings, Service, WaitlistEntry } from '../types';
 import { db } from '../firebase.ts';
 import { doc, updateDoc, addDoc, collection } from "firebase/firestore";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend 
 } from 'recharts';
+import CustomerHistoryModal from './CustomerHistoryModal';
 
 interface AdminDashboardProps {
   bookings: Booking[];
@@ -14,11 +15,13 @@ interface AdminDashboardProps {
   customers: Customer[];
   services: Service[];
   settings: SalonSettings;
+  waitlist: WaitlistEntry[];
   onLogout: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, onLogout }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, waitlist, onLogout }) => {
   const [period, setPeriod] = useState<'current' | 'next' | 'custom'>('current');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
@@ -88,11 +91,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
   // Ranking: Clientes que mais gastaram (LTV no período)
   const topSpenders = useMemo(() => {
-    const spenders: Record<string, { name: string, total: number }> = {};
+    const spenders: Record<string, { id: string, name: string, total: number }> = {};
     filteredData.transactions
       .filter(t => t.type === 'receivable' && t.status === 'paid' && t.customerId)
       .forEach(t => {
-        if (!spenders[t.customerId!]) spenders[t.customerId!] = { name: t.customerName || 'Cliente', total: 0 };
+        if (!spenders[t.customerId!]) spenders[t.customerId!] = { id: t.customerId!, name: t.customerName || 'Cliente', total: 0 };
         spenders[t.customerId!].total += t.amount;
       });
     return Object.values(spenders).sort((a, b) => b.total - a.total).slice(0, 5);
@@ -100,11 +103,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
   // Ranking: Clientes mais frequentes
   const topFrequent = useMemo(() => {
-    const frequent: Record<string, { name: string, count: number }> = {};
+    const frequent: Record<string, { id: string, name: string, count: number }> = {};
     filteredData.bookings
       .filter(b => b.status === 'completed')
       .forEach(b => {
-        if (!frequent[b.customerId]) frequent[b.customerId] = { name: b.customerName, count: 0 };
+        if (!frequent[b.customerId]) frequent[b.customerId] = { id: b.customerId, name: b.customerName, count: 0 };
         frequent[b.customerId].count += 1;
       });
     return Object.values(frequent).sort((a, b) => b.count - a.count).slice(0, 5);
@@ -316,13 +319,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
            <h3 className="text-lg font-bold text-tea-900 mb-6 font-serif italic">Maiores Faturamentos</h3>
            <div className="space-y-4">
               {topSpenders.map((s, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-50 hover:bg-white transition-all">
+                <button 
+                  key={i} 
+                  onClick={() => setSelectedCustomerId(s.id)}
+                  className="w-full flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-50 hover:bg-white transition-all group"
+                >
                    <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-tea-900 text-white rounded-lg flex items-center justify-center font-bold text-xs">{i + 1}</div>
-                      <span className="text-xs font-bold text-gray-800 line-clamp-1">{s.name}</span>
+                      <span className="text-xs font-bold text-gray-800 line-clamp-1 group-hover:text-tea-800 transition-colors">{s.name}</span>
                    </div>
                    <span className="text-sm font-bold text-tea-800">R$ {s.total.toFixed(0)}</span>
-                </div>
+                </button>
               ))}
               {topSpenders.length === 0 && <p className="text-center py-10 text-gray-300 italic">Sem dados financeiros.</p>}
            </div>
@@ -333,13 +340,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
            <h3 className="text-lg font-bold text-tea-900 mb-6 font-serif italic">Clientes Mais Assíduas</h3>
            <div className="space-y-4">
               {topFrequent.map((s, i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-tea-50/30 rounded-2xl border border-tea-50 hover:bg-white transition-all">
+                <button 
+                  key={i} 
+                  onClick={() => setSelectedCustomerId(s.id)}
+                  className="w-full flex items-center justify-between p-4 bg-tea-50/30 rounded-2xl border border-tea-50 hover:bg-white transition-all group"
+                >
                    <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-tea-200 text-tea-900 rounded-lg flex items-center justify-center font-bold text-xs">{i + 1}</div>
-                      <span className="text-xs font-bold text-gray-800 line-clamp-1">{s.name}</span>
+                      <span className="text-xs font-bold text-gray-800 line-clamp-1 group-hover:text-tea-800 transition-colors">{s.name}</span>
                    </div>
                    <span className="text-[10px] font-bold uppercase tracking-widest text-tea-700">{s.count} visitas</span>
-                </div>
+                </button>
               ))}
               {topFrequent.length === 0 && <p className="text-center py-10 text-gray-300 italic">Sem agendamentos concluídos.</p>}
            </div>
@@ -393,6 +404,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
             </div>
          </div>
       </div>
+      {/* Modal de Histórico da Cliente */}
+      {selectedCustomerId && (
+        <CustomerHistoryModal 
+          customer={customers.find(c => c.id === selectedCustomerId)!}
+          bookings={bookings}
+          transactions={transactions}
+          waitlist={waitlist}
+          onClose={() => setSelectedCustomerId(null)}
+        />
+      )}
     </div>
   );
 };

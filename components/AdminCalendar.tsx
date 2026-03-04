@@ -1,24 +1,28 @@
 
 import React, { useState } from 'react';
-import { Booking, Service, TeamMember, SalonSettings, Customer } from '../types';
+import { Booking, Service, TeamMember, SalonSettings, Customer, Transaction, WaitlistEntry } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc, writeBatch, getDocs, query, where } from "firebase/firestore";
+import CustomerHistoryModal from './CustomerHistoryModal';
 
 interface AdminCalendarProps {
   bookings: Booking[];
   services: Service[];
   customers: Customer[];
+  transactions: Transaction[];
+  waitlist: WaitlistEntry[];
   teamMembers: TeamMember[];
   settings?: SalonSettings;
   onUpdateStatus?: (id: string, status: any) => void;
 }
 
-const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, teamMembers, settings }) => {
+const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, settings }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
   const [modal, setModal] = useState<{ open: boolean; hour: string; type: 'free' | 'occupied' | 'opened' }>({ open: false, hour: '', type: 'free' });
   const [customerSearch, setCustomerSearch] = useState('');
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [historyCustomerId, setHistoryCustomerId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -362,7 +366,17 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                <div className="space-y-6">
                   <div className="p-8 bg-tea-900 text-white rounded-[2.5rem] text-center shadow-xl">
                      <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-2">Cliente Agendada</p>
-                     <p className="font-serif text-2xl font-bold italic">{getSlotData(modal.hour).booking?.customerName}</p>
+                     <button 
+                      onClick={() => {
+                        const booking = getSlotData(modal.hour).booking;
+                        if (booking?.customerId && booking?.customerId !== 'none') {
+                          setHistoryCustomerId(booking.customerId);
+                        }
+                      }}
+                      className="font-serif text-2xl font-bold italic hover:text-tea-100 transition-colors"
+                     >
+                      {getSlotData(modal.hour).booking?.customerName}
+                     </button>
                      <p className="text-xs text-tea-100 mt-2 font-medium">{getSlotData(modal.hour).booking?.serviceName}</p>
                   </div>
                   
@@ -403,6 +417,16 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
            <span className="text-[9px] font-bold text-tea-950 uppercase tracking-widest">Agendado</span>
         </div>
       </div>
+      {/* Modal de Histórico da Cliente */}
+      {historyCustomerId && (
+        <CustomerHistoryModal 
+          customer={customers.find(c => c.id === historyCustomerId)!}
+          bookings={bookings}
+          transactions={transactions}
+          waitlist={waitlist}
+          onClose={() => setHistoryCustomerId(null)}
+        />
+      )}
     </div>
   );
 };

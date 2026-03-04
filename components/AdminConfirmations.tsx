@@ -1,14 +1,16 @@
 
 import React, { useState } from 'react';
-import { Booking, Customer, WaitlistEntry, Service, TeamMember } from '../types';
+import { Booking, Customer, WaitlistEntry, Service, TeamMember, Transaction } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import CustomerHistoryModal from './CustomerHistoryModal';
 
 interface AdminConfirmationsProps {
   bookings: Booking[];
   customers: Customer[];
   waitlist: WaitlistEntry[];
   services: Service[];
+  transactions: Transaction[];
   teamMembers: TeamMember[];
   onUpdateStatus?: (id: string, status: any) => void;
   onUpdateDeposit?: (id: string, status: any) => void;
@@ -16,8 +18,9 @@ interface AdminConfirmationsProps {
   onRemoveWaitlist?: (id: string) => void;
 }
 
-const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, teamMembers, onUpdateStatus }) => {
+const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, onUpdateStatus }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WaitlistEntry | null>(null);
   const [manualEntry, setManualEntry] = useState({ name: '', whatsapp: '', serviceId: '', date: '', customerId: '' });
@@ -209,7 +212,12 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
               <div className="flex items-center gap-6">
                 <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-inner">{b.customerName.charAt(0)}</div>
                 <div>
-                   <h3 className="text-xl font-bold text-tea-950">{b.customerName}</h3>
+                   <button 
+                    onClick={() => setSelectedCustomerId(b.customerId)}
+                    className="text-xl font-bold text-tea-950 hover:text-tea-700 transition-colors text-left"
+                   >
+                    {b.customerName}
+                   </button>
                    <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{b.serviceName}</p>
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {b.dateTime}</p>
                 </div>
@@ -256,7 +264,12 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    <div className="absolute top-0 right-0 p-6 opacity-10 font-serif text-7xl italic font-bold text-tea-900">{index + 1}º</div>
                    <div className="space-y-3 relative z-10">
                       <div className="flex justify-between items-start">
-                        <h4 className="font-bold text-tea-950 text-lg leading-tight pr-12">{w.customerName}</h4>
+                        <button 
+                          onClick={() => w.customerId && w.customerId !== 'manual' && setSelectedCustomerId(w.customerId)}
+                          className="font-bold text-tea-950 text-lg leading-tight pr-12 hover:text-tea-700 transition-colors text-left"
+                        >
+                          {w.customerName}
+                        </button>
                         <span className="text-[8px] bg-tea-800 text-white px-3 py-1 rounded-full font-bold uppercase shadow-sm">Posição {index + 1}</span>
                       </div>
                       <div className="space-y-1">
@@ -520,6 +533,16 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
             </div>
           )}
         </div>
+      )}
+      {/* Modal de Histórico da Cliente */}
+      {selectedCustomerId && (
+        <CustomerHistoryModal 
+          customer={customers.find(c => c.id === selectedCustomerId)!}
+          bookings={bookings}
+          transactions={transactions}
+          waitlist={waitlist}
+          onClose={() => setSelectedCustomerId(null)}
+        />
       )}
     </div>
   );
