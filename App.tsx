@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion } from './types.ts';
-import { INITIAL_SERVICES, DEFAULT_SETTINGS } from './constants.ts';
+import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, InventoryItem } from './types.ts';
+import { INITIAL_SERVICES, DEFAULT_SETTINGS, INITIAL_INVENTORY } from './constants.ts';
 import { db, auth } from './firebase.ts';
 import { signInAnonymously } from "firebase/auth";
 import { 
@@ -33,6 +33,7 @@ import AdminConfirmations from './components/AdminConfirmations.tsx';
 import AdminSettingsView from './components/AdminSettingsView.tsx';
 import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
+import AdminInventory from './components/AdminInventory.tsx';
 
 const App: React.FC = () => {
   // Load initial state from localStorage if available
@@ -56,6 +57,7 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [customerInitialTab, setCustomerInitialTab] = useState<'home' | 'agendar' | 'agenda'>('home');
 
   const setView = (v: View) => {
@@ -142,6 +144,7 @@ const App: React.FC = () => {
       console.log("Modo Visual: Firestore Mock Ativo.");
       setServices(INITIAL_SERVICES);
       setSettings(DEFAULT_SETTINGS);
+      setInventory(INITIAL_INVENTORY);
       setIsLoading(false);
       return;
     }
@@ -211,11 +214,44 @@ const App: React.FC = () => {
       handlePermissionError(error, "promotions");
     });
 
+    const unsubInventory = onSnapshot(collection(db, "inventory"), (snapshot) => {
+      setInventory(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as InventoryItem)));
+    }, (error) => {
+      handlePermissionError(error, "inventory");
+    });
+
     return () => {
       unsubSettings(); unsubServices(); unsubCustomers();
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
+      unsubInventory();
     };
   }, []);
+
+  // Increment visit count when on Customer Home
+  useEffect(() => {
+    if (!isLoading && !isMockMode && currentView === View.CUSTOMER_HOME) {
+      const incrementVisit = async () => {
+        try {
+          await updateDoc(doc(db, "settings", "main"), {
+            visitCount: increment(1),
+            lastUpdated: Date.now()
+          });
+        } catch (err) {
+          console.error("Error incrementing visit count:", err);
+        }
+      };
+      incrementVisit();
+    }
+  }, [isLoading, isMockMode, currentView]);
+
+  // Cleanup address if it contains the unwanted phrase
+  useEffect(() => {
+    const unwanted = "PRÓXIMO AO MATERIAL DE CONSTRUÇÃO DO FABIO";
+    if (!isLoading && !isMockMode && settings.address.toUpperCase().includes(unwanted)) {
+      const cleanAddress = settings.address.replace(/,?\s*PRÓXIMO AO MATERIAL DE CONSTRUÇÃO DO FABIO/gi, "");
+      updateDoc(doc(db, "settings", "main"), { address: cleanAddress });
+    }
+  }, [isLoading, isMockMode, settings.address]);
 
   const handleUpdateStatus = async (id: string, status: any) => {
     // FIX: Using isMockMode for check
@@ -231,6 +267,45 @@ const App: React.FC = () => {
     await updateDoc(doc(db, "bookings", id), { depositStatus });
   };
 
+  const handleBook = async (sid: string, dt: string, mid?: string) => {
+    if (!currentUser) { setView(View.CUSTOMER_LOGIN); return; }
+    if (isMockMode) return;
+    const srv = services.find(s => s.id === sid);
+    const booking = {
+      customerId: currentUser.id,
+      customerName: currentUser.name,
+      serviceId: sid,
+      serviceName: srv?.name || '',
+      dateTime: dt,
+      duration: srv?.duration || 30,
+      status: 'pending',
+      depositStatus: 'pending',
+      teamMemberId: mid || '',
+      teamMemberName: mid ? settings.teamMembers.find(m => m.id === mid)?.name : '',
+      agreedToCancellationPolicy: true,
+      policyAgreedAt: new Date().toISOString()
+    };
+    await addDoc(collection(db, "bookings"), booking);
+    alert("Solicitação de agendamento enviada com sucesso!");
+  };
+
+  const handleAddToWaitlist = async (sid: string, dt?: string) => {
+    if (!currentUser) { setView(View.CUSTOMER_LOGIN); return; }
+    if (isMockMode) return;
+    const srv = services.find(s => s.id === sid);
+    await addDoc(collection(db, "waitlist"), {
+      customerId: currentUser.id,
+      customerName: currentUser.name,
+      customerWhatsapp: currentUser.whatsapp,
+      serviceId: sid,
+      serviceName: srv?.name || '',
+      preferredDate: dt || new Date().toISOString(),
+      status: 'active',
+      createdAt: new Date().toISOString()
+    });
+    alert("Você foi adicionada à lista de espera!");
+  };
+
   const renderView = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
@@ -242,7 +317,8 @@ const App: React.FC = () => {
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} waitlist={waitlist} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} bookings={bookings} customers={customers} onAdd={async (d) => { if(!isMockMode) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !isMockMode && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "transactions", id))} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
-        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
+        case View.ADMIN_INVENTORY: return <AdminInventory inventory={inventory} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "inventory", id))} onAdd={async (data) => !isMockMode && await addDoc(collection(db, "inventory"), data)} />;
+        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
       }
     }
 
@@ -366,10 +442,12 @@ const App: React.FC = () => {
       );
       default: return (
         <CustomerHome 
-          settings={settings} services={services} bookings={bookings} 
-          onBook={() => {}} 
+          settings={settings} services={services} bookings={bookings} promotions={promotions}
+          currentUser={currentUser}
+          onBook={handleBook} 
           onAuthClick={() => setView(View.CUSTOMER_LOGIN)} 
           onLoginSuccess={() => setView(View.CUSTOMER_DASHBOARD)}
+          onAddToWaitlist={handleAddToWaitlist}
           onQuickRegister={async (name, whatsapp, bookingId, serviceId, isWaitlist) => {
             const cleanWhatsapp = whatsapp.replace(/\D/g, '');
             if (isMockMode) {
@@ -442,25 +520,6 @@ const App: React.FC = () => {
               throw err;
             }
           }}
-          onAddToWaitlist={async (serviceId) => {
-            if (isMockMode || !currentUser) return;
-            const service = services.find(s => s.id === serviceId);
-            const id = Math.random().toString(36).substr(2, 9);
-            const entry: WaitlistEntry = {
-              id,
-              customerId: currentUser.id,
-              customerName: currentUser.name,
-              customerWhatsapp: currentUser.whatsapp,
-              serviceId,
-              serviceName: service?.name || 'Serviço',
-              preferredDate: 'Qualquer data',
-              status: 'active',
-              createdAt: new Date().toISOString()
-            };
-            await setDoc(doc(db, "waitlist", id), entry);
-            alert("Você foi adicionada à lista de espera com sucesso!");
-          }} 
-          currentUser={currentUser} 
         />
       );
     }
@@ -477,6 +536,7 @@ const App: React.FC = () => {
           onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }} 
           onAdminLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} 
           isAdminAuthenticated={isAdminAuthenticated} 
+          lastUpdated={settings.lastUpdated}
           pendingBookingsCount={bookings.filter(b => {
             const isPending = b.status === 'pending';
             const testCustomer = customers.find(c => c.cpf.replace(/\D/g, '') === '33426618877');

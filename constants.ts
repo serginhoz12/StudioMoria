@@ -1,5 +1,8 @@
 
-import { Service, SalonSettings } from './types';
+import { Service, SalonSettings, InventoryItem } from './types';
+
+export const APP_VERSION = "1.0.9";
+export const LAST_UPDATE_DATE = "04/03";
 
 export const INITIAL_SERVICES: Service[] = [
   { id: '1', name: 'Design de Sobrancelha', price: 45, duration: 30, description: 'Modelagem profissional utilizando técnicas de visagismo para um olhar harmonioso.', category: 'Olhar', isVisible: true, isHighlighted: false },
@@ -15,9 +18,10 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   name: "Studio Moriá Estética",
   primaryColor: "tea", 
   logo: "https://lh3.googleusercontent.com/d/15KFidcKVQniucz9tEtmgKWLLKttnrGgd",
-  address: "Rua Santa Monica, Sítio Novo - Cubatão SP, próximo ao material de construção do Fabio",
+  address: "Rua Santa Monica, Sítio Novo - Cubatão SP",
   googleMapsLink: "https://www.google.com/maps/search/?api=1&query=-23.9004600,-46.4425140",
   lastUpdated: Date.now(),
+  visitCount: 0,
   teamMembers: [
     { id: 'tm1', name: "Moriá (Proprietária)", assignedServiceIds: ['1', '2', '3', '4'] }
   ],
@@ -45,5 +49,17 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   photos: [
     "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=1974&auto=format&fit=crop",
     "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=1787&auto=format&fit=crop",
-  ]
+  ],
+  loyaltyConfig: {
+    enabled: true,
+    pointsPerReal: 1,
+    minPointsToRedeem: 500,
+    rewardDescription: "R$ 50,00 de desconto em qualquer procedimento"
+  }
 };
+
+export const INITIAL_INVENTORY: InventoryItem[] = [
+  { id: 'i1', name: 'Cera Depilatória Mel', category: 'Depilação', quantity: 5, minQuantity: 2, unit: 'kg', lastRestockedAt: new Date().toISOString() },
+  { id: 'i2', name: 'Shampoo Pós-Química', category: 'Cabelo', quantity: 12, minQuantity: 5, unit: 'un', lastRestockedAt: new Date().toISOString() },
+  { id: 'i3', name: 'Esmalte Vermelho Paixão', category: 'Unhas', quantity: 3, minQuantity: 5, unit: 'un', lastRestockedAt: new Date().toISOString() },
+];

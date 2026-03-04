@@ -44,7 +44,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
         name: selectedCustomer.name, 
         whatsapp: selectedCustomer.whatsapp, 
         cpf: selectedCustomer.cpf,
-        password: selectedCustomer.password
+        password: selectedCustomer.password,
+        loyaltyPoints: selectedCustomer.loyaltyPoints || 0
       });
       setIsEditing(true);
     }
@@ -342,6 +343,10 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Senha de Acesso</label>
                 <input type="text" value={editData.password} onChange={e => setEditData({...editData, password: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" placeholder="Alterar senha do cliente" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Pontos de Fidelidade</label>
+                <input type="number" value={editData.loyaltyPoints} onChange={e => setEditData({...editData, loyaltyPoints: Number(e.target.value)})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
               </div>
               <div className="pt-6 space-y-4">
                 <button onClick={handleSaveEdit} className="w-full py-6 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[11px] tracking-widest shadow-xl hover:bg-black transition-all">Salvar Alterações</button>

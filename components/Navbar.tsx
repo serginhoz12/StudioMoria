@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { View, Customer } from '../types';
+import { APP_VERSION, LAST_UPDATE_DATE } from '../constants';
 
 interface NavbarProps {
   view: View;
@@ -15,6 +16,7 @@ interface NavbarProps {
   isAdminAuthenticated: boolean;
   pendingBookingsCount?: number;
   isMockMode?: boolean;
+  lastUpdated?: number;
 }
 
 const Navbar: React.FC<NavbarProps> = ({ 
@@ -29,7 +31,8 @@ const Navbar: React.FC<NavbarProps> = ({
   onAdminLogout,
   isAdminAuthenticated,
   pendingBookingsCount = 0,
-  isMockMode = false
+  isMockMode = false,
+  lastUpdated
 }) => {
   const adminTabs = [
     { id: View.ADMIN_DASHBOARD, label: 'Início', icon: '🏠' },
@@ -38,6 +41,7 @@ const Navbar: React.FC<NavbarProps> = ({
     { id: View.ADMIN_FINANCE, label: 'Caixa', icon: '💰' },
     { id: View.ADMIN_CLIENTS, label: 'Clientes', icon: '👤' },
     { id: View.ADMIN_MARKETING, label: 'Marketing', icon: '📢' },
+    { id: View.ADMIN_INVENTORY, label: 'Estoque', icon: '📦' },
     { id: View.ADMIN_SETTINGS, label: 'Config', icon: '⚙️' },
   ];
 
@@ -66,7 +70,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
               <span className="text-[6px] font-bold text-tea-600 uppercase tracking-widest mt-0.5">
-                v1.0.6 • Atualizado em 02/03
+                v{APP_VERSION} • Atualizado em {lastUpdated ? new Date(lastUpdated).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : LAST_UPDATE_DATE}
               </span>
             </div>
           </div>

@@ -16,10 +16,11 @@ interface AdminDashboardProps {
   services: Service[];
   settings: SalonSettings;
   waitlist: WaitlistEntry[];
+  inventory: any[];
   onLogout: () => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, waitlist, onLogout }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, waitlist, inventory, onLogout }) => {
   const [period, setPeriod] = useState<'current' | 'next' | 'custom'>('current');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({
@@ -168,6 +169,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
       .sort((a, b) => a.dateTime.localeCompare(b.dateTime));
   }, [bookings, todayStr]);
 
+  const currentMonth = new Date().getMonth() + 1;
+  const birthdaysThisMonth = useMemo(() => {
+    return customers.filter(c => {
+      if (!c.birthday) return false;
+      const month = parseInt(c.birthday.split('-')[1]);
+      return month === currentMonth;
+    });
+  }, [customers, currentMonth]);
+
+  const lowStockItems = useMemo(() => {
+    return inventory.filter(item => item.quantity <= item.minQuantity);
+  }, [inventory]);
+
   const stats = [
     { label: 'Visitas ao Site', value: totalVisits.toLocaleString(), icon: '👁️', color: 'bg-indigo-50 text-indigo-600' },
     { label: 'Ticket Médio', value: `R$ ${ticketMedio.toFixed(2)}`, icon: '📈', color: 'bg-blue-50 text-blue-600' },
@@ -223,6 +237,77 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
             <p className="text-2xl font-serif font-bold text-gray-900 italic">{stat.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Alertas e Aniversários */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Aniversariantes do Mês */}
+        <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-tea-900 font-serif italic">Aniversariantes do Mês</h3>
+            <span className="bg-pink-50 text-pink-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
+              {birthdaysThisMonth.length} Clientes
+            </span>
+          </div>
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scroll">
+            {birthdaysThisMonth.map(c => (
+              <div key={c.id} className="flex items-center justify-between p-3 bg-gray-50/50 rounded-2xl border border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-pink-100 text-pink-600 rounded-full flex items-center justify-center text-xs">🎂</div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800">{c.name}</p>
+                    <p className="text-[8px] text-gray-400 uppercase font-bold tracking-widest">
+                      {c.birthday?.split('-')[2]}/{c.birthday?.split('-')[1]}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => window.open(`https://wa.me/${c.whatsapp.replace(/\D/g, '')}?text=Parabéns ${c.name}! O Studio Moriá deseja um dia maravilhoso!`, '_blank')}
+                  className="text-[8px] font-bold text-tea-700 uppercase tracking-widest hover:underline"
+                >
+                  Enviar Parabéns
+                </button>
+              </div>
+            ))}
+            {birthdaysThisMonth.length === 0 && (
+              <p className="text-center py-10 text-gray-300 italic text-sm">Nenhum aniversário este mês.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Alerta de Estoque Baixo */}
+        <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-tea-900 font-serif italic">Alerta de Estoque</h3>
+            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${lowStockItems.length > 0 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-600'}`}>
+              {lowStockItems.length} Itens Críticos
+            </span>
+          </div>
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scroll">
+            {lowStockItems.map(item => (
+              <div key={item.id} className="flex items-center justify-between p-3 bg-orange-50/30 rounded-2xl border border-orange-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-xs">📦</div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800">{item.name}</p>
+                    <p className="text-[8px] text-orange-600 uppercase font-bold tracking-widest">
+                      Restam apenas {item.quantity} {item.unit}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-orange-500" 
+                    style={{ width: `${(item.quantity / item.minQuantity) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+            {lowStockItems.length === 0 && (
+              <p className="text-center py-10 text-gray-300 italic text-sm">Estoque em dia.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Agenda do Dia */}

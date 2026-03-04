@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
-import { SalonSettings, Service, Customer, Booking } from '../types.ts';
+import { SalonSettings, Service, Customer, Booking, Promotion } from '../types.ts';
 
 interface CustomerHomeProps {
   settings: SalonSettings;
   services: Service[];
   bookings: Booking[];
+  promotions: Promotion[];
   onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
   onAuthClick: () => void;
   onLoginSuccess: () => void;
@@ -14,7 +15,7 @@ interface CustomerHomeProps {
   currentUser: Customer | null;
 }
 
-const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, bookings, onAuthClick, onLoginSuccess, onQuickRegister, onAddToWaitlist, currentUser }) => {
+const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, bookings, promotions, onAuthClick, onLoginSuccess, onQuickRegister, onAddToWaitlist, currentUser }) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
   const [selectedServiceDetail, setSelectedServiceDetail] = useState<Service | null>(null);
   const [showQuickAuth, setShowQuickAuth] = useState(false);
@@ -66,7 +67,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
           <div className="mb-8 md:mb-14 flex justify-center w-full">
             <img 
               src={settings.logo} 
-              className="w-full max-w-[280px] sm:max-w-[420px] md:max-w-[580px] lg:max-w-[750px] h-auto drop-shadow-2xl object-contain" 
+              className="w-full max-w-[320px] sm:max-w-[500px] md:max-w-[700px] lg:max-w-[900px] xl:max-w-[1100px] h-auto drop-shadow-2xl object-contain" 
               alt="Logo Studio Moriá" 
             />
           </div>
@@ -82,7 +83,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
             <div className="pt-6 animate-slide-up">
               <div className="inline-flex items-center gap-3 text-white/90 font-medium px-8 py-4 bg-white/5 rounded-3xl border border-white/10 backdrop-blur-sm">
                 <span className="text-xl">📍</span>
-                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] leading-relaxed max-w-[280px]">
+                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.2em] leading-relaxed max-w-md">
                   {settings.address}
                 </p>
               </div>
@@ -123,6 +124,66 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
           ))}
         </div>
       </section>
+
+      {/* Dicas e Avisos */}
+      {promotions.filter(p => p.type === 'tip' && p.isActive).length > 0 && (
+        <section id="dicas" className="bg-tea-50/50 py-24 md:py-32 px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Cuidados & Bem-estar</p>
+              <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">Dicas da Moriá</h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {promotions.filter(p => p.type === 'tip' && p.isActive).map(tip => (
+                <div key={tip.id} className="bg-white p-8 md:p-12 rounded-[3rem] border border-tea-100 shadow-sm hover:shadow-xl transition-all flex flex-col gap-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <span className="w-10 h-10 bg-tea-900 text-white rounded-xl flex items-center justify-center text-xl">✨</span>
+                      <h3 className="text-2xl font-serif font-bold text-tea-950 italic">{tip.title}</h3>
+                    </div>
+                    <p className="text-gray-600 leading-relaxed whitespace-pre-line text-sm md:text-base">
+                      {tip.content}
+                    </p>
+                  </div>
+
+                  {tip.videoUrl && (
+                    <div className="aspect-video w-full rounded-3xl overflow-hidden bg-gray-100 shadow-inner">
+                      {tip.videoUrl.includes('youtube.com') || tip.videoUrl.includes('youtu.be') ? (
+                        <iframe 
+                          src={tip.videoUrl.replace('watch?v=', 'embed/').replace('youtu.be/', 'youtube.com/embed/')} 
+                          width="100%" 
+                          height="100%" 
+                          style={{ border: 0 }} 
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                          allowFullScreen 
+                          title={tip.title}
+                        ></iframe>
+                      ) : (
+                        <video src={tip.videoUrl} controls className="w-full h-full object-cover" />
+                      )}
+                    </div>
+                  )}
+
+                  {tip.linkedServiceId && (
+                    <div className="mt-auto pt-6 border-t border-gray-50">
+                      <button 
+                        onClick={() => {
+                          const service = services.find(s => s.id === tip.linkedServiceId);
+                          if (service) setSelectedServiceDetail(service);
+                        }}
+                        className="text-tea-700 font-bold text-[10px] uppercase tracking-widest hover:underline flex items-center gap-2"
+                      >
+                        Ver Procedimento Relacionado →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Localização */}
       <section id="localizacao" className="bg-gray-50 py-24 md:py-32 px-6 rounded-[5rem] md:rounded-[10rem] mx-4 md:mx-12 my-12 overflow-hidden relative">

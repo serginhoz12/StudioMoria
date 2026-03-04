@@ -12,7 +12,8 @@ export enum View {
   ADMIN_CLIENTS = 'ADMIN_CLIENTS',
   ADMIN_CONFIRMATIONS = 'ADMIN_CONFIRMATIONS',
   ADMIN_SETTINGS = 'ADMIN_SETTINGS',
-  ADMIN_MARKETING = 'ADMIN_MARKETING'
+  ADMIN_MARKETING = 'ADMIN_MARKETING',
+  ADMIN_INVENTORY = 'ADMIN_INVENTORY'
 }
 
 export interface Customer {
@@ -25,6 +26,8 @@ export interface Customer {
   receivesNotifications: boolean;
   agreedToTerms: boolean;
   history: Booking[];
+  loyaltyPoints?: number;
+  birthday?: string; // YYYY-MM-DD
 }
 
 export interface Service {
@@ -113,6 +116,7 @@ export interface Promotion {
   content: string;
   type: 'promotion' | 'tip';
   discountPercentage: number;
+  videoUrl?: string;
   linkedServiceId?: string;
   applicableServiceIds: string[];
   targetCustomerIds: string[];
@@ -129,6 +133,7 @@ export interface SalonSettings {
   address?: string;
   googleMapsLink?: string;
   lastUpdated: number;
+  visitCount?: number;
   teamMembers: TeamMember[];
   businessHours: BusinessHours;
   agendaOpenUntil?: string;
@@ -143,4 +148,22 @@ export interface SalonSettings {
   usefulLinks?: { label: string; url: string; }[];
   comments?: { author: string; text: string; }[];
   photos?: string[];
+  loyaltyConfig?: LoyaltyConfig;
+}
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  minQuantity: number;
+  unit: string; // ml, g, un, etc.
+  lastRestockedAt: string;
+}
+
+export interface LoyaltyConfig {
+  enabled: boolean;
+  pointsPerReal: number;
+  minPointsToRedeem: number;
+  rewardDescription: string;
 }

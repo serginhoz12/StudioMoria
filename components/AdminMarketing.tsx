@@ -26,6 +26,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   // Estado do Formulário
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [discount, setDiscount] = useState(0);
   const [linkedServiceId, setLinkedServiceId] = useState<string>('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -104,6 +105,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
         content,
         type: activeTab === 'promotions' ? 'promotion' : 'tip',
         discountPercentage: activeTab === 'promotions' ? discount : 0,
+        videoUrl: videoUrl || undefined,
         linkedServiceId: linkedServiceId || undefined,
         applicableServiceIds: selectedServices,
         targetCustomerIds: Array.from(selectedCustomerIds),
@@ -135,7 +137,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   };
 
   const resetForm = () => {
-    setTitle(''); setContent(''); setDiscount(0); setLinkedServiceId('');
+    setTitle(''); setContent(''); setVideoUrl(''); setDiscount(0); setLinkedServiceId('');
     setSelectedServices([]); setSelectedCustomerIds(new Set());
   };
 
@@ -293,6 +295,10 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Link de Vídeo (Opcional)</label>
+                <input type="url" value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="Ex: https://youtube.com/..." className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all" />
+              </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Vincular Procedimento (Opcional)</label>
                 <select 

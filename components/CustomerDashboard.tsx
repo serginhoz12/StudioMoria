@@ -172,6 +172,33 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </button>
         </div>
 
+        {activeTab === 'home' && settings.loyaltyConfig?.enabled && (
+          <div className="bg-white p-8 rounded-[3.5rem] border border-tea-100 shadow-xl relative overflow-hidden animate-slide-up">
+            <div className="absolute top-0 right-0 p-6 opacity-5 text-8xl">💎</div>
+            <div className="relative z-10">
+              <p className="text-[10px] font-bold text-tea-800 uppercase tracking-widest mb-2">Programa de Fidelidade</p>
+              <div className="flex items-end gap-2">
+                <span className="text-5xl font-serif font-bold text-tea-950 italic">{customer.loyaltyPoints || 0}</span>
+                <span className="text-xs font-bold text-tea-600 uppercase tracking-widest mb-2">Pontos</span>
+              </div>
+              <div className="mt-6 space-y-4">
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-tea-900 transition-all duration-1000" 
+                    style={{ width: `${Math.min(100, ((customer.loyaltyPoints || 0) / (settings.loyaltyConfig.minPointsToRedeem)) * 100)}%` }}
+                  ></div>
+                </div>
+                <p className="text-[10px] text-gray-500 font-medium leading-relaxed">
+                  { (customer.loyaltyPoints || 0) >= settings.loyaltyConfig.minPointsToRedeem 
+                    ? "🎉 Parabéns! Você já pode resgatar seu prêmio: " + settings.loyaltyConfig.rewardDescription
+                    : `Faltam ${settings.loyaltyConfig.minPointsToRedeem - (customer.loyaltyPoints || 0)} pontos para você ganhar: ${settings.loyaltyConfig.rewardDescription}`
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'agendar' && (
           <div className="space-y-8 animate-slide-up">
             {!selectedService ? (
