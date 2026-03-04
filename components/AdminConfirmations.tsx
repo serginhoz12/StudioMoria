@@ -20,7 +20,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
   const [editingEntry, setEditingEntry] = useState<WaitlistEntry | null>(null);
-  const [manualEntry, setManualEntry] = useState({ name: '', whatsapp: '', serviceId: '', date: '' });
+  const [manualEntry, setManualEntry] = useState({ name: '', whatsapp: '', serviceId: '', date: '', customerId: '' });
+  const [customerSearch, setCustomerSearch] = useState('');
   
   const [performingService, setPerformingService] = useState<WaitlistEntry | null>(null);
   const [performanceData, setPerformanceData] = useState({
@@ -28,11 +29,21 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     serviceId: '',
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    price: 0
+    price: 0,
+    customerId: ''
   });
 
   const handleCompleteService = async () => {
     if (!performingService || !performanceData.teamMemberId || !performanceData.serviceId || !performanceData.price) return alert("Preencha todos os campos.");
+    
+    // Ensure we have a customer ID
+    const finalCustomerId = performingService.customerId && performingService.customerId !== 'manual' 
+      ? performingService.customerId 
+      : performanceData.customerId;
+
+    if (!finalCustomerId || finalCustomerId === 'manual') {
+      return alert("Associe este atendimento a uma cliente cadastrada.");
+    }
 
     const teamMember = teamMembers.find(m => m.id === performanceData.teamMemberId);
     const service = services.find(s => s.id === performanceData.serviceId);
@@ -41,7 +52,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
       if (!(db as any)._isMock) {
         // 1. Create completed booking
         const bookingRef = await addDoc(collection(db, "bookings"), {
-          customerId: performingService.customerId || 'manual',
+          customerId: finalCustomerId,
           customerName: performingService.customerName,
           serviceId: performanceData.serviceId,
           serviceName: service?.name || performingService.serviceName,
@@ -64,7 +75,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           amount: performanceData.price,
           date: performanceData.date,
           status: 'paid',
-          customerId: performingService.customerId || 'manual',
+          customerId: finalCustomerId,
           customerName: performingService.customerName,
           bookingId: bookingRef.id,
           serviceName: service?.name || performingService.serviceName,
@@ -78,6 +89,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
       }
       
       setPerformingService(null);
+      setPerformanceData({ ...performanceData, customerId: '' });
+      setCustomerSearch('');
       alert("Atendimento registrado com sucesso!");
     } catch (error: any) {
       console.error("Erro ao registrar atendimento:", error);
@@ -92,6 +105,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
 
   const handleAddManualWaitlist = async () => {
     if (!manualEntry.name || !manualEntry.whatsapp || !manualEntry.serviceId) return alert("Preencha todos os campos.");
+    if (!manualEntry.customerId || manualEntry.customerId === 'manual') return alert("Selecione uma cliente cadastrada para incluir na espera.");
     
     const service = services.find(s => s.id === manualEntry.serviceId);
     
@@ -105,7 +119,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           preferredDate: manualEntry.date,
           status: 'active',
           createdAt: new Date().toISOString(),
-          customerId: 'manual'
+          customerId: manualEntry.customerId || 'manual'
         });
       } catch (error: any) {
         console.error("Erro ao adicionar à espera:", error);
@@ -120,7 +134,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     }
 
     setShowWaitlistForm(false);
-    setManualEntry({ name: '', whatsapp: '', serviceId: '', date: '' });
+    setManualEntry({ name: '', whatsapp: '', serviceId: '', date: '', customerId: '' });
+    setCustomerSearch('');
   };
 
   const handleUpdateWaitlist = async () => {
@@ -318,6 +333,33 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                  </div>
                  
                  <div className="space-y-5">
+                    {(!performingService.customerId || performingService.customerId === 'manual') && (
+                      <div className="p-6 bg-orange-50 rounded-3xl border border-orange-100 space-y-4">
+                        <p className="text-[10px] font-bold text-orange-800 uppercase tracking-widest text-center">Vincular Cliente Cadastrada</p>
+                        <input 
+                          type="text" 
+                          placeholder="Buscar cliente..." 
+                          value={customerSearch} 
+                          onChange={e => setCustomerSearch(e.target.value)} 
+                          className="w-full p-4 bg-white border border-orange-200 rounded-2xl text-xs outline-none font-bold shadow-sm" 
+                        />
+                        <div className="max-h-28 overflow-y-auto space-y-1 custom-scroll">
+                          {customers.filter(c => c.name.toLowerCase().includes(customerSearch.toLowerCase())).slice(0, 5).map(c => (
+                            <button 
+                              key={c.id} 
+                              type="button"
+                              onClick={() => { 
+                                setPerformanceData({ ...performanceData, customerId: c.id }); 
+                                setCustomerSearch(c.name); 
+                              }} 
+                              className={`w-full p-3 text-left text-[10px] rounded-xl font-bold transition-all ${performanceData.customerId === c.id ? 'bg-tea-900 text-white' : 'bg-white hover:bg-orange-100 text-gray-600'}`}
+                            >
+                              {c.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Procedimento Realizado</label>
                       <select 
@@ -372,7 +414,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                       >
                         Concluir e Lançar no Caixa
                       </button>
-                      <button onClick={() => setPerformingService(null)} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
+                      <button onClick={() => { setPerformingService(null); setCustomerSearch(''); }} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
                     </div>
                  </div>
               </div>
@@ -385,6 +427,36 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
               <div className="bg-white w-full max-w-md rounded-[3.5rem] p-12 shadow-3xl space-y-8 animate-slide-up">
                  <h3 className="text-3xl font-serif text-tea-950 font-bold italic text-center">Incluir na Espera</h3>
                  <div className="space-y-5">
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Buscar Cliente Cadastrada</label>
+                      <input 
+                        type="text" 
+                        placeholder="Nome da cliente..." 
+                        value={customerSearch} 
+                        onChange={e => setCustomerSearch(e.target.value)} 
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-xs outline-none font-bold" 
+                      />
+                      <div className="max-h-28 overflow-y-auto space-y-1 custom-scroll pr-2">
+                        {customers.filter(c => {
+                          const isMatch = c.name.toLowerCase().includes(customerSearch.toLowerCase());
+                          const isTestUser = c.cpf.replace(/\D/g, '') === '33426618877';
+                          return isMatch && !isTestUser;
+                        }).slice(0, 5).map(c => (
+                          <button 
+                            key={c.id} 
+                            type="button"
+                            onClick={() => { 
+                              setManualEntry({ ...manualEntry, customerId: c.id, name: c.name, whatsapp: c.whatsapp }); 
+                              setCustomerSearch(c.name); 
+                            }} 
+                            className={`w-full p-3 text-left text-[10px] rounded-xl font-bold transition-all ${manualEntry.customerId === c.id ? 'bg-tea-900 text-white' : 'bg-white hover:bg-tea-50 text-gray-600'}`}
+                          >
+                            {c.name} - {c.whatsapp}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="space-y-1">
                       <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Nome da Cliente</label>
                       <input placeholder="Ex: Ana Maria" value={manualEntry.name} onChange={e => setManualEntry({...manualEntry, name: e.target.value})} className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
