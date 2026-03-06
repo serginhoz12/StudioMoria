@@ -39,14 +39,57 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isBooking, setIsBooking] = useState(false);
 
-  // Filtra slots abertos pela Moriá de hoje em diante
+  // Filtra slots abertos pela Moriá de hoje em diante, considerando a duração de agendamentos existentes
   const availableSlots = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return bookings.filter(b => 
-      b.status === 'open' && 
+    
+    // 1. Get all active bookings (pending, scheduled, completed)
+    const activeBookings = bookings.filter(b => 
+      ['pending', 'scheduled', 'completed'].includes(b.status) && 
       b.dateTime >= today
-    ).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
-  }, [bookings]);
+    );
+
+    // 2. Identify slots that are NOT covered by any active booking's duration
+    const nonOverlappingOpenSlots = bookings.filter(slot => {
+      if (slot.status !== 'open' || slot.dateTime < today) return false;
+      const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
+      return !activeBookings.some(b => {
+        if (slot.teamMemberId && b.teamMemberId && slot.teamMemberId !== b.teamMemberId) return false;
+        const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+        const bDuration = b.duration || 30;
+        const bEnd = bStart + bDuration * 60 * 1000;
+        return slotStart >= bStart && slotStart < bEnd;
+      });
+    });
+
+    // 3. If a service is selected, ensure the entire duration fits without hitting another booking or closing time
+    if (selectedService) {
+      const serviceDurationMs = selectedService.duration * 60 * 1000;
+      
+      return nonOverlappingOpenSlots.filter(slot => {
+        const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
+        const slotEnd = slotStart + serviceDurationMs;
+
+        // Check for conflicts with other bookings that start after this slot
+        const hasConflict = activeBookings.some(b => {
+          if (slot.teamMemberId && b.teamMemberId && slot.teamMemberId !== b.teamMemberId) return false;
+          const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+          return bStart > slotStart && bStart < slotEnd;
+        });
+
+        if (hasConflict) return false;
+
+        // Check if the service exceeds business hours
+        const [date] = slot.dateTime.split(' ');
+        const closingTime = new Date(`${date}T${settings.businessHours.end}`).getTime();
+        if (slotEnd > closingTime) return false;
+
+        return true;
+      }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    }
+
+    return nonOverlappingOpenSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }, [bookings, selectedService, settings.businessHours.end]);
 
   const groupedSlots = useMemo(() => {
     const groups: { [key: string]: Booking[] } = {};
@@ -300,8 +343,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 <div key={b.id} className="p-8 bg-white rounded-[3rem] border border-gray-100 shadow-sm space-y-4 relative overflow-hidden">
                    <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="text-xl font-serif font-bold text-tea-950 italic leading-tight">{b.serviceName}</h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">A partir de R$ {b.originalPrice?.toFixed(2)}</p>
+                        <h4 className="text-xl font-serif font-bold text-tea-950 italic leading-tight">{b.serviceName || 'Serviço'}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                           {b.originalPrice ? `Valor: R$ ${b.originalPrice.toFixed(2)}` : 'Valor sob consulta'}
+                        </p>
                       </div>
                       <span className={`px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest ${
                         b.status === 'completed' ? 'bg-green-100 text-green-700' : 
@@ -315,6 +360,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                    <div className="flex gap-6 text-xs text-gray-500 font-bold uppercase tracking-widest pt-4 border-t border-gray-50">
                       <span>🗓️ {b.dateTime.split(' ')[0]}</span>
                       <span>⏰ {b.dateTime.split(' ')[1]}</span>
+                      {b.teamMemberName && <span className="ml-4">👤 {b.teamMemberName}</span>}
                    </div>
                    {b.status === 'pending' && (
                      <button 

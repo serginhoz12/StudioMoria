@@ -63,6 +63,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           teamMemberName: teamMember?.name || '',
           dateTime: `${performanceData.date} ${performanceData.time}`,
           duration: service?.duration || 30,
+          originalPrice: performanceData.price,
           status: 'completed',
           depositStatus: 'paid',
           paymentReceived: performanceData.price,
@@ -202,24 +203,20 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
 
       {activeTab === 'pending' && (
         <div className="space-y-6">
-          {bookings.filter(b => {
-            const isPending = b.status === 'pending';
-            const testCustomer = customers.find(c => c.cpf.replace(/\D/g, '') === '33426618877');
-            const isTestUser = testCustomer && b.customerId === testCustomer.id;
-            return isPending && !isTestUser;
-          }).map(b => (
+          {bookings.filter(b => b.status === 'pending').map(b => (
             <div key={b.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-6 animate-slide-up">
               <div className="flex items-center gap-6">
-                <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-inner">{b.customerName.charAt(0)}</div>
+                <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center font-bold text-2xl shadow-inner">{(b.customerName || '?').charAt(0)}</div>
                 <div>
                    <button 
                     onClick={() => setSelectedCustomerId(b.customerId)}
                     className="text-xl font-bold text-tea-950 hover:text-tea-700 transition-colors text-left"
                    >
-                    {b.customerName}
+                    {b.customerName || 'Cliente'}
                    </button>
-                   <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{b.serviceName}</p>
+                   <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{b.serviceName || 'Serviço'}</p>
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {b.dateTime}</p>
+                   {b.teamMemberName && <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">👤 Profissional: {b.teamMemberName}</p>}
                 </div>
               </div>
               <div className="flex gap-4 w-full md:w-auto">

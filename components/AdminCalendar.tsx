@@ -48,9 +48,27 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   const getSlotData = (hour: string) => {
     const fullDateTime = `${selectedDate} ${hour}`;
-    const booking = bookings.find(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status !== 'cancelled');
-    if (!booking) return { type: 'locked' };
-    return { type: booking.status, booking };
+    const currentTime = new Date(`${selectedDate}T${hour}`).getTime();
+
+    // 1. Check if there's an exact booking at this time
+    const exactBooking = bookings.find(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status !== 'cancelled');
+    if (exactBooking) return { type: exactBooking.status, booking: exactBooking };
+
+    // 2. Check if this slot is covered by a previous booking's duration
+    const coveringBooking = bookings.find(b => {
+      // Only consider active bookings for the same professional on the same day
+      if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
+      if (!b.dateTime.startsWith(selectedDate)) return false;
+      
+      const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+      const bDuration = b.duration || 30;
+      const bEnd = bStart + bDuration * 60 * 1000;
+      return currentTime >= bStart && currentTime < bEnd;
+    });
+
+    if (coveringBooking) return { type: 'occupied', booking: coveringBooking, isDurationBlock: true };
+
+    return { type: 'locked' };
   };
 
   const handleOpenSlot = async (hour: string) => {
@@ -150,6 +168,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
           dateTime: `${selectedDate} ${hour}`,
           duration: service.duration,
+          originalPrice: service.price,
           status: 'scheduled',
           depositStatus: 'paid',
           agreedToCancellationPolicy: true,
@@ -247,9 +266,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             if (data.type === 'open') {
               style = "bg-white border-tea-500 text-tea-900 border-2 cursor-pointer shadow-md shadow-tea-50";
               label = "Aberto p/ Site";
-            } else if (data.type === 'scheduled' || data.type === 'completed') {
-              style = "bg-tea-900 text-white border-tea-900 cursor-pointer shadow-lg";
-              label = data.booking?.customerName.split(' ')[0] || "Ocupado";
+            } else if (data.type === 'scheduled' || data.type === 'completed' || data.type === 'pending' || (data as any).isDurationBlock) {
+              if ((data as any).isDurationBlock) {
+                style = "bg-tea-800/80 text-white/80 border-tea-800 cursor-not-allowed shadow-inner";
+                label = "Duração: " + (data.booking?.customerName.split(' ')[0] || "Ocupado");
+              } else {
+                style = "bg-tea-900 text-white border-tea-900 cursor-pointer shadow-lg";
+                label = data.booking?.customerName.split(' ')[0] || "Ocupado";
+              }
             } else {
               // Bloqueado mas clicável para abrir
               style = "bg-gray-50 text-gray-300 border-2 border-dashed border-gray-100 cursor-pointer hover:border-tea-200 hover:text-tea-300";
@@ -259,9 +283,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             return (
               <button 
                 key={hour} 
-                disabled={isProcessing}
+                disabled={isProcessing || (data as any).isDurationBlock}
                 onClick={() => setModal({ open: true, hour, type: data.type === 'locked' ? 'free' : (data.type === 'open' ? 'opened' : 'occupied') })}
-                className={`p-6 rounded-3xl transition-all flex flex-col items-center justify-center min-h-[100px] ${style} hover:scale-105 active:scale-95`}
+                className={`p-6 rounded-3xl transition-all flex flex-col items-center justify-center min-h-[100px] ${style} ${!(data as any).isDurationBlock ? 'hover:scale-105 active:scale-95' : ''}`}
               >
                 <span className="text-xl font-serif font-bold italic">{hour}</span>
                 <span className="text-[8px] font-bold uppercase tracking-widest mt-1 text-center">{label}</span>
@@ -377,7 +401,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                      >
                       {getSlotData(modal.hour).booking?.customerName}
                      </button>
-                     <p className="text-xs text-tea-100 mt-2 font-medium">{getSlotData(modal.hour).booking?.serviceName}</p>
+                     <p className="text-xs text-tea-100 mt-2 font-medium">{getSlotData(modal.hour).booking?.serviceName || 'Serviço'}</p>
                   </div>
                   
                   <div className="grid grid-cols-1 gap-3">
