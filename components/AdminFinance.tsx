@@ -40,7 +40,14 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
     date: new Date().toISOString().split('T')[0],
     customerId: '',
     bookingId: '',
-    status: 'paid' as 'paid' | 'pending'
+    status: 'paid' as 'paid' | 'pending',
+    isRecurring: false,
+    estimatedAmount: 0,
+    realAmount: 0,
+    category: 'other' as any,
+    paymentMethod: 'pix' as any,
+    installmentsCount: 1,
+    installments: [] as { amount: number; dueDate: string }[]
   });
 
   const [customerSearch, setCustomerSearch] = useState('');
@@ -54,7 +61,14 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
       date: t.date,
       customerId: t.customerId || '',
       bookingId: t.bookingId || '',
-      status: t.status
+      status: t.status,
+      isRecurring: t.isRecurring || false,
+      estimatedAmount: t.estimatedAmount || 0,
+      realAmount: t.realAmount || 0,
+      category: t.category || 'other',
+      paymentMethod: t.paymentMethod || 'pix',
+      installmentsCount: t.installmentsCount || 1,
+      installments: []
     });
     setCustomerSearch(t.customerName || '');
     setShowForm(true);
@@ -79,24 +93,57 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
     const customer = customers.find(c => c.id === newTrans.customerId);
     const booking = bookings.find(b => b.id === newTrans.bookingId);
 
-    const transData = {
-      ...newTrans,
-      customerName: customer?.name || '',
-      serviceName: booking?.serviceName || '',
-      procedureDate: booking?.dateTime || '',
-      paidAt: newTrans.status === 'paid' ? (new Date().toISOString()) : null,
-      updatedAt: new Date().toISOString()
-    };
+    const isInstallment = ['credit', 'store_installments'].includes(newTrans.paymentMethod) && newTrans.installmentsCount > 1;
 
     try {
       if (!(db as any)._isMock) {
         if (editingId) {
+          const transData = {
+            ...newTrans,
+            customerName: customer?.name || '',
+            serviceName: booking?.serviceName || '',
+            procedureDate: booking?.dateTime || '',
+            paidAt: newTrans.status === 'paid' ? (new Date().toISOString()) : null,
+            updatedAt: new Date().toISOString()
+          };
           await updateDoc(doc(db, "transactions", editingId), transData);
+          if (onUpdate) onUpdate(editingId, transData);
+        } else if (isInstallment) {
+          // Generate multiple transactions for installments
+          const parentId = Math.random().toString(36).substr(2, 9);
+          for (let i = 0; i < newTrans.installmentsCount; i++) {
+            const inst = newTrans.installments[i] || { 
+              amount: newTrans.amount / newTrans.installmentsCount, 
+              dueDate: new Date(new Date(newTrans.date).setMonth(new Date(newTrans.date).getMonth() + i)).toISOString().split('T')[0] 
+            };
+            
+            const transData = {
+              ...newTrans,
+              description: `${newTrans.description} (${i + 1}/${newTrans.installmentsCount})`,
+              amount: inst.amount,
+              date: newTrans.date,
+              dueDate: inst.dueDate,
+              status: i === 0 && newTrans.status === 'paid' ? 'paid' : 'pending',
+              installmentNumber: i + 1,
+              parentTransactionId: parentId,
+              customerName: customer?.name || '',
+              serviceName: booking?.serviceName || '',
+              procedureDate: booking?.dateTime || '',
+              paidAt: i === 0 && newTrans.status === 'paid' ? (new Date().toISOString()) : null,
+              createdAt: new Date().toISOString()
+            };
+            await addDoc(collection(db, "transactions"), transData);
+          }
         } else {
-          await addDoc(collection(db, "transactions"), {
-            ...transData,
+          const transData = {
+            ...newTrans,
+            customerName: customer?.name || '',
+            serviceName: booking?.serviceName || '',
+            procedureDate: booking?.dateTime || '',
+            paidAt: newTrans.status === 'paid' ? (new Date().toISOString()) : null,
             createdAt: new Date().toISOString()
-          });
+          };
+          await addDoc(collection(db, "transactions"), transData);
         }
         
         // Vínculo inteligente: Se for um agendamento sendo pago agora
@@ -109,10 +156,6 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
             depositStatus: 'paid'
           });
         }
-      }
-
-      if (editingId && onUpdate) {
-        onUpdate(editingId, transData);
       }
 
       setShowForm(false);
@@ -132,7 +175,14 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
       date: new Date().toISOString().split('T')[0], 
       customerId: '', 
       bookingId: '', 
-      status: 'paid' 
+      status: 'paid',
+      isRecurring: false,
+      estimatedAmount: 0,
+      realAmount: 0,
+      category: 'other',
+      paymentMethod: 'pix',
+      installmentsCount: 1,
+      installments: []
     });
     setCustomerSearch('');
   };
@@ -171,6 +221,65 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
           <div className="absolute top-0 right-0 p-4 opacity-10 text-5xl">💰</div>
           <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-1">Saldo Líquido</p>
           <p className="text-3xl font-serif font-bold">R$ {totals.balance.toLocaleString('pt-BR')}</p>
+        </div>
+      </div>
+
+      {/* Profitability Analysis */}
+      <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
+        <div className="flex items-center gap-4">
+          <span className="text-3xl">📊</span>
+          <div>
+            <h3 className="text-xl font-serif font-bold text-tea-950 italic">Análise de Rentabilidade</h3>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Custo Fixo vs. Preço dos Procedimentos</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest border-b border-gray-50 pb-2">Custos Fixos Mensais</h4>
+            <div className="space-y-2">
+              {['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].map(cat => {
+                const amount = transactions
+                  .filter(t => t.type === 'payable' && t.category === cat && t.status === 'paid')
+                  .reduce((acc, t) => acc + t.amount, 0);
+                const labels: any = { water: 'Água', electricity: 'Luz', internet: 'Internet', salary: 'Pró-labore', tax: 'MEI', rent: 'Aluguel' };
+                return (
+                  <div key={cat} className="flex justify-between text-sm">
+                    <span className="text-gray-500">{labels[cat]}</span>
+                    <span className="font-bold text-tea-900">R$ {amount.toFixed(2)}</span>
+                  </div>
+                );
+              })}
+              <div className="flex justify-between text-sm pt-2 border-t border-gray-50 font-bold">
+                <span className="text-tea-950">Total Fixo</span>
+                <span className="text-tea-900">R$ {transactions.filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="md:col-span-2 bg-tea-50/30 p-8 rounded-3xl border border-tea-100 space-y-6">
+            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest">Sugestão de Precificação</h4>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Para cobrir seus custos fixos e ter lucro, cada hora de trabalho deve render um valor mínimo. 
+              Baseado nos seus gastos atuais, aqui está uma estimativa:
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-white p-5 rounded-2xl shadow-sm">
+                <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Custo Fixo por Hora (Est.)</p>
+                <p className="text-xl font-serif font-bold text-tea-900">
+                  R$ {(transactions.filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0) / (22 * 8)).toFixed(2)}
+                </p>
+                <p className="text-[8px] text-gray-400 mt-1">* Baseado em 22 dias/mês, 8h/dia</p>
+              </div>
+              <div className="bg-tea-900 p-5 rounded-2xl text-white shadow-lg">
+                <p className="text-[9px] font-bold text-tea-300 uppercase mb-1">Meta de Faturamento/Hora</p>
+                <p className="text-xl font-serif font-bold">
+                  R$ {(transactions.filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0) * 2.5 / (22 * 8)).toFixed(2)}
+                </p>
+                <p className="text-[8px] text-tea-100 mt-1">* Incluindo margem de lucro de 60%</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -248,12 +357,126 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
                <div className="grid grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Valor R$</label>
-                    <input type="number" value={newTrans.amount || ''} onChange={e => setNewTrans({...newTrans, amount: parseFloat(e.target.value)})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-lg text-tea-900 shadow-inner" placeholder="0,00" />
+                    <input type="number" value={newTrans.amount || ''} onChange={e => setNewTrans({...newTrans, amount: parseFloat(e.target.value), realAmount: parseFloat(e.target.value)})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-lg text-tea-900 shadow-inner" placeholder="0,00" />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Data</label>
                     <input type="date" value={newTrans.date} onChange={e => setNewTrans({...newTrans, date: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
                   </div>
+               </div>
+
+               <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
+                  <input 
+                    type="checkbox" 
+                    checked={newTrans.isRecurring} 
+                    onChange={e => setNewTrans({...newTrans, isRecurring: e.target.checked})}
+                    className="w-5 h-5 rounded border-gray-300 text-tea-900 focus:ring-tea-500"
+                  />
+                  <label className="text-xs font-bold text-tea-900 uppercase tracking-widest">Lançamento Recorrente (Mensal)</label>
+               </div>
+
+               {newTrans.isRecurring && (
+                 <div className="grid grid-cols-2 gap-5 p-6 bg-tea-50/30 rounded-2xl border border-tea-100">
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-tea-700 uppercase ml-2 tracking-widest">Valor Estimado R$</label>
+                      <input type="number" value={newTrans.estimatedAmount || ''} onChange={e => setNewTrans({...newTrans, estimatedAmount: parseFloat(e.target.value)})} className="w-full p-4 bg-white rounded-xl outline-none font-bold text-sm shadow-sm" placeholder="0,00" />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-tea-700 uppercase ml-2 tracking-widest">Valor Real R$</label>
+                      <input type="number" value={newTrans.realAmount || ''} onChange={e => setNewTrans({...newTrans, realAmount: parseFloat(e.target.value), amount: parseFloat(e.target.value)})} className="w-full p-4 bg-white rounded-xl outline-none font-bold text-sm shadow-sm" placeholder="0,00" />
+                    </div>
+                 </div>
+               )}
+
+               <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Forma de Pagamento</label>
+                  <select 
+                    value={newTrans.paymentMethod} 
+                    onChange={e => {
+                      const method = e.target.value as any;
+                      setNewTrans({...newTrans, paymentMethod: method, installmentsCount: 1, installments: []});
+                    }}
+                    className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner"
+                  >
+                    <option value="pix">PIX</option>
+                    <option value="debit">Cartão de Débito</option>
+                    <option value="credit">Cartão de Crédito</option>
+                    <option value="store_installments">Parcelado pela Loja</option>
+                  </select>
+               </div>
+
+               {['credit', 'store_installments'].includes(newTrans.paymentMethod) && (
+                 <div className="space-y-4 p-6 bg-tea-50/30 rounded-2xl border border-tea-100">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-tea-700 uppercase ml-2 tracking-widest">Número de Parcelas</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        max="48"
+                        value={newTrans.installmentsCount} 
+                        onChange={e => {
+                          const count = parseInt(e.target.value) || 1;
+                          const insts = Array.from({length: count}, (_, i) => ({
+                            amount: Number((newTrans.amount / count).toFixed(2)),
+                            dueDate: new Date(new Date(newTrans.date).setMonth(new Date(newTrans.date).getMonth() + i)).toISOString().split('T')[0]
+                          }));
+                          setNewTrans({...newTrans, installmentsCount: count, installments: insts});
+                        }} 
+                        className="w-full p-4 bg-white rounded-xl outline-none font-bold text-sm shadow-sm" 
+                      />
+                    </div>
+
+                    {newTrans.installmentsCount > 1 && (
+                      <div className="space-y-3 mt-4">
+                        <p className="text-[9px] font-bold text-tea-900 uppercase tracking-widest mb-2">Detalhamento das Parcelas</p>
+                        {newTrans.installments.map((inst, idx) => (
+                          <div key={idx} className="grid grid-cols-2 gap-3 items-center">
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 font-bold">{idx + 1}ª</span>
+                              <input 
+                                type="number" 
+                                value={inst.amount} 
+                                onChange={e => {
+                                  const updated = [...newTrans.installments];
+                                  updated[idx].amount = parseFloat(e.target.value);
+                                  setNewTrans({...newTrans, installments: updated});
+                                }}
+                                className="w-full pl-8 pr-4 py-2 bg-white rounded-lg text-xs font-bold outline-none border border-tea-100"
+                              />
+                            </div>
+                            <input 
+                              type="date" 
+                              value={inst.dueDate} 
+                              onChange={e => {
+                                const updated = [...newTrans.installments];
+                                updated[idx].dueDate = e.target.value;
+                                setNewTrans({...newTrans, installments: updated});
+                              }}
+                              className="w-full px-4 py-2 bg-white rounded-lg text-xs font-bold outline-none border border-tea-100"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                 </div>
+               )}
+
+               <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Categoria</label>
+                  <select 
+                    value={newTrans.category} 
+                    onChange={e => setNewTrans({...newTrans, category: e.target.value as any})}
+                    className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner"
+                  >
+                    <option value="other">Outros</option>
+                    <option value="water">Água</option>
+                    <option value="electricity">Luz</option>
+                    <option value="internet">Internet</option>
+                    <option value="salary">Salário Proprietária</option>
+                    <option value="tax">Imposto MEI</option>
+                    <option value="rent">Aluguel</option>
+                    <option value="supplies">Insumos/Produtos</option>
+                  </select>
                </div>
 
                <div className="space-y-2">

@@ -72,14 +72,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
   // Cálculos de KPIs Avançados
   const totalReceivable = filteredData.transactions
-    .filter(t => t.type === 'receivable')
+    .filter(t => t.type === 'receivable' && t.status === 'paid')
     .reduce((acc, t) => acc + t.amount, 0);
     
   const totalPayable = filteredData.transactions
-    .filter(t => t.type === 'payable')
+    .filter(t => t.type === 'payable' && t.status === 'paid')
+    .reduce((acc, t) => acc + t.amount, 0);
+
+  const fixedCosts = filteredData.transactions
+    .filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid')
     .reduce((acc, t) => acc + t.amount, 0);
 
   const completedBookings = filteredData.bookings.filter(b => b.status === 'completed');
+  
+  // Estimated product cost for completed bookings
+  const estimatedProductCost = useMemo(() => {
+    return completedBookings.reduce((acc, b) => {
+      const service = services.find(s => s.id === b.serviceId);
+      if (!service || !service.usedProducts) return acc;
+      
+      const serviceCost = service.usedProducts.reduce((sAcc, up) => {
+        const product = inventory.find(p => p.id === up.productId);
+        if (!product || !product.purchasePrice || !product.netWeight) return sAcc;
+        return sAcc + (product.purchasePrice / product.netWeight * up.consumption);
+      }, 0);
+      
+      return acc + serviceCost;
+    }, 0);
+  }, [completedBookings, services, inventory]);
+
   const cancelledBookings = filteredData.bookings.filter(b => b.status === 'cancelled');
   
   const ticketMedio = completedBookings.length > 0 ? totalReceivable / completedBookings.length : 0;
@@ -89,6 +110,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
   const cancellationRate = filteredData.bookings.length > 0 
     ? (cancelledBookings.length / filteredData.bookings.length) * 100 
     : 0;
+
+  const netProfit = totalReceivable - totalPayable - estimatedProductCost;
 
   // Ranking: Clientes que mais gastaram (LTV no período)
   const topSpenders = useMemo(() => {
@@ -184,8 +207,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
   const stats = [
     { label: 'Visitas ao Site', value: totalVisits.toLocaleString(), icon: '👁️', color: 'bg-indigo-50 text-indigo-600' },
-    { label: 'Ticket Médio', value: `R$ ${ticketMedio.toFixed(2)}`, icon: '📈', color: 'bg-blue-50 text-blue-600' },
-    { label: 'Taxa de Cancelamento', value: `${cancellationRate.toFixed(1)}%`, icon: '⚠️', color: cancellationRate > 15 ? 'bg-red-50 text-red-600' : 'bg-tea-50 text-tea-600' },
+    { label: 'Custos Fixos', value: `R$ ${fixedCosts.toLocaleString('pt-BR')}`, icon: '🏠', color: 'bg-orange-50 text-orange-600' },
+    { label: 'Lucro Líquido Est.', value: `R$ ${netProfit.toLocaleString('pt-BR')}`, icon: '💎', color: netProfit > 0 ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600' },
     { label: 'Receitas (Total)', value: `R$ ${totalReceivable.toLocaleString('pt-BR')}`, icon: '💰', color: 'bg-green-50 text-green-600' },
   ];
 
@@ -456,7 +479,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
         </div>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={[{ name: 'Receitas', value: totalReceivable }, { name: 'Despesas', value: totalPayable }]}>
+            <BarChart data={[
+              { name: 'Receitas', value: totalReceivable }, 
+              { name: 'Despesas', value: totalPayable },
+              { name: 'Custo Prod.', value: estimatedProductCost }
+            ]}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
               <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
               <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
@@ -464,6 +491,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
               <Bar dataKey="value" radius={[15, 15, 15, 15]} barSize={60}>
                  <Cell fill="#418d50" />
                  <Cell fill="#ef4444" />
+                 <Cell fill="#f59e0b" />
               </Bar>
             </BarChart>
           </ResponsiveContainer>

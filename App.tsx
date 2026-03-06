@@ -310,14 +310,58 @@ const App: React.FC = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
-        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} isMockMode={isMockMode} />;
+        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} inventory={inventory} isMockMode={isMockMode} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} transactions={transactions} waitlist={waitlist} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
         // FIX: Added missing 'services' prop to AdminConfirmations to resolve TS error
         case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} services={services} transactions={transactions} teamMembers={settings.teamMembers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})} waitlist={waitlist} onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))} />;
         case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} waitlist={waitlist} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "customers", id), data)} />;
         case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} bookings={bookings} customers={customers} onAdd={async (d) => { if(!isMockMode) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !isMockMode && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "transactions", id))} />;
         case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
-        case View.ADMIN_INVENTORY: return <AdminInventory inventory={inventory} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "inventory", id))} onAdd={async (data) => !isMockMode && await addDoc(collection(db, "inventory"), data)} />;
+        case View.ADMIN_INVENTORY: return <AdminInventory 
+          inventory={inventory} 
+          onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} 
+          onDelete={(id) => !isMockMode && deleteDoc(doc(db, "inventory", id))} 
+          onAdd={async (data) => {
+            if(isMockMode) return;
+            await addDoc(collection(db, "inventory"), data);
+            
+            if (data.purchasePrice && data.purchasePrice > 0) {
+              const isInstallment = ['credit', 'store_installments'].includes(data.paymentMethod || '') && (data.installmentsCount || 1) > 1;
+              
+              if (isInstallment) {
+                const parentId = Math.random().toString(36).substr(2, 9);
+                const count = data.installmentsCount || 1;
+                for (let i = 0; i < count; i++) {
+                  await addDoc(collection(db, "transactions"), {
+                    type: 'payable',
+                    description: `Compra: ${data.name} (${i + 1}/${count})`,
+                    amount: Number((data.purchasePrice / count).toFixed(2)),
+                    date: data.purchaseDate,
+                    dueDate: new Date(new Date(data.purchaseDate).setMonth(new Date(data.purchaseDate).getMonth() + i)).toISOString().split('T')[0],
+                    status: i === 0 ? 'paid' : 'pending',
+                    category: 'supplies',
+                    paymentMethod: data.paymentMethod,
+                    installmentNumber: i + 1,
+                    installmentsCount: count,
+                    parentTransactionId: parentId,
+                    createdAt: new Date().toISOString()
+                  });
+                }
+              } else {
+                await addDoc(collection(db, "transactions"), {
+                  type: 'payable',
+                  description: `Compra: ${data.name}`,
+                  amount: data.purchasePrice,
+                  date: data.purchaseDate,
+                  status: 'paid',
+                  category: 'supplies',
+                  paymentMethod: data.paymentMethod,
+                  createdAt: new Date().toISOString()
+                });
+              }
+            }
+          }} 
+        />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
       }
     }
@@ -328,6 +372,7 @@ const App: React.FC = () => {
             customer={currentUser} 
             bookings={bookings} 
             services={services}
+            transactions={transactions}
             settings={settings}
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
@@ -373,10 +418,12 @@ const App: React.FC = () => {
           onRegister={async (n, w, c, p, not) => {
             if(isMockMode) return;
             try {
-              const cleanCpf = c.replace(/\D/g, '');
+              const id = Math.random().toString(36).substr(2, 9);
+              const finalCpf = c.trim() || `S/C-${id.toUpperCase()}`;
+              const cleanCpf = finalCpf.replace(/\D/g, '');
               
               // Check for duplicate directly if global list is empty due to permissions
-              if (customers.length === 0) {
+              if (c.trim() && customers.length === 0) {
                 const q = query(collection(db, "customers"), where("cpf", "==", c));
                 const snap = await getDocs(q);
                 if (!snap.empty) {
@@ -385,8 +432,7 @@ const App: React.FC = () => {
                 }
               }
 
-              const id = Math.random().toString(36).substr(2, 9);
-              const user = { id, name: n, whatsapp: w, cpf: c, password: p, receivesNotifications: not, agreedToTerms: true, history: [] };
+              const user = { id, name: n, whatsapp: w, cpf: finalCpf, password: p, receivesNotifications: not, agreedToTerms: true, history: [] };
               await setDoc(doc(db, "customers", id), user);
               setCurrentUser(user);
               setCustomerInitialTab('home');

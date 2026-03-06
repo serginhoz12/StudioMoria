@@ -1,14 +1,54 @@
 
 import { Service, SalonSettings, InventoryItem } from './types';
 
-export const APP_VERSION = "1.0.9";
-export const LAST_UPDATE_DATE = "04/03";
+export const APP_VERSION = "1.1.0";
+export const LAST_UPDATE_DATE = "06/03";
 
 export const INITIAL_SERVICES: Service[] = [
-  { id: '1', name: 'Design de Sobrancelha', price: 45, duration: 30, description: 'Modelagem profissional utilizando técnicas de visagismo para um olhar harmonioso.', category: 'Olhar', isVisible: true, isHighlighted: false },
-  { id: '2', name: 'Limpeza de Pele', price: 120, duration: 60, description: 'Protocolo revitalizante com extração profunda e máscaras calmantes de alta performance.', category: 'Rosto', isVisible: true, isHighlighted: false },
-  { id: '3', name: 'Manicure & Pedicure', price: 65, duration: 90, description: 'Cuidado completo das unhas com esmaltação premium e hidratação profunda.', category: 'Unhas', isVisible: true, isHighlighted: false },
-  { id: '4', name: 'Drenagem Linfática', price: 150, duration: 60, description: 'Massagem manual suave para redução de edema e desintoxicação corporal.', category: 'Corpo', isVisible: true, isHighlighted: false },
+  { 
+    id: '1', 
+    name: 'Design de Sobrancelha', 
+    price: 45, 
+    duration: 30, 
+    description: 'Modelagem profissional utilizando técnicas de visagismo para um olhar harmonioso.', 
+    category: 'Olhar', 
+    isVisible: true, 
+    isHighlighted: false,
+    usedProducts: [{ productId: 'i4', consumption: 5 }] // Ex: 5g de henna
+  },
+  { 
+    id: '2', 
+    name: 'Limpeza de Pele', 
+    price: 120, 
+    duration: 60, 
+    description: 'Protocolo revitalizante com extração profunda e máscaras calmantes de alta performance.', 
+    category: 'Rosto', 
+    isVisible: true, 
+    isHighlighted: false,
+    usedProducts: [{ productId: 'i5', consumption: 10 }] // Ex: 10ml de tônico
+  },
+  { 
+    id: '3', 
+    name: 'Manicure & Pedicure', 
+    price: 65, 
+    duration: 90, 
+    description: 'Cuidado completo das unhas com esmaltação premium e hidratação profunda.', 
+    category: 'Unhas', 
+    isVisible: true, 
+    isHighlighted: false,
+    usedProducts: [{ productId: 'i3', consumption: 1 }] // Ex: 1 un de esmalte (uso parcial)
+  },
+  { 
+    id: '4', 
+    name: 'Drenagem Linfática', 
+    price: 150, 
+    duration: 60, 
+    description: 'Massagem manual suave para redução de edema e desintoxicação corporal.', 
+    category: 'Corpo', 
+    isVisible: true, 
+    isHighlighted: false,
+    usedProducts: [{ productId: 'i6', consumption: 20 }] // Ex: 20ml de óleo
+  },
 ];
 
 const defaultAgendaDate = new Date();
@@ -59,7 +99,10 @@ export const DEFAULT_SETTINGS: SalonSettings = {
 };
 
 export const INITIAL_INVENTORY: InventoryItem[] = [
-  { id: 'i1', name: 'Cera Depilatória Mel', category: 'Depilação', quantity: 5, minQuantity: 2, unit: 'kg', lastRestockedAt: new Date().toISOString() },
-  { id: 'i2', name: 'Shampoo Pós-Química', category: 'Cabelo', quantity: 12, minQuantity: 5, unit: 'un', lastRestockedAt: new Date().toISOString() },
-  { id: 'i3', name: 'Esmalte Vermelho Paixão', category: 'Unhas', quantity: 3, minQuantity: 5, unit: 'un', lastRestockedAt: new Date().toISOString() },
+  { id: 'i1', name: 'Cera Depilatória Mel', category: 'Depilação', quantity: 5000, minQuantity: 1000, unit: 'g', lastRestockedAt: new Date().toISOString(), netWeight: 5000, grossWeight: 5200, weightUnit: 'g', purchasePrice: 85.00, purchaseDate: '2026-02-15' },
+  { id: 'i2', name: 'Shampoo Pós-Química', category: 'Cabelo', quantity: 1000, minQuantity: 200, unit: 'ml', lastRestockedAt: new Date().toISOString(), netWeight: 1000, grossWeight: 1100, weightUnit: 'ml', purchasePrice: 45.00, purchaseDate: '2026-02-20' },
+  { id: 'i3', name: 'Esmalte Vermelho Paixão', category: 'Unhas', quantity: 10, minQuantity: 2, unit: 'un', lastRestockedAt: new Date().toISOString(), netWeight: 10, grossWeight: 15, weightUnit: 'g', purchasePrice: 12.50, purchaseDate: '2026-03-01' },
+  { id: 'i4', name: 'Henna Castanho Médio', category: 'Olhar', quantity: 50, minQuantity: 10, unit: 'g', lastRestockedAt: new Date().toISOString(), netWeight: 50, grossWeight: 60, weightUnit: 'g', purchasePrice: 35.00, purchaseDate: '2026-03-01' },
+  { id: 'i5', name: 'Tônico Facial', category: 'Rosto', quantity: 500, minQuantity: 100, unit: 'ml', lastRestockedAt: new Date().toISOString(), netWeight: 500, grossWeight: 550, weightUnit: 'ml', purchasePrice: 28.00, purchaseDate: '2026-02-25' },
+  { id: 'i6', name: 'Óleo de Massagem', category: 'Corpo', quantity: 1000, minQuantity: 200, unit: 'ml', lastRestockedAt: new Date().toISOString(), netWeight: 1000, grossWeight: 1050, weightUnit: 'ml', purchasePrice: 55.00, purchaseDate: '2026-02-10' },
 ];

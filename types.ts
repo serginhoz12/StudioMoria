@@ -40,6 +40,7 @@ export interface Service {
   isVisible: boolean;
   isHighlighted?: boolean;
   returnPeriodDays?: number; // Periodicidade de retorno em dias
+  usedProducts?: { productId: string; consumption: number }[]; // Produtos usados e quantidade (g/ml/un)
 }
 
 export interface BusinessHours {
@@ -81,13 +82,15 @@ export interface Booking {
   paymentDate?: string;
 }
 
+export type PaymentMethod = 'pix' | 'debit' | 'credit' | 'store_installments';
+
 export interface Transaction {
   id: string;
   type: 'payable' | 'receivable';
   description: string;
   amount: number;
   date: string;
-  dueDate?: string; // Added to fix missing property error
+  dueDate?: string; 
   status: 'pending' | 'paid';
   customerId?: string;
   customerName?: string;
@@ -95,6 +98,14 @@ export interface Transaction {
   serviceName?: string;
   procedureDate?: string;
   paidAt?: string;
+  isRecurring?: boolean;
+  estimatedAmount?: number;
+  realAmount?: number;
+  category?: 'water' | 'electricity' | 'internet' | 'salary' | 'tax' | 'rent' | 'supplies' | 'other';
+  paymentMethod?: PaymentMethod;
+  installmentsCount?: number;
+  installmentNumber?: number;
+  parentTransactionId?: string;
 }
 
 export interface WaitlistEntry {
@@ -159,6 +170,14 @@ export interface InventoryItem {
   minQuantity: number;
   unit: string; // ml, g, un, etc.
   lastRestockedAt: string;
+  netWeight?: number;
+  grossWeight?: number;
+  weightUnit?: string;
+  purchasePrice?: number;
+  purchaseDate?: string;
+  usageStartDate?: string;
+  paymentMethod?: PaymentMethod;
+  installmentsCount?: number;
 }
 
 export interface LoyaltyConfig {

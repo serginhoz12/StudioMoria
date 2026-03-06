@@ -12,18 +12,30 @@ interface AdminSettingsViewProps {
   customers: any[];
   bookings: any[];
   transactions: any[];
+  inventory: any[];
   isMockMode: boolean;
 }
 
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
   settings, 
   services = [],
+  inventory = [],
   isMockMode
 }) => {
   const categories = ['Olhar', 'Rosto', 'Mãos', 'Unhas', 'Corpo', 'Outros'];
-  const [newService, setNewService] = useState({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0 });
+  const [newService, setNewService] = useState<Partial<Service>>({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0, usedProducts: [] });
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
+
+  const calculateServiceCost = (service: Partial<Service>) => {
+    if (!service.usedProducts) return 0;
+    return service.usedProducts.reduce((acc, up) => {
+      const product = inventory.find(p => p.id === up.productId);
+      if (!product || !product.purchasePrice || !product.netWeight) return acc;
+      const costPerUnit = product.purchasePrice / product.netWeight;
+      return acc + (costPerUnit * up.consumption);
+    }, 0);
+  };
 
   const updateGlobalSettings = async (newSet: SalonSettings) => {
     if (isMockMode) {
@@ -146,6 +158,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           returnPeriodDays: Number(editingService.returnPeriodDays) || 0,
           isVisible: editingService.isVisible !== false, // Garante booleano
           isHighlighted: !!editingService.isHighlighted,
+          usedProducts: editingService.usedProducts || [],
           id: editingService.id
         };
 
@@ -432,6 +445,67 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                 <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Descrição</label>
                 <textarea className="w-full p-4 rounded-2xl bg-gray-50 outline-none h-24 shadow-inner" value={editingService.description} onChange={e => setEditingService({...editingService, description: e.target.value})} />
               </div>
+
+              <div className="space-y-4 border-t border-gray-100 pt-6">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-[11px] font-bold text-tea-900 uppercase tracking-widest">Produtos Utilizados</h4>
+                  <div className="text-[10px] font-bold text-tea-600">Custo Est.: R$ {calculateServiceCost(editingService).toFixed(2)}</div>
+                </div>
+                
+                <div className="space-y-3">
+                  {(editingService.usedProducts || []).map((up, idx) => {
+                    const product = inventory.find(p => p.id === up.productId);
+                    return (
+                      <div key={idx} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl">
+                        <span className="flex-1 text-xs font-medium text-gray-700">{product?.name || 'Produto não encontrado'}</span>
+                        <input 
+                          type="number" 
+                          className="w-20 p-2 bg-white rounded-lg text-xs font-bold outline-none"
+                          value={up.consumption}
+                          onChange={e => {
+                            const newProds = [...(editingService.usedProducts || [])];
+                            newProds[idx].consumption = Number(e.target.value);
+                            setEditingService({...editingService, usedProducts: newProds});
+                          }}
+                        />
+                        <span className="text-[10px] text-gray-400 font-bold uppercase">{product?.unit || 'g'}</span>
+                        <button 
+                          onClick={() => {
+                            const newProds = (editingService.usedProducts || []).filter((_, i) => i !== idx);
+                            setEditingService({...editingService, usedProducts: newProds});
+                          }}
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                  
+                  <div className="flex gap-2">
+                    <select 
+                      className="flex-1 p-3 bg-gray-50 rounded-xl text-xs outline-none"
+                      onChange={e => {
+                        const pid = e.target.value;
+                        if (!pid) return;
+                        const alreadyHas = (editingService.usedProducts || []).some(up => up.productId === pid);
+                        if (alreadyHas) return;
+                        setEditingService({
+                          ...editingService, 
+                          usedProducts: [...(editingService.usedProducts || []), { productId: pid, consumption: 0 }]
+                        });
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="">+ Adicionar Produto</option>
+                      {inventory.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.unit})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-4 pt-4">
                 <button onClick={() => setEditingService(null)} className="flex-1 py-4 text-gray-400 font-bold uppercase text-[10px] tracking-widest">Cancelar</button>
                 <button onClick={saveEditedService} className="flex-[2] bg-tea-800 text-white py-4 rounded-2xl font-bold shadow-xl uppercase text-[10px] tracking-widest">Confirmar Alterações</button>

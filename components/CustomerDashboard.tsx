@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, WaitlistEntry, Promotion } from '../types';
+import { Customer, Booking, Service, SalonSettings, WaitlistEntry, Promotion, Transaction } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 
@@ -8,6 +8,7 @@ interface CustomerDashboardProps {
   customer: Customer;
   bookings: Booking[];
   services: Service[];
+  transactions: Transaction[];
   settings: SalonSettings;
   onLogout: () => void;
   onUpdateProfile: (upd: any) => void;
@@ -16,13 +17,14 @@ interface CustomerDashboardProps {
   waitlist: WaitlistEntry[];
   onRemoveWaitlist: (id: string) => void;
   promotions: Promotion[];
-  initialTab?: 'home' | 'agendar' | 'agenda';
+  initialTab?: 'home' | 'agendar' | 'agenda' | 'faturas';
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
   customer, 
   bookings, 
   services, 
+  transactions,
   settings, 
   onLogout,
   onUpdateProfile,
@@ -33,7 +35,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   promotions,
   initialTab = 'home'
 }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'faturas'>(initialTab);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isBooking, setIsBooking] = useState(false);
 
@@ -55,6 +57,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     });
     return groups;
   }, [availableSlots]);
+
+  const pendingInvoices = useMemo(() => {
+    return transactions.filter(t => t.customerId === customer.id && t.type === 'receivable' && t.status === 'pending');
+  }, [transactions, customer.id]);
+
+  const paidInvoices = useMemo(() => {
+    return transactions.filter(t => t.customerId === customer.id && t.type === 'receivable' && t.status === 'paid');
+  }, [transactions, customer.id]);
 
   const handleBookSlot = async (slot: Booking) => {
     if (!selectedService) return;
@@ -169,6 +179,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <button onClick={() => setActiveTab('agenda')} className={`p-8 rounded-[3rem] shadow-xl border flex flex-col items-center gap-4 transition-all ${activeTab === 'agenda' ? 'bg-tea-50 border-tea-200' : 'bg-white border-gray-50'}`}>
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${activeTab === 'agenda' ? 'bg-tea-900 text-white' : 'bg-tea-50 text-tea-800'}`}>🗓️</div>
             <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Minha Agenda</span>
+          </button>
+          <button onClick={() => setActiveTab('faturas')} className={`p-8 rounded-[3rem] shadow-xl border flex flex-col items-center gap-4 transition-all ${activeTab === 'faturas' ? 'bg-tea-50 border-tea-200' : 'bg-white border-gray-50'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${activeTab === 'faturas' ? 'bg-tea-900 text-white' : 'bg-tea-50 text-tea-800'}`}>💳</div>
+            <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Faturas</span>
           </button>
         </div>
 
@@ -347,8 +361,82 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
         )}
 
+        {activeTab === 'faturas' && (
+          <div className="space-y-6 animate-slide-up">
+            <h3 className="text-2xl font-serif text-tea-950 italic font-bold text-center">Minhas Faturas</h3>
+            
+            {pendingInvoices.length > 0 && (
+              <div className="space-y-4">
+                <p className="text-[10px] font-bold text-orange-600 uppercase tracking-widest ml-4">Pagamentos Pendentes</p>
+                {pendingInvoices.map(t => (
+                  <div key={t.id} className="p-8 bg-orange-50/50 rounded-[3rem] border border-orange-100 shadow-sm space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-lg font-serif font-bold text-tea-950 italic">{t.description}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString('pt-BR') : 'A definir'}</p>
+                      </div>
+                      <span className="text-lg font-bold text-tea-900">R$ {t.amount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
+                       <span className="text-[9px] text-orange-700 font-bold uppercase tracking-widest">Aguardando Pagamento</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {paidInvoices.length > 0 && (
+              <div className="space-y-4">
+                <p className="text-[10px] font-bold text-tea-600 uppercase tracking-widest ml-4">Histórico de Pagamentos</p>
+                {paidInvoices.map(t => (
+                  <div key={t.id} className="p-8 bg-white rounded-[3rem] border border-gray-100 shadow-sm space-y-3 opacity-70">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h4 className="text-lg font-serif font-bold text-tea-950 italic">{t.description}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Pago em: {t.paidAt ? new Date(t.paidAt).toLocaleDateString('pt-BR') : new Date(t.date).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                      <span className="text-lg font-bold text-tea-900">R$ {t.amount.toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                       <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+                       <span className="text-[9px] text-green-700 font-bold uppercase tracking-widest">Pagamento Realizado</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {pendingInvoices.length === 0 && paidInvoices.length === 0 && (
+              <div className="text-center py-20 opacity-30 italic text-sm">Nenhuma fatura encontrada.</div>
+            )}
+          </div>
+        )}
+
         {activeTab === 'home' && (
           <div className="space-y-8 animate-slide-up">
+             {pendingInvoices.length > 0 && (
+               <div className="p-8 bg-red-50 rounded-[3.5rem] border border-red-100 shadow-xl space-y-4 relative overflow-hidden animate-pulse">
+                  <div className="absolute top-0 right-0 p-6 opacity-10 text-6xl">💳</div>
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">Aviso de Fatura</p>
+                      <h4 className="text-2xl font-serif font-bold text-tea-950 italic leading-tight">Pagamento Pendente</h4>
+                    </div>
+                  </div>
+                  <p className="text-sm text-red-800 leading-relaxed font-medium">
+                    Você possui {pendingInvoices.length} {pendingInvoices.length === 1 ? 'fatura pendente' : 'faturas pendentes'}. 
+                    Por favor, verifique os detalhes na aba de faturas.
+                  </p>
+                  <button 
+                    onClick={() => setActiveTab('faturas')}
+                    className="w-full py-5 bg-red-600 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-red-700 transition-all"
+                  >
+                    Ver Minhas Faturas
+                  </button>
+               </div>
+             )}
+
              {nextEstimate && (
                <div className={`p-8 rounded-[3.5rem] border shadow-2xl space-y-4 relative overflow-hidden transition-all transform hover:scale-[1.02] ${nextEstimate.isOverdue ? 'bg-orange-50 border-orange-200 ring-4 ring-orange-100/50' : 'bg-white border-tea-100'}`}>
                   <div className="flex justify-between items-start">

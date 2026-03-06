@@ -17,7 +17,15 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
     quantity: 0,
     minQuantity: 0,
     unit: 'un',
-    lastRestockedAt: new Date().toISOString()
+    lastRestockedAt: new Date().toISOString(),
+    netWeight: 0,
+    grossWeight: 0,
+    weightUnit: 'g',
+    purchasePrice: 0,
+    purchaseDate: new Date().toISOString().split('T')[0],
+    usageStartDate: '',
+    paymentMethod: 'pix' as any,
+    installmentsCount: 1
   });
 
   const categories = Array.from(new Set(inventory.map(item => item.category)));
@@ -32,7 +40,15 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
       quantity: 0,
       minQuantity: 0,
       unit: 'un',
-      lastRestockedAt: new Date().toISOString()
+      lastRestockedAt: new Date().toISOString(),
+      netWeight: 0,
+      grossWeight: 0,
+      weightUnit: 'g',
+      purchasePrice: 0,
+      purchaseDate: new Date().toISOString().split('T')[0],
+      usageStartDate: '',
+      paymentMethod: 'pix',
+      installmentsCount: 1
     });
   };
 
@@ -122,6 +138,88 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Peso Líquido</label>
+              <div className="flex gap-2">
+                <input 
+                  type="number" 
+                  value={newItem.netWeight}
+                  onChange={e => setNewItem({...newItem, netWeight: Number(e.target.value)})}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+                />
+                <select 
+                  value={newItem.weightUnit}
+                  onChange={e => setNewItem({...newItem, weightUnit: e.target.value})}
+                  className="px-2 py-2 rounded-xl border border-gray-200 outline-none"
+                >
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="ml">ml</option>
+                  <option value="l">l</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Peso Bruto</label>
+              <input 
+                type="number" 
+                value={newItem.grossWeight}
+                onChange={e => setNewItem({...newItem, grossWeight: Number(e.target.value)})}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Valor da Compra (R$)</label>
+              <input 
+                type="number" 
+                value={newItem.purchasePrice}
+                onChange={e => setNewItem({...newItem, purchasePrice: Number(e.target.value)})}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data da Compra</label>
+              <input 
+                type="date" 
+                value={newItem.purchaseDate}
+                onChange={e => setNewItem({...newItem, purchaseDate: e.target.value})}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data Início de Uso</label>
+              <input 
+                type="date" 
+                value={newItem.usageStartDate}
+                onChange={e => setNewItem({...newItem, usageStartDate: e.target.value})}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Forma de Pagamento</label>
+              <select 
+                value={newItem.paymentMethod}
+                onChange={e => setNewItem({...newItem, paymentMethod: e.target.value as any, installmentsCount: 1})}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+              >
+                <option value="pix">PIX</option>
+                <option value="debit">Cartão de Débito</option>
+                <option value="credit">Cartão de Crédito</option>
+                <option value="store_installments">Parcelado pela Loja</option>
+              </select>
+            </div>
+            {['credit', 'store_installments'].includes(newItem.paymentMethod || '') && (
+              <div>
+                <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Parcelas</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  value={newItem.installmentsCount}
+                  onChange={e => setNewItem({...newItem, installmentsCount: Number(e.target.value)})}
+                  className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+                />
+              </div>
+            )}
           </div>
           <div className="flex justify-end gap-3 mt-6">
             <button 
@@ -145,7 +243,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Produto</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Categoria</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Detalhes Peso</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Compra / Uso</th>
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Quantidade</th>
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Ações</th>
@@ -156,12 +255,16 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="font-bold text-tea-900">{item.name}</div>
-                  <div className="text-[10px] text-gray-400 uppercase tracking-tight">Última reposição: {new Date(item.lastRestockedAt).toLocaleDateString('pt-BR')}</div>
+                  <div className="text-[10px] text-gray-400 uppercase tracking-tight">{item.category}</div>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="px-2 py-1 bg-tea-50 text-tea-700 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                    {item.category}
-                  </span>
+                  <div className="text-xs text-gray-600">Líq: {item.netWeight || 0}{item.weightUnit || 'g'}</div>
+                  <div className="text-xs text-gray-400">Bruto: {item.grossWeight || 0}{item.weightUnit || 'g'}</div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-xs text-tea-800 font-medium">R$ {item.purchasePrice?.toFixed(2) || '0,00'}</div>
+                  <div className="text-[9px] text-gray-400 uppercase">Compra: {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString('pt-BR') : '-'}</div>
+                  <div className="text-[9px] text-tea-600 uppercase">Uso: {item.usageStartDate ? new Date(item.usageStartDate).toLocaleDateString('pt-BR') : '-'}</div>
                 </td>
                 <td className="px-6 py-4 text-center">
                   <div className="flex items-center justify-center gap-2">
