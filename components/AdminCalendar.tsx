@@ -27,6 +27,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [isProcessing, setIsProcessing] = useState(false);
 
   const [manualTime, setManualTime] = useState('');
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkStartDate, setBulkStartDate] = useState(selectedDate);
+  const [bulkEndDate, setBulkEndDate] = useState(selectedDate);
 
   // Added resetForm function to fix "Cannot find name 'resetForm'" error
   const resetForm = () => {
@@ -92,6 +95,13 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   const handleReleaseFullDay = async () => {
     if (!(db as any)._isMock) {
+      const pro = teamMembers.find(m => m.id === selectedProId);
+      const dayOfWeek = new Date(selectedDate + 'T00:00:00').getDay();
+      
+      if (pro?.offDays?.includes(dayOfWeek)) {
+        if (!confirm(`Hoje é dia de folga de ${pro.name}. Deseja liberar a agenda mesmo assim?`)) return;
+      }
+
       if (!confirm(`Deseja liberar TODOS os horários de ${settings?.businessHours?.start} às ${settings?.businessHours?.end} para o dia ${new Date(selectedDate + 'T00:00:00').toLocaleDateString()}?`)) return;
       
       setIsProcessing(true);
@@ -217,6 +227,80 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setModal({ open: false, hour: '', type: 'free' });
   };
 
+  const handleBulkRelease = async () => {
+    if ((db as any)._isMock) return alert("Modo visual: Período liberado simulado.");
+    
+    const start = new Date(bulkStartDate + 'T00:00:00');
+    const end = new Date(bulkEndDate + 'T00:00:00');
+    
+    if (end < start) return alert("A data final deve ser maior ou igual à data inicial.");
+    
+    setIsProcessing(true);
+    try {
+      let currentDate = new Date(start);
+      const pro = teamMembers.find(m => m.id === selectedProId);
+      
+      while (currentDate <= end) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const dayOfWeek = currentDate.getDay();
+
+        // Pula dias de folga do profissional
+        if (pro?.offDays?.includes(dayOfWeek)) {
+          currentDate.setDate(currentDate.getDate() + 1);
+          continue;
+        }
+        
+        // Respeita o horário de funcionamento do salão (timeSlots já é baseado nisso)
+        for (const hour of timeSlots) {
+          const fullDateTime = `${dateStr} ${hour}`;
+          
+          // Verifica se já existe algo nesse horário para evitar duplicatas
+          const exists = bookings.some(b => 
+            b.dateTime === fullDateTime && 
+            b.teamMemberId === selectedProId && 
+            b.status !== 'cancelled'
+          );
+          
+          if (!exists) {
+            await addDoc(collection(db, "bookings"), {
+              dateTime: fullDateTime,
+              status: 'open',
+              teamMemberId: selectedProId,
+              teamMemberName: pro?.name || 'Profissional',
+              customerName: 'LIBERADO PARA CLIENTES',
+              customerId: 'none',
+              createdAt: new Date().toISOString()
+            });
+          }
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      alert("Período liberado com sucesso!");
+      setIsBulkModalOpen(false);
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao liberar período.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    if ((db as any)._isMock) return;
+    if (!confirm("Deseja EXCLUIR PERMANENTEMENTE este agendamento? Esta ação não pode ser desfeita e removerá o registro do sistema.")) return;
+    
+    setIsProcessing(true);
+    try {
+      await deleteDoc(doc(db, "bookings", bookingId));
+      alert("Agendamento excluído com sucesso.");
+      setModal({ open: false, hour: '', type: 'free' });
+    } catch (e) {
+      alert("Erro ao excluir agendamento.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="space-y-8 animate-fade-in pb-20">
       {/* Header e Filtros */}
@@ -231,13 +315,24 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <button 
             onClick={handleReleaseFullDay} 
             disabled={isProcessing}
             className="flex-1 bg-tea-100 text-tea-900 px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-200 transition-all disabled:opacity-50"
           >
             {isProcessing ? 'Processando...' : 'Liberar Dia'}
+          </button>
+          <button 
+            onClick={() => {
+              setBulkStartDate(selectedDate);
+              setBulkEndDate(selectedDate);
+              setIsBulkModalOpen(true);
+            }} 
+            disabled={isProcessing}
+            className="flex-1 bg-tea-900 text-white px-6 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-800 transition-all disabled:opacity-50"
+          >
+            Liberar Período
           </button>
           <button 
             onClick={handleBlockFullDay} 
@@ -417,6 +512,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                     >
                       Cancelar Agendamento
                     </button>
+                    <button 
+                      onClick={() => handleDeleteBooking(getSlotData(modal.hour).booking!.id)} 
+                      className="w-full py-3 text-red-400 text-[9px] font-bold uppercase tracking-widest hover:text-red-600 transition-all"
+                    >
+                      🗑️ Excluir Permanentemente
+                    </button>
                   </div>
                </div>
             )}
@@ -441,6 +542,55 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
            <span className="text-[9px] font-bold text-tea-950 uppercase tracking-widest">Agendado</span>
         </div>
       </div>
+
+      {/* Modal de Liberação em Massa */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-tea-950/40 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-2xl animate-scale-in">
+            <h3 className="text-2xl font-serif font-bold text-tea-950 italic mb-6">Liberar Período</h3>
+            
+            <div className="space-y-6 mb-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data Início</label>
+                <input 
+                  type="date" 
+                  value={bulkStartDate} 
+                  onChange={e => setBulkStartDate(e.target.value)} 
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100" 
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data Fim</label>
+                <input 
+                  type="date" 
+                  value={bulkEndDate} 
+                  onChange={e => setBulkEndDate(e.target.value)} 
+                  className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100" 
+                />
+              </div>
+              <p className="text-[10px] text-gray-400 italic px-2">
+                * Os horários serão liberados respeitando o horário de funcionamento do salão ({settings?.businessHours?.start} às {settings?.businessHours?.end}).
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={handleBulkRelease}
+                disabled={isProcessing}
+                className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-800 transition-all shadow-lg disabled:opacity-50"
+              >
+                {isProcessing ? 'Processando...' : 'Confirmar Liberação'}
+              </button>
+              <button 
+                onClick={() => setIsBulkModalOpen(false)}
+                className="w-full py-2 text-gray-400 font-bold uppercase text-[9px] tracking-widest hover:text-gray-600"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Modal de Histórico da Cliente */}
       {historyCustomerId && (
         <CustomerHistoryModal 
