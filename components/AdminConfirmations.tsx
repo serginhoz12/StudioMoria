@@ -25,6 +25,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [editingEntry, setEditingEntry] = useState<WaitlistEntry | null>(null);
   const [manualEntry, setManualEntry] = useState({ name: '', whatsapp: '', serviceId: '', date: '', customerId: '' });
   const [customerSearch, setCustomerSearch] = useState('');
+  const [approveModal, setApproveModal] = useState<{ booking: Booking; price: number } | null>(null);
   
   const [performingService, setPerformingService] = useState<WaitlistEntry | null>(null);
   const [performanceData, setPerformanceData] = useState({
@@ -159,21 +160,29 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     setEditingEntry(null);
   };
 
-  const handleAction = async (id: string, status: 'scheduled' | 'cancelled') => {
+  const handleAction = async (id: string, status: 'scheduled' | 'cancelled', price?: number) => {
     try {
       if (!(db as any)._isMock) {
-        await updateDoc(doc(db, "bookings", id), { 
-          status,
-          updatedAt: new Date().toISOString()
-        });
+        const updateData: any = { status, updatedAt: new Date().toISOString() };
+        if (status === 'scheduled' && price != null && price > 0) {
+          updateData.originalPrice = price;
+          updateData.finalPrice = price;
+        }
+        await updateDoc(doc(db, "bookings", id), updateData);
       }
       if (onUpdateStatus) {
         onUpdateStatus(id, status);
       }
+      setApproveModal(null);
     } catch (error) {
       console.error("Erro ao atualizar status:", error);
       alert("Erro ao processar pedido. Tente novamente.");
     }
+  };
+
+  const openApproveModal = (booking: Booking) => {
+    const service = services.find(s => s.id === booking.serviceId);
+    setApproveModal({ booking, price: service?.price ?? 0 });
   };
 
   // Ordenação por ordem de chegada (mais antigo primeiro)
@@ -221,7 +230,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
               </div>
               <div className="flex gap-4 w-full md:w-auto">
                  <button 
-                  onClick={() => handleAction(b.id, 'scheduled')}
+                  onClick={() => openApproveModal(b)}
                   className="flex-1 md:flex-none px-8 py-4 bg-tea-800 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-950 transition-all shadow-md active:scale-95"
                  >
                   Aprovar ✓
@@ -531,6 +540,38 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           )}
         </div>
       )}
+      {/* Modal Aprovar com preço */}
+      {approveModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[3.5rem] p-12 shadow-3xl space-y-8 animate-slide-up">
+            <div className="text-center">
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Definir preço do agendamento</h3>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-2">{approveModal.booking.customerName} – {approveModal.booking.serviceName}</p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Preço a cobrar do cliente (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={approveModal.price || ''}
+                onChange={e => setApproveModal({ ...approveModal, price: parseFloat(e.target.value) || 0 })}
+                className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-lg text-tea-900 shadow-inner"
+              />
+            </div>
+            <div className="pt-2 space-y-3">
+              <button
+                onClick={() => handleAction(approveModal.booking.id, 'scheduled', approveModal.price)}
+                className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+              >
+                Aprovar agendamento
+              </button>
+              <button onClick={() => setApproveModal(null)} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Histórico da Cliente */}
       {selectedCustomerId && (
         <CustomerHistoryModal 

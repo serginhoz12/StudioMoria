@@ -13,24 +13,53 @@ interface AdminFinanceProps {
   onDelete?: (id: string) => void;
 }
 
+const FIXED_CATEGORIES = ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'] as const;
+type FixedCat = (typeof FIXED_CATEGORIES)[number];
+
+const FIXED_CATEGORY_LABELS: Record<FixedCat, string> = { water: 'Água', electricity: 'Luz', internet: 'Internet', salary: 'Pró-labore', tax: 'MEI', rent: 'Aluguel' };
+
+/** Identifica a categoria de custo fixo: pela categoria salva ou pela descrição do lançamento. */
+function getEffectiveFixedCategory(t: Transaction): FixedCat | null {
+  if (t.type !== 'payable') return null;
+  if (t.category && FIXED_CATEGORIES.includes(t.category as FixedCat)) return t.category as FixedCat;
+  const d = (t.description || '').toLowerCase().normalize('NFD').replace(/\u0300/g, '');
+  if (d.includes('internet')) return 'internet';
+  if (d.includes('aluguel')) return 'rent';
+  if (d.includes('agua')) return 'water';
+  if (d.includes('luz') || d.includes('energia') || d.includes('eletricidade')) return 'electricity';
+  if (d.includes('pro-labore') || d.includes('prolabore') || d.includes('salário') || d.includes('salario')) return 'salary';
+  if (d.includes('mei') || d.includes('imposto')) return 'tax';
+  return null;
+}
+
 const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactions, bookings, customers, onUpdate, onDelete }) => {
   const [showForm, setShowForm] = useState(false);
+  const now = new Date();
+  const [periodStart, setPeriodStart] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]);
+  const [periodEnd, setPeriodEnd] = useState(() => now.toISOString().split('T')[0]);
   
   // Identificar ID do cliente de teste
   const testCustomerId = useMemo(() => customers.find(c => c.cpf === '33426618877')?.id, [customers]);
 
   // Filtrar transações de teste e de agendamentos cancelados
-  const transactions = useMemo(() => {
+  const baseTransactions = useMemo(() => {
     return allTransactions.filter(t => {
       const isTestUser = testCustomerId && t.customerId === testCustomerId;
-      
-      // Filter out transactions linked to cancelled bookings
       const linkedBooking = t.bookingId ? bookings.find(b => b.id === t.bookingId) : null;
       const isCancelledBooking = linkedBooking?.status === 'cancelled';
-      
       return !isTestUser && !isCancelledBooking;
     });
   }, [allTransactions, testCustomerId, bookings]);
+
+  // Filtrar por período selecionado
+  const transactions = useMemo(() => {
+    const start = new Date(periodStart).getTime();
+    const end = new Date(periodEnd + 'T23:59:59').getTime();
+    return baseTransactions.filter(t => {
+      const tDate = new Date(t.date).getTime();
+      return tDate >= start && tDate <= end;
+    });
+  }, [baseTransactions, periodStart, periodEnd]);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState({
@@ -194,6 +223,21 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
     return { revenue, expenses, pending, balance: revenue - expenses };
   }, [transactions]);
 
+  // Custos fixos: todos os lançamentos de despesa que são custo fixo (por categoria ou por descrição)
+  const fixedCostsForAnalysis = useMemo(() => {
+    return transactions.filter(t => getEffectiveFixedCategory(t) !== null);
+  }, [transactions]);
+
+  // Soma por categoria efetiva (para exibir na análise)
+  const fixedCostsByCategory = useMemo(() => {
+    const map: Record<FixedCat, number> = { water: 0, electricity: 0, internet: 0, salary: 0, tax: 0, rent: 0 };
+    fixedCostsForAnalysis.forEach(t => {
+      const cat = getEffectiveFixedCategory(t);
+      if (cat) map[cat] += t.amount;
+    });
+    return map;
+  }, [fixedCostsForAnalysis]);
+
   return (
     <div className="space-y-8 animate-fade-in pb-20">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-sm gap-6">
@@ -201,7 +245,15 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
           <h2 className="text-3xl font-bold text-tea-950 font-serif italic">Caixa Moriá</h2>
           <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Ganhos e Despesas</p>
         </div>
-        <button onClick={() => { resetForm(); setShowForm(true); }} className="w-full md:w-auto bg-tea-900 text-white px-10 py-5 rounded-2xl font-bold uppercase text-[11px] tracking-widest hover:bg-black transition-all shadow-xl">+ Lançar Movimentação</button>
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Período</label>
+            <input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} className="p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none border border-gray-100" />
+            <span className="text-gray-300">até</span>
+            <input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} className="p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none border border-gray-100" />
+          </div>
+          <button onClick={() => { resetForm(); setShowForm(true); }} className="bg-tea-900 text-white px-10 py-5 rounded-2xl font-bold uppercase text-[11px] tracking-widest hover:bg-black transition-all shadow-xl">+ Lançar Movimentação</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -236,23 +288,18 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="space-y-4">
-            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest border-b border-gray-50 pb-2">Custos Fixos Mensais</h4>
+            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest border-b border-gray-50 pb-2">Custos Fixos (período)</h4>
+            <p className="text-[9px] text-gray-400">Inclui lançamentos confirmados e pendentes no período selecionado.</p>
             <div className="space-y-2">
-              {['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].map(cat => {
-                const amount = transactions
-                  .filter(t => t.type === 'payable' && t.category === cat && t.status === 'paid')
-                  .reduce((acc, t) => acc + t.amount, 0);
-                const labels: any = { water: 'Água', electricity: 'Luz', internet: 'Internet', salary: 'Pró-labore', tax: 'MEI', rent: 'Aluguel' };
-                return (
-                  <div key={cat} className="flex justify-between text-sm">
-                    <span className="text-gray-500">{labels[cat]}</span>
-                    <span className="font-bold text-tea-900">R$ {amount.toFixed(2)}</span>
-                  </div>
-                );
-              })}
+              {FIXED_CATEGORIES.map(cat => (
+                <div key={cat} className="flex justify-between text-sm">
+                  <span className="text-gray-500">{FIXED_CATEGORY_LABELS[cat]}</span>
+                  <span className="font-bold text-tea-900">R$ {fixedCostsByCategory[cat].toFixed(2)}</span>
+                </div>
+              ))}
               <div className="flex justify-between text-sm pt-2 border-t border-gray-50 font-bold">
                 <span className="text-tea-950">Total Fixo</span>
-                <span className="text-tea-900">R$ {transactions.filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0).toFixed(2)}</span>
+                <span className="text-tea-900">R$ {fixedCostsForAnalysis.reduce((acc, t) => acc + t.amount, 0).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -261,20 +308,20 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
             <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest">Sugestão de Precificação</h4>
             <p className="text-xs text-gray-600 leading-relaxed">
               Para cobrir seus custos fixos e ter lucro, cada hora de trabalho deve render um valor mínimo. 
-              Baseado nos seus gastos atuais, aqui está uma estimativa:
+              Baseado nos lançamentos do período, aqui está uma estimativa:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white p-5 rounded-2xl shadow-sm">
                 <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Custo Fixo por Hora (Est.)</p>
                 <p className="text-xl font-serif font-bold text-tea-900">
-                  R$ {(transactions.filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0) / (22 * 8)).toFixed(2)}
+                  R$ {(fixedCostsForAnalysis.reduce((acc, t) => acc + t.amount, 0) / (22 * 8)).toFixed(2)}
                 </p>
                 <p className="text-[8px] text-gray-400 mt-1">* Baseado em 22 dias/mês, 8h/dia</p>
               </div>
               <div className="bg-tea-900 p-5 rounded-2xl text-white shadow-lg">
                 <p className="text-[9px] font-bold text-tea-300 uppercase mb-1">Meta de Faturamento/Hora</p>
                 <p className="text-xl font-serif font-bold">
-                  R$ {(transactions.filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0) * 2.5 / (22 * 8)).toFixed(2)}
+                  R$ {(fixedCostsForAnalysis.reduce((acc, t) => acc + t.amount, 0) * 2.5 / (22 * 8)).toFixed(2)}
                 </p>
                 <p className="text-[8px] text-tea-100 mt-1">* Incluindo margem de lucro de 60%</p>
               </div>
