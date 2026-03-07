@@ -18,9 +18,11 @@ interface AdminDashboardProps {
   waitlist: WaitlistEntry[];
   inventory: any[];
   onLogout: () => void;
+  onUpdateBooking?: (id: string, data: Partial<Booking>) => void;
+  onUpdateTransaction?: (id: string, data: Partial<Transaction>) => void;
 }
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, waitlist, inventory, onLogout }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions, customers, services, settings, waitlist, inventory, onLogout, onUpdateBooking, onUpdateTransaction }) => {
   const [period, setPeriod] = useState<'current' | 'next' | 'custom'>('current');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [dateRange, setDateRange] = useState({
@@ -519,11 +521,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
       </div>
       {/* Modal de Histórico da Cliente */}
       {selectedCustomerId && (
-        <CustomerHistoryModal 
+        <CustomerHistoryModal
           customer={customers.find(c => c.id === selectedCustomerId)!}
           bookings={bookings}
           transactions={transactions}
           waitlist={waitlist}
+          services={services}
+          onUpdateBooking={onUpdateBooking}
+          onUpdateTransaction={onUpdateTransaction}
           onClose={() => setSelectedCustomerId(null)}
         />
       )}

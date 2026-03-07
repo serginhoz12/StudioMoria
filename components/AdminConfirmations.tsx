@@ -16,9 +16,11 @@ interface AdminConfirmationsProps {
   onUpdateDeposit?: (id: string, status: any) => void;
   onDeleteBooking?: (id: string) => void;
   onRemoveWaitlist?: (id: string) => void;
+  onUpdateBooking?: (id: string, data: Partial<Booking>) => void;
+  onUpdateTransaction?: (id: string, data: Partial<Transaction>) => void;
 }
 
-const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, onUpdateStatus }) => {
+const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, onUpdateStatus, onUpdateBooking, onUpdateTransaction }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
@@ -574,11 +576,14 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
 
       {/* Modal de Histórico da Cliente */}
       {selectedCustomerId && (
-        <CustomerHistoryModal 
+        <CustomerHistoryModal
           customer={customers.find(c => c.id === selectedCustomerId)!}
           bookings={bookings}
           transactions={transactions}
           waitlist={waitlist}
+          services={services}
+          onUpdateBooking={onUpdateBooking}
+          onUpdateTransaction={onUpdateTransaction}
           onClose={() => setSelectedCustomerId(null)}
         />
       )}
