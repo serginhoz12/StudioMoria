@@ -219,8 +219,9 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
   const totals = useMemo(() => {
     const revenue = transactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
     const expenses = transactions.filter(t => t.type === 'payable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
-    const pending = transactions.filter(t => t.type === 'receivable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
-    return { revenue, expenses, pending, balance: revenue - expenses };
+    const pendingReceivable = transactions.filter(t => t.type === 'receivable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
+    const pendingPayable = transactions.filter(t => t.type === 'payable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
+    return { revenue, expenses, pendingReceivable, pendingPayable, balance: revenue - expenses };
   }, [transactions]);
 
   // Custos fixos: todos os lançamentos de despesa que são custo fixo (por categoria ou por descrição)
@@ -256,23 +257,32 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
         <div className="bg-green-50 p-8 rounded-[2.5rem] border border-green-100 shadow-sm">
           <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">Entradas</p>
           <p className="text-3xl font-serif font-bold text-green-900">R$ {totals.revenue.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-green-600 mt-1">Recebidas no período</p>
         </div>
         <div className="bg-red-50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
           <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">Saídas</p>
           <p className="text-3xl font-serif font-bold text-red-900">R$ {totals.expenses.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-red-600 mt-1">Pagas no período</p>
         </div>
         <div className="bg-orange-50 p-8 rounded-[2.5rem] border border-orange-100 shadow-sm">
-          <p className="text-[10px] font-bold text-orange-700 uppercase tracking-widest mb-1">Pendente</p>
-          <p className="text-3xl font-serif font-bold text-orange-900">R$ {totals.pending.toLocaleString('pt-BR')}</p>
+          <p className="text-[10px] font-bold text-orange-700 uppercase tracking-widest mb-1">A receber</p>
+          <p className="text-3xl font-serif font-bold text-orange-900">R$ {totals.pendingReceivable.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-orange-600 mt-1">Receitas pendentes</p>
+        </div>
+        <div className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-200 shadow-sm">
+          <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-1">A pagar</p>
+          <p className="text-3xl font-serif font-bold text-amber-900">R$ {totals.pendingPayable.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-amber-700 mt-1">Despesas pendentes</p>
         </div>
         <div className="bg-tea-950 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10 text-5xl">💰</div>
           <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-1">Saldo Líquido</p>
           <p className="text-3xl font-serif font-bold">R$ {totals.balance.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-tea-200 mt-1">Entradas − Saídas pagas</p>
         </div>
       </div>
 
