@@ -491,7 +491,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
             </div>
           )}
         </div>
-      ))}
+      )}
     </div>
   );
 };
