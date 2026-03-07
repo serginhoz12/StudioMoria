@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Transaction, Customer, Booking } from '../types';
+import { Transaction, Customer, Booking, Service, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
 
@@ -8,6 +8,8 @@ interface AdminFinanceProps {
   transactions: Transaction[];
   bookings: Booking[];
   customers: Customer[];
+  services: Service[];
+  inventory: InventoryItem[];
   onAdd?: (data: any) => Promise<void>;
   onUpdate?: (id: string, data: any) => void;
   onDelete?: (id: string) => void;
@@ -32,7 +34,7 @@ function getEffectiveFixedCategory(t: Transaction): FixedCat | null {
   return null;
 }
 
-const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactions, bookings, customers, onUpdate, onDelete }) => {
+const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactions, bookings, customers, services = [], inventory = [], onUpdate, onDelete }) => {
   const [showForm, setShowForm] = useState(false);
   const now = new Date();
   const [periodStart, setPeriodStart] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]);
@@ -229,15 +231,65 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
     return transactions.filter(t => getEffectiveFixedCategory(t) !== null);
   }, [transactions]);
 
-  // Soma por categoria efetiva (para exibir na análise)
+  // Custos fixos sempre como valor positivo (despesa a cobrir) — nunca contabilizar como positivo na receita
   const fixedCostsByCategory = useMemo(() => {
     const map: Record<FixedCat, number> = { water: 0, electricity: 0, internet: 0, salary: 0, tax: 0, rent: 0 };
     fixedCostsForAnalysis.forEach(t => {
       const cat = getEffectiveFixedCategory(t);
-      if (cat) map[cat] += t.amount;
+      if (cat) map[cat] += Math.abs(Number(t.amount));
     });
     return map;
   }, [fixedCostsForAnalysis]);
+
+  const totalFixedCost = useMemo(() => fixedCostsForAnalysis.reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0), [fixedCostsForAnalysis]);
+
+  // Análise por procedimento: realizados no período, receita, custo de produtos, sugestão de preço
+  const procedureAnalysis = useMemo(() => {
+    const start = new Date(periodStart).getTime();
+    const end = new Date(periodEnd + 'T23:59:59').getTime();
+    const byService: Record<string, { service: Service; count: number; revenue: number; productCostPerProc: number; totalProductCost: number }> = {};
+
+    const completedInPeriod = bookings.filter(b => {
+      if (b.status !== 'completed') return false;
+      const t = new Date(b.dateTime.replace(' ', 'T')).getTime();
+      return t >= start && t <= end;
+    });
+
+    const paidByBookingId: Record<string, number> = {};
+    transactions.filter(t => t.type === 'receivable' && t.status === 'paid' && t.bookingId).forEach(t => {
+      const tDate = new Date(t.date).getTime();
+      if (tDate >= start && tDate <= end) paidByBookingId[t.bookingId!] = (paidByBookingId[t.bookingId!] || 0) + t.amount;
+    });
+
+    completedInPeriod.forEach(b => {
+      const sid = b.serviceId || b.serviceName;
+      if (!sid) return;
+      const service = services.find(s => s.id === sid || s.name === b.serviceName) || { id: sid, name: b.serviceName || sid, price: 0, duration: 0, description: '', category: '', isVisible: true, usedProducts: [] } as Service;
+      const key = service.id;
+      if (!byService[key]) byService[key] = { service, count: 0, revenue: 0, productCostPerProc: 0, totalProductCost: 0 };
+
+      byService[key].count += 1;
+      const paid = b.paymentReceived ?? paidByBookingId[b.id] ?? 0;
+      byService[key].revenue += paid;
+    });
+
+    Object.keys(byService).forEach(key => {
+      const row = byService[key];
+      let costPerProc = 0;
+      if (row.service.usedProducts?.length && inventory.length) {
+        row.service.usedProducts.forEach(up => {
+          const product = inventory.find(p => p.id === up.productId);
+          if (!product?.purchasePrice || !product?.netWeight || product.netWeight <= 0) return;
+          const costPerUnit = product.purchasePrice / product.netWeight;
+          costPerProc += costPerUnit * (up.consumption || 0);
+        });
+      }
+      row.productCostPerProc = costPerProc;
+      row.totalProductCost = costPerProc * row.count;
+    });
+
+    return Object.values(byService).sort((a, b) => b.count - a.count);
+  }, [bookings, transactions, services, inventory, periodStart, periodEnd]);
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
@@ -304,39 +356,85 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
               {FIXED_CATEGORIES.map(cat => (
                 <div key={cat} className="flex justify-between text-sm">
                   <span className="text-gray-500">{FIXED_CATEGORY_LABELS[cat]}</span>
-                  <span className="font-bold text-tea-900">R$ {fixedCostsByCategory[cat].toFixed(2)}</span>
+                  <span className="font-bold text-red-600">R$ {fixedCostsByCategory[cat].toFixed(2)}</span>
                 </div>
               ))}
               <div className="flex justify-between text-sm pt-2 border-t border-gray-50 font-bold">
-                <span className="text-tea-950">Total Fixo</span>
-                <span className="text-tea-900">R$ {fixedCostsForAnalysis.reduce((acc, t) => acc + t.amount, 0).toFixed(2)}</span>
+                <span className="text-tea-950">Total Fixo (despesas)</span>
+                <span className="text-red-600">R$ {totalFixedCost.toFixed(2)}</span>
               </div>
             </div>
           </div>
 
           <div className="md:col-span-2 bg-tea-50/30 p-8 rounded-3xl border border-tea-100 space-y-6">
-            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest">Sugestão de Precificação</h4>
+            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest">Custo fixo × hora (referência)</h4>
             <p className="text-xs text-gray-600 leading-relaxed">
-              Para cobrir seus custos fixos e ter lucro, cada hora de trabalho deve render um valor mínimo. 
-              Baseado nos lançamentos do período, aqui está uma estimativa:
+              Custos fixos são despesas (sempre negativos no fluxo). Para cobri-los, cada hora de trabalho deve render no mínimo:
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-white p-5 rounded-2xl shadow-sm">
-                <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Custo Fixo por Hora (Est.)</p>
+                <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Custo fixo/hora (est.)</p>
                 <p className="text-xl font-serif font-bold text-tea-900">
-                  R$ {(fixedCostsForAnalysis.reduce((acc, t) => acc + t.amount, 0) / (22 * 8)).toFixed(2)}
+                  R$ {(totalFixedCost / (22 * 8)).toFixed(2)}
                 </p>
-                <p className="text-[8px] text-gray-400 mt-1">* Baseado em 22 dias/mês, 8h/dia</p>
+                <p className="text-[8px] text-gray-400 mt-1">* 22 dias/mês, 8h/dia</p>
               </div>
               <div className="bg-tea-900 p-5 rounded-2xl text-white shadow-lg">
-                <p className="text-[9px] font-bold text-tea-300 uppercase mb-1">Meta de Faturamento/Hora</p>
+                <p className="text-[9px] font-bold text-tea-300 uppercase mb-1">Meta faturamento/hora</p>
                 <p className="text-xl font-serif font-bold">
-                  R$ {(fixedCostsForAnalysis.reduce((acc, t) => acc + t.amount, 0) * 2.5 / (22 * 8)).toFixed(2)}
+                  R$ {(totalFixedCost * 2.5 / (22 * 8)).toFixed(2)}
                 </p>
-                <p className="text-[8px] text-tea-100 mt-1">* Incluindo margem de lucro de 60%</p>
+                <p className="text-[8px] text-tea-100 mt-1">* Margem ~60%</p>
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Precificação por procedimento */}
+        <div className="mt-10 pt-10 border-t border-gray-100">
+          <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest mb-2">Sugestão de precificação por procedimento</h4>
+          <p className="text-xs text-gray-600 leading-relaxed mb-6">
+            Comparando procedimentos realizados no período, valor cobrado e custo dos produtos utilizados em cada um.
+          </p>
+          {procedureAnalysis.length === 0 ? (
+            <p className="text-gray-400 italic text-sm">Nenhum procedimento concluído no período selecionado.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest">Procedimento</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Realizados</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Receita total</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Receita/proc.</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Custo produto/proc.</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Custo produto total</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Margem (aprox.)</th>
+                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Preço mín. sugerido</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {procedureAnalysis.map(({ service, count, revenue, productCostPerProc, totalProductCost }) => {
+                    const revenuePerProc = count > 0 ? revenue / count : 0;
+                    const marginPct = revenue > 0 ? ((revenue - totalProductCost) / revenue) * 100 : 0;
+                    const suggestedMin = productCostPerProc > 0 ? productCostPerProc / 0.4 : revenuePerProc;
+                    return (
+                      <tr key={service.id} className="border-b border-gray-50 hover:bg-tea-50/30">
+                        <td className="py-4 pr-4 font-bold text-tea-950">{service.name}</td>
+                        <td className="py-4 pr-4 text-right">{count}</td>
+                        <td className="py-4 pr-4 text-right text-green-700 font-bold">R$ {revenue.toFixed(2)}</td>
+                        <td className="py-4 pr-4 text-right">R$ {revenuePerProc.toFixed(2)}</td>
+                        <td className="py-4 pr-4 text-right text-red-600">R$ {productCostPerProc.toFixed(2)}</td>
+                        <td className="py-4 pr-4 text-right text-red-600">R$ {totalProductCost.toFixed(2)}</td>
+                        <td className="py-4 pr-4 text-right">{marginPct.toFixed(0)}%</td>
+                        <td className="py-4 pr-4 text-right font-bold text-tea-800">R$ {suggestedMin.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
