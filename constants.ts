@@ -94,7 +94,8 @@ export const DEFAULT_SETTINGS: SalonSettings = {
     enabled: true,
     pointsPerReal: 1,
     minPointsToRedeem: 500,
-    rewardDescription: "R$ 50,00 de desconto em qualquer procedimento"
+    rewardDescription: "R$ 50,00 de desconto em qualquer procedimento",
+    targetCustomerIds: []
   }
 };
 

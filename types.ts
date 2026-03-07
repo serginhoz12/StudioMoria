@@ -185,4 +185,6 @@ export interface LoyaltyConfig {
   pointsPerReal: number;
   minPointsToRedeem: number;
   rewardDescription: string;
+  /** IDs das clientes que participam do programa. Vazio = nenhuma vê o card. */
+  targetCustomerIds?: string[];
 }

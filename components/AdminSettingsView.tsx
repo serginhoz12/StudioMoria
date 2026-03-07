@@ -19,6 +19,7 @@ interface AdminSettingsViewProps {
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
   settings, 
   services = [],
+  customers = [],
   inventory = [],
   isMockMode
 }) => {
