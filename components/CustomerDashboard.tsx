@@ -129,6 +129,24 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         duration: selectedService.duration,
         updatedAt: new Date().toISOString()
       });
+
+      // Remove from waitlist if exists
+      try {
+        const { query, where, getDocs, collection, deleteDoc } = await import("firebase/firestore");
+        const q = query(
+          collection(db, "waitlist"), 
+          where("customerId", "==", customer.id), 
+          where("serviceId", "==", selectedService.id),
+          where("status", "==", "active")
+        );
+        const snap = await getDocs(q);
+        for (const d of snap.docs) {
+          await deleteDoc(doc(db, "waitlist", d.id));
+        }
+      } catch (waitlistErr) {
+        console.error("Erro ao remover da lista de espera:", waitlistErr);
+      }
+
       alert("Pedido de agendamento enviado! Aguarde a confirmação da Moriá.");
       setActiveTab('agenda');
     } catch (e: any) {

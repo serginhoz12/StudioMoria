@@ -184,6 +184,22 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           agreedToCancellationPolicy: true,
           policyAgreedAt: new Date().toISOString()
         });
+
+        // Remove from waitlist if exists
+        try {
+          const q = query(
+            collection(db, "waitlist"), 
+            where("customerId", "==", customer.id), 
+            where("serviceId", "==", service.id),
+            where("status", "==", "active")
+          );
+          const snap = await getDocs(q);
+          for (const d of snap.docs) {
+            await deleteDoc(doc(db, "waitlist", d.id));
+          }
+        } catch (waitlistErr) {
+          console.error("Erro ao remover da lista de espera (manual booking):", waitlistErr);
+        }
       }
       alert("Agendamento manual realizado com sucesso!");
       setModal({ open: false, hour: '', type: 'free' });

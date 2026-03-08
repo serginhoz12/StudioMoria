@@ -31,7 +31,10 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
   const categories = Array.from(new Set(inventory.map(item => item.category)));
 
   const handleAdd = () => {
-    if (!newItem.name || !newItem.category) return;
+    if (!newItem.name || !newItem.category) {
+      alert("Por favor, preencha o nome e a categoria do produto.");
+      return;
+    }
     onAdd(newItem);
     setIsAdding(false);
     setNewItem({

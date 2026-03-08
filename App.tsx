@@ -289,6 +289,23 @@ const App: React.FC = () => {
       policyAgreedAt: new Date().toISOString()
     };
     await addDoc(collection(db, "bookings"), booking);
+
+    // Remove from waitlist if exists for this service
+    try {
+      const q = query(
+        collection(db, "waitlist"), 
+        where("customerId", "==", currentUser.id), 
+        where("serviceId", "==", sid),
+        where("status", "==", "active")
+      );
+      const snap = await getDocs(q);
+      for (const d of snap.docs) {
+        await deleteDoc(doc(db, "waitlist", d.id));
+      }
+    } catch (err) {
+      console.error("Erro ao remover da lista de espera:", err);
+    }
+
     alert("Solicitação de agendamento enviada com sucesso!");
   };
 
@@ -325,43 +342,52 @@ const App: React.FC = () => {
           onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} 
           onDelete={(id) => !isMockMode && deleteDoc(doc(db, "inventory", id))} 
           onAdd={async (data) => {
-            if(isMockMode) return;
-            await addDoc(collection(db, "inventory"), data);
-            
-            if (data.purchasePrice && data.purchasePrice > 0) {
-              const isInstallment = ['credit', 'store_installments'].includes(data.paymentMethod || '') && (data.installmentsCount || 1) > 1;
+            if(isMockMode) {
+              alert("Modo de Demonstração: O item foi simulado, mas não será salvo permanentemente.");
+              return;
+            }
+            try {
+              await addDoc(collection(db, "inventory"), data);
               
-              if (isInstallment) {
-                const parentId = Math.random().toString(36).substr(2, 9);
-                const count = data.installmentsCount || 1;
-                for (let i = 0; i < count; i++) {
+              if (data.purchasePrice && data.purchasePrice > 0) {
+                const isInstallment = ['credit', 'store_installments'].includes(data.paymentMethod || '') && (data.installmentsCount || 1) > 1;
+                
+                if (isInstallment) {
+                  const parentId = Math.random().toString(36).substr(2, 9);
+                  const count = data.installmentsCount || 1;
+                  for (let i = 0; i < count; i++) {
+                    await addDoc(collection(db, "transactions"), {
+                      type: 'payable',
+                      description: `Compra Estoque: ${data.name} (${i + 1}/${count})`,
+                      amount: Number((data.purchasePrice / count).toFixed(2)),
+                      date: data.purchaseDate,
+                      dueDate: new Date(new Date(data.purchaseDate).setMonth(new Date(data.purchaseDate).getMonth() + i)).toISOString().split('T')[0],
+                      status: i === 0 ? 'paid' : 'pending',
+                      category: 'supplies',
+                      paymentMethod: data.paymentMethod,
+                      installmentNumber: i + 1,
+                      installmentsCount: count,
+                      parentTransactionId: parentId,
+                      createdAt: new Date().toISOString()
+                    });
+                  }
+                } else {
                   await addDoc(collection(db, "transactions"), {
                     type: 'payable',
-                    description: `Compra: ${data.name} (${i + 1}/${count})`,
-                    amount: Number((data.purchasePrice / count).toFixed(2)),
+                    description: `Compra Estoque: ${data.name}`,
+                    amount: data.purchasePrice,
                     date: data.purchaseDate,
-                    dueDate: new Date(new Date(data.purchaseDate).setMonth(new Date(data.purchaseDate).getMonth() + i)).toISOString().split('T')[0],
-                    status: i === 0 ? 'paid' : 'pending',
+                    status: 'paid',
                     category: 'supplies',
                     paymentMethod: data.paymentMethod,
-                    installmentNumber: i + 1,
-                    installmentsCount: count,
-                    parentTransactionId: parentId,
                     createdAt: new Date().toISOString()
                   });
                 }
-              } else {
-                await addDoc(collection(db, "transactions"), {
-                  type: 'payable',
-                  description: `Compra: ${data.name}`,
-                  amount: data.purchasePrice,
-                  date: data.purchaseDate,
-                  status: 'paid',
-                  category: 'supplies',
-                  paymentMethod: data.paymentMethod,
-                  createdAt: new Date().toISOString()
-                });
               }
+              alert("Produto cadastrado e valor lançado no caixa com sucesso!");
+            } catch (err) {
+              console.error("Erro ao cadastrar produto:", err);
+              alert("Erro ao cadastrar produto. Verifique sua conexão.");
             }
           }} 
         />;
@@ -541,6 +567,22 @@ const App: React.FC = () => {
                   status: 'pending',
                   bookedAt: new Date().toISOString()
                 });
+
+                // Remove from waitlist if exists
+                try {
+                  const qW = query(
+                    collection(db, "waitlist"), 
+                    where("customerId", "==", user.id), 
+                    where("serviceId", "==", serviceId),
+                    where("status", "==", "active")
+                  );
+                  const snapW = await getDocs(qW);
+                  for (const d of snapW.docs) {
+                    await deleteDoc(doc(db, "waitlist", d.id));
+                  }
+                } catch (err) {
+                  console.error("Erro ao remover da lista de espera (quick register):", err);
+                }
               }
 
               // Handle Waitlist
