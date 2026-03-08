@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Booking, Customer, WaitlistEntry, Service, TeamMember, Transaction } from '../types';
+import { Booking, Customer, WaitlistEntry, Service, TeamMember, Transaction, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import CustomerHistoryModal from './CustomerHistoryModal';
@@ -12,13 +12,15 @@ interface AdminConfirmationsProps {
   services: Service[];
   transactions: Transaction[];
   teamMembers: TeamMember[];
+  inventory: InventoryItem[];
   onUpdateStatus?: (id: string, status: any) => void;
   onUpdateDeposit?: (id: string, status: any) => void;
   onDeleteBooking?: (id: string) => void;
   onRemoveWaitlist?: (id: string) => void;
+  onUpdateInventory?: (id: string, data: Partial<InventoryItem>) => void;
 }
 
-const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, onUpdateStatus }) => {
+const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, inventory, onUpdateStatus, onUpdateInventory }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
@@ -36,6 +38,10 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     customerId: ''
   });
 
+  const [usedProducts, setUsedProducts] = useState<{ productId: string; quantity: number }[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
   const handleCompleteService = async () => {
     if (!performingService || !performanceData.teamMemberId || !performanceData.serviceId || !performanceData.price) return alert("Preencha todos os campos.");
     
@@ -52,6 +58,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     const service = services.find(s => s.id === performanceData.serviceId);
     
     try {
+      setIsProcessing(true);
       if (!(db as any)._isMock) {
         // 1. Create completed booking
         const bookingRef = await addDoc(collection(db, "bookings"), {
@@ -69,7 +76,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           paymentReceived: performanceData.price,
           paymentDate: new Date().toISOString(),
           agreedToCancellationPolicy: true,
-          policyAgreedAt: new Date().toISOString()
+          policyAgreedAt: new Date().toISOString(),
+          usedProducts: usedProducts
         });
 
         // 2. Create transaction
@@ -88,14 +96,27 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           createdAt: new Date().toISOString()
         });
 
-        // 3. Remove from waitlist
+        // 3. Update Inventory
+        if (onUpdateInventory) {
+          for (const used of usedProducts) {
+            const item = inventory.find(i => i.id === used.productId);
+            if (item) {
+              await onUpdateInventory(item.id, {
+                quantity: Math.max(0, item.quantity - used.quantity)
+              });
+            }
+          }
+        }
+
+        // 4. Remove from waitlist
         await deleteDoc(doc(db, "waitlist", performingService.id));
       }
       
       setPerformingService(null);
       setPerformanceData({ ...performanceData, customerId: '' });
       setCustomerSearch('');
-      alert("Atendimento registrado com sucesso!");
+      setUsedProducts([]);
+      alert("Atendimento registrado com sucesso e estoque atualizado!");
     } catch (error: any) {
       console.error("Erro ao registrar atendimento:", error);
       if (error.code === 'permission-denied') {
@@ -104,6 +125,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
       } else {
         alert("Erro ao salvar. Tente novamente.");
       }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -417,14 +440,64 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                       />
                     </div>
                     
+                    <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Produtos Utilizados</p>
+                      <input 
+                        type="text" 
+                        placeholder="Buscar produto..." 
+                        value={productSearch} 
+                        onChange={e => setProductSearch(e.target.value)} 
+                        className="w-full p-4 bg-white border border-gray-200 rounded-2xl text-xs outline-none font-bold shadow-sm" 
+                      />
+                      <div className="max-h-28 overflow-y-auto space-y-1 custom-scroll">
+                        {inventory.filter(i => i.name.toLowerCase().includes(productSearch.toLowerCase()) && i.quantity > 0).slice(0, 5).map(i => (
+                          <button 
+                            key={i.id} 
+                            onClick={() => {
+                              if (!usedProducts.find(up => up.productId === i.id)) {
+                                setUsedProducts([...usedProducts, { productId: i.id, quantity: 1 }]);
+                              }
+                              setProductSearch('');
+                            }} 
+                            className="w-full p-3 text-left text-[10px] rounded-xl font-bold bg-white hover:bg-tea-50 text-gray-600 border border-gray-100"
+                          >
+                            {i.name} ({i.quantity} {i.unit})
+                          </button>
+                        ))}
+                      </div>
+                      {usedProducts.length > 0 && (
+                        <div className="space-y-2 pt-2">
+                          {usedProducts.map(p => {
+                            const item = inventory.find(i => i.id === p.productId);
+                            return (
+                              <div key={p.productId} className="flex items-center justify-between bg-white p-3 rounded-xl border border-tea-50">
+                                <span className="text-[10px] font-bold text-tea-900 truncate flex-1">{item?.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <input 
+                                    type="number" 
+                                    value={p.quantity} 
+                                    onChange={e => setUsedProducts(usedProducts.map(up => up.productId === p.productId ? { ...up, quantity: Number(e.target.value) } : up))}
+                                    className="w-12 p-2 bg-gray-50 rounded-lg text-center text-[10px] font-bold outline-none"
+                                  />
+                                  <span className="text-[9px] text-gray-400">{item?.unit}</span>
+                                  <button onClick={() => setUsedProducts(usedProducts.filter(up => up.productId !== p.productId))} className="text-red-300 hover:text-red-500">✕</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="pt-4 space-y-3">
                       <button 
                         onClick={handleCompleteService} 
-                        className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+                        disabled={isProcessing}
+                        className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all disabled:opacity-50"
                       >
-                        Concluir e Lançar no Caixa
+                        {isProcessing ? 'Processando...' : 'Concluir e Lançar no Caixa'}
                       </button>
-                      <button onClick={() => { setPerformingService(null); setCustomerSearch(''); }} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
+                      <button onClick={() => { setPerformingService(null); setCustomerSearch(''); setUsedProducts([]); }} className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500">Cancelar</button>
                     </div>
                  </div>
               </div>

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Booking, Service, TeamMember, SalonSettings, Customer, Transaction, WaitlistEntry } from '../types';
+import { Booking, Service, TeamMember, SalonSettings, Customer, Transaction, WaitlistEntry, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc, writeBatch, getDocs, query, where } from "firebase/firestore";
 import CustomerHistoryModal from './CustomerHistoryModal';
@@ -12,11 +12,13 @@ interface AdminCalendarProps {
   transactions: Transaction[];
   waitlist: WaitlistEntry[];
   teamMembers: TeamMember[];
+  inventory: InventoryItem[];
   settings?: SalonSettings;
   onUpdateStatus?: (id: string, status: any) => void;
+  onUpdateInventory?: (id: string, data: Partial<InventoryItem>) => void;
 }
 
-const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, settings }) => {
+const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, inventory, settings, onUpdateInventory }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
   const [modal, setModal] = useState<{ open: boolean; hour: string; type: 'free' | 'occupied' | 'opened' }>({ open: false, hour: '', type: 'free' });
@@ -30,6 +32,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkStartDate, setBulkStartDate] = useState(selectedDate);
   const [bulkEndDate, setBulkEndDate] = useState(selectedDate);
+
+  // State for product usage during completion
+  const [usedProducts, setUsedProducts] = useState<{ productId: string; quantity: number }[]>([]);
+  const [productSearch, setProductSearch] = useState('');
 
   // Added resetForm function to fix "Cannot find name 'resetForm'" error
   const resetForm = () => {
@@ -211,12 +217,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   const handleCompleteBooking = async (booking: Booking) => {
     if (!(db as any)._isMock) {
+      setIsProcessing(true);
       try {
         // 1. Update booking status
         await updateDoc(doc(db, "bookings", booking.id), {
           status: 'completed',
           paymentReceived: services.find(s => s.id === booking.serviceId)?.price || 0,
-          paymentDate: new Date().toISOString()
+          paymentDate: new Date().toISOString(),
+          usedProducts: usedProducts // Store what was used
         });
 
         // 2. Create transaction
@@ -235,12 +243,28 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           createdAt: new Date().toISOString()
         });
 
-        alert("Atendimento concluído e lançado no caixa!");
+        // 3. Update Inventory
+        if (onUpdateInventory) {
+          for (const used of usedProducts) {
+            const item = inventory.find(i => i.id === used.productId);
+            if (item) {
+              await onUpdateInventory(item.id, {
+                quantity: Math.max(0, item.quantity - used.quantity)
+              });
+            }
+          }
+        }
+
+        alert("Atendimento concluído, lançado no caixa e estoque atualizado!");
       } catch (e) {
+        console.error("Erro ao concluir atendimento:", e);
         alert("Erro ao concluir atendimento.");
+      } finally {
+        setIsProcessing(false);
       }
     }
     setModal({ open: false, hour: '', type: 'free' });
+    setUsedProducts([]);
   };
 
   const handleBulkRelease = async () => {
@@ -516,11 +540,65 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                   </div>
                   
                   <div className="grid grid-cols-1 gap-3">
+                    <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4">
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center">Produtos Utilizados</p>
+                      
+                      <div className="space-y-2">
+                        <input 
+                          type="text" 
+                          placeholder="Buscar produto no estoque..." 
+                          value={productSearch} 
+                          onChange={e => setProductSearch(e.target.value)} 
+                          className="w-full p-3 bg-white border border-gray-100 rounded-xl text-xs outline-none font-bold" 
+                        />
+                        <div className="max-h-24 overflow-y-auto space-y-1 custom-scroll">
+                          {inventory.filter(i => i.name.toLowerCase().includes(productSearch.toLowerCase()) && i.quantity > 0).slice(0, 5).map(i => (
+                            <button 
+                              key={i.id} 
+                              onClick={() => {
+                                if (!usedProducts.find(p => p.productId === i.id)) {
+                                  setUsedProducts([...usedProducts, { productId: i.id, quantity: 1 }]);
+                                }
+                                setProductSearch('');
+                              }} 
+                              className="w-full p-2 text-left text-[10px] rounded-lg font-bold bg-white hover:bg-tea-50 text-gray-600 border border-gray-50"
+                            >
+                              {i.name} ({i.quantity} {i.unit})
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {usedProducts.length > 0 && (
+                        <div className="space-y-2 pt-2">
+                          {usedProducts.map(p => {
+                            const item = inventory.find(i => i.id === p.productId);
+                            return (
+                              <div key={p.productId} className="flex items-center justify-between bg-white p-2 rounded-xl border border-tea-50">
+                                <span className="text-[10px] font-bold text-tea-900 truncate flex-1">{item?.name}</span>
+                                <div className="flex items-center gap-2">
+                                  <input 
+                                    type="number" 
+                                    value={p.quantity} 
+                                    onChange={e => setUsedProducts(usedProducts.map(up => up.productId === p.productId ? { ...up, quantity: Number(e.target.value) } : up))}
+                                    className="w-12 p-1 bg-gray-50 rounded-lg text-center text-[10px] font-bold outline-none"
+                                  />
+                                  <span className="text-[9px] text-gray-400">{item?.unit}</span>
+                                  <button onClick={() => setUsedProducts(usedProducts.filter(up => up.productId !== p.productId))} className="text-red-300 hover:text-red-500">✕</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
                     <button 
                       onClick={() => handleCompleteBooking(getSlotData(modal.hour).booking!)} 
-                      className="w-full py-5 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-200 transition-all shadow-md"
+                      disabled={isProcessing}
+                      className="w-full py-5 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-200 transition-all shadow-md disabled:opacity-50"
                     >
-                      ✅ Concluir Atendimento
+                      {isProcessing ? 'Processando...' : '✅ Concluir Atendimento'}
                     </button>
                     <button 
                       onClick={() => handleCloseSlot(getSlotData(modal.hour).booking!.id)} 

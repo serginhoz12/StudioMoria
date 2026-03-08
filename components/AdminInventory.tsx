@@ -28,31 +28,41 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
     installmentsCount: 1
   });
 
+  const [isSaving, setIsSaving] = useState(false);
+
   const categories = Array.from(new Set(inventory.map(item => item.category)));
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newItem.name || !newItem.category) {
       alert("Por favor, preencha o nome e a categoria do produto.");
       return;
     }
-    onAdd(newItem);
-    setIsAdding(false);
-    setNewItem({
-      name: '',
-      category: '',
-      quantity: 0,
-      minQuantity: 0,
-      unit: 'un',
-      lastRestockedAt: new Date().toISOString(),
-      netWeight: 0,
-      grossWeight: 0,
-      weightUnit: 'g',
-      purchasePrice: 0,
-      purchaseDate: new Date().toISOString().split('T')[0],
-      usageStartDate: '',
-      paymentMethod: 'pix',
-      installmentsCount: 1
-    });
+    
+    setIsSaving(true);
+    try {
+      await onAdd(newItem);
+      setIsAdding(false);
+      setNewItem({
+        name: '',
+        category: '',
+        quantity: 0,
+        minQuantity: 0,
+        unit: 'un',
+        lastRestockedAt: new Date().toISOString(),
+        netWeight: 0,
+        grossWeight: 0,
+        weightUnit: 'g',
+        purchasePrice: 0,
+        purchaseDate: new Date().toISOString().split('T')[0],
+        usageStartDate: '',
+        paymentMethod: 'pix',
+        installmentsCount: 1
+      });
+    } catch (err) {
+      console.error("Erro ao salvar item no componente:", err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -233,9 +243,10 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
             </button>
             <button 
               onClick={handleAdd}
-              className="bg-tea-800 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg"
+              disabled={isSaving}
+              className="bg-tea-800 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg disabled:opacity-50"
             >
-              Salvar Item
+              {isSaving ? 'Salvando...' : 'Salvar Item'}
             </button>
           </div>
         </div>
