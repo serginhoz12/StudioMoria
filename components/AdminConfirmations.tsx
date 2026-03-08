@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Booking, Customer, WaitlistEntry, Service, TeamMember, Transaction, InventoryItem } from '../types';
+import { Booking, Customer, WaitlistEntry, Service, TeamMember, Transaction, InventoryItem, SalonSettings } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import CustomerHistoryModal from './CustomerHistoryModal';
@@ -13,6 +13,7 @@ interface AdminConfirmationsProps {
   transactions: Transaction[];
   teamMembers: TeamMember[];
   inventory: InventoryItem[];
+  settings: SalonSettings;
   onUpdateStatus?: (id: string, status: any) => void;
   onUpdateDeposit?: (id: string, status: any) => void;
   onDeleteBooking?: (id: string) => void;
@@ -20,7 +21,7 @@ interface AdminConfirmationsProps {
   onUpdateInventory?: (id: string, data: Partial<InventoryItem>) => void;
 }
 
-const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, inventory, onUpdateStatus, onUpdateInventory }) => {
+const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, customers, waitlist, services, transactions, teamMembers, inventory, settings, onUpdateStatus, onUpdateInventory }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'waitlist'>('pending');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
   const [showWaitlistForm, setShowWaitlistForm] = useState(false);
@@ -326,6 +327,14 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                             className="text-[9px] font-bold text-tea-800 uppercase tracking-widest hover:underline"
                           >
                             📱 Whats
+                          </a>
+                          <a 
+                            href={`https://wa.me/${w.customerWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${w.customerName}! A agenda do Studio Moriá foi liberada até o dia ${settings.agendaOpenUntil ? new Date(settings.agendaOpenUntil + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}. Você já pode realizar seu agendamento pelo site!`)}`} 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="text-[9px] font-bold text-orange-600 uppercase tracking-widest hover:underline"
+                          >
+                            🔔 Notificar Agenda
                           </a>
                           <button 
                             onClick={() => setEditingEntry(w)}
