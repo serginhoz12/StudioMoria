@@ -39,7 +39,11 @@ const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ custome
               <div>
                 <p className="font-bold text-tea-950 text-lg leading-tight">{booking.serviceName}</p>
                 <div className="flex items-center gap-4 mt-2">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {booking.dateTime} {booking.teamMemberName ? `• 👤 ${booking.teamMemberName}` : ''}</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                    🗓️ {booking.dateTime.replace(/\[object Object\]/gi, '').trim()} 
+                    {booking.originalPrice ? ` • R$ ${booking.originalPrice.toFixed(2)}` : ''}
+                    {booking.teamMemberName ? ` • 👤 ${booking.teamMemberName}` : ''}
+                  </p>
                   {booking.rescheduledCount ? <span className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded italic">Remarcado {booking.rescheduledCount}x</span> : null}
                 </div>
               </div>

@@ -144,7 +144,7 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
                     <div className="text-center md:text-left">
                       <p className="text-2xl font-serif font-bold text-tea-900 italic mb-2">{b.serviceName}</p>
                       <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString()} às {b.dateTime.split(' ')[1]}</span>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {new Date(b.dateTime.replace(/\[object Object\]/gi, '').replace(' ', 'T')).toLocaleDateString()} às {b.dateTime.replace(/\[object Object\]/gi, '').split(' ')[1] || '--:--'}</span>
                       </div>
                     </div>
                     <div className="flex flex-col items-center md:items-end gap-2">

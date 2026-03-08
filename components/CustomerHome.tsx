@@ -126,10 +126,6 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                 <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-4 block">Toque para ver detalhes</span>
               </div>
               <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
-                <div>
-                   <p className="text-[9px] text-gray-300 font-bold uppercase tracking-widest mb-1">Investimento Inicial</p>
-                   <span className="text-xs font-bold text-tea-800 uppercase tracking-widest">A partir de R$ {service.price.toFixed(2)}</span>
-                </div>
                 <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
               </div>
             </div>
@@ -308,8 +304,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                         }}
                         className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-[10px] shadow-lg hover:bg-black transition-all active:scale-95 flex flex-col items-center"
                       >
-                        <span className="opacity-60 text-[8px] uppercase">{new Date(slot.dateTime.replace(' ', 'T')).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
-                        <span>{slot.dateTime.split(' ')[1]}</span>
+                        <span className="opacity-60 text-[8px] uppercase">{new Date(slot.dateTime.replace(/\[object Object\]/gi, '').replace(' ', 'T')).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
+                        <span>{slot.dateTime.replace(/\[object Object\]/gi, '').split(' ')[1] || '--:--'}</span>
                       </button>
                     ))}
                   </div>
@@ -358,9 +354,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Duração Média</p>
                     <p className="text-xl font-serif text-tea-900 font-bold italic">{selectedServiceDetail.duration} min</p>
                  </div>
-                 <div className="p-6 bg-tea-900 rounded-3xl text-white">
-                    <p className="text-[9px] font-bold text-tea-300 uppercase tracking-widest mb-1">Valor Inicial</p>
-                    <p className="text-sm font-bold uppercase tracking-widest">A partir de R$ {selectedServiceDetail.price.toFixed(2)}</p>
+                 <div className="p-6 bg-tea-900 rounded-3xl text-white flex items-center justify-center">
+                    <p className="text-sm font-bold uppercase tracking-widest">Studio Moriá</p>
                  </div>
               </div>
             </div>

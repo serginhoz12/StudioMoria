@@ -283,6 +283,7 @@ const App: React.FC = () => {
       serviceName: srv?.name || '',
       dateTime: dt,
       duration: srv?.duration || 30,
+      originalPrice: srv?.price || 0,
       status: 'pending',
       depositStatus: 'pending',
       teamMemberId: mid || '',

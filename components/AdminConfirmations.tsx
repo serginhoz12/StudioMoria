@@ -238,7 +238,10 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    >
                     {b.customerName || 'Cliente'}
                    </button>
-                   <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">{b.serviceName || 'Serviço'}</p>
+                   <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">
+                     {b.serviceName || 'Serviço'}
+                     {b.originalPrice && <span className="ml-2 text-gray-400">• R$ {b.originalPrice.toFixed(2)}</span>}
+                   </p>
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {b.dateTime}</p>
                    {b.teamMemberName && <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">👤 Profissional: {b.teamMemberName}</p>}
                 </div>
@@ -329,7 +332,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                             📱 Whats
                           </a>
                           <a 
-                            href={`https://wa.me/${w.customerWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${w.customerName}! A agenda do Studio Moriá foi liberada até o dia ${settings.agendaOpenUntil ? new Date(settings.agendaOpenUntil + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}. Você já pode realizar seu agendamento pelo site!`)}`} 
+                            href={`https://wa.me/${w.customerWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá ${w.customerName.split(' ')[0]}! A agenda do Studio Moriá foi liberada até o dia ${settings.agendaOpenUntil ? new Date(settings.agendaOpenUntil + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}. Você já pode realizar seu agendamento pelo site!`)}`} 
                             target="_blank" 
                             rel="noreferrer"
                             className="text-[9px] font-bold text-orange-600 uppercase tracking-widest hover:underline"

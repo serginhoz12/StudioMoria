@@ -39,6 +39,24 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [isBooking, setIsBooking] = useState(false);
 
+  const handleCancelBooking = async (id: string) => {
+    if (!confirm("Deseja realmente cancelar este agendamento?")) return;
+    if ((db as any)._isMock) {
+      alert("Modo de Demonstração: Agendamento cancelado com sucesso!");
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "bookings", id), { 
+        status: 'cancelled',
+        cancelledAt: new Date().toISOString()
+      });
+      alert("Agendamento cancelado com sucesso.");
+    } catch (e) {
+      console.error("Erro ao cancelar agendamento:", e);
+      alert("Erro ao cancelar agendamento.");
+    }
+  };
+
   // Filtra slots abertos pela Moriá de hoje em diante, considerando a duração de agendamentos existentes
   const availableSlots = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -284,7 +302,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     <button key={s.id} onClick={() => setSelectedService(s)} className="w-full p-8 rounded-[2.5rem] border-2 bg-white border-gray-50 hover:border-tea-200 transition-all flex justify-between items-center group">
                        <div className="text-left">
                           <p className="font-bold text-tea-950 text-lg group-hover:text-tea-800">{s.name}</p>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">A partir de R$ {s.price.toFixed(2)} • {s.duration}min</p>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.duration}min</p>
                        </div>
                        <div className="text-2xl opacity-20 group-hover:opacity-100 transition-opacity">🌿</div>
                     </button>
@@ -376,8 +394,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       </span>
                    </div>
                    <div className="flex gap-6 text-xs text-gray-500 font-bold uppercase tracking-widest pt-4 border-t border-gray-50">
-                      <span>🗓️ {b.dateTime.split(' ')[0]}</span>
-                      <span>⏰ {b.dateTime.split(' ')[1]}</span>
+                      <span>🗓️ {b.dateTime.replace(/\[object Object\]/gi, '').split(' ')[0]}</span>
+                      <span>⏰ {b.dateTime.replace(/\[object Object\]/gi, '').split(' ')[1] || '--:--'}</span>
                       {b.teamMemberName && <span className="ml-4">👤 {b.teamMemberName}</span>}
                    </div>
                    {b.status === 'pending' && (
@@ -386,6 +404,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       className="w-full py-3 text-red-300 font-bold uppercase text-[9px] tracking-widest hover:text-red-500"
                      >
                       Desistir do Agendamento
+                     </button>
+                   )}
+                   {b.status === 'scheduled' && (
+                     <button 
+                      onClick={() => handleCancelBooking(b.id)}
+                      className="w-full py-3 text-red-300 font-bold uppercase text-[9px] tracking-widest hover:text-red-500"
+                     >
+                      Cancelar Agendamento
                      </button>
                    )}
                 </div>

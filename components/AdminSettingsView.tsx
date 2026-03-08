@@ -457,7 +457,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                     <span className="text-[8px] bg-tea-100 text-tea-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">{s.category}</span>
                   </div>
                   <p className="text-[10px] text-gray-400 font-bold uppercase">
-                    A partir de R$ {s.price.toFixed(2)} • {s.duration} min 
+                    {s.duration} min 
                     {s.returnPeriodDays ? ` • Retorno: ${s.returnPeriodDays} dias` : ''}
                   </p>
                 </div>

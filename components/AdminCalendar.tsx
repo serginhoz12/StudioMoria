@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Booking, Service, TeamMember, SalonSettings, Customer, Transaction, WaitlistEntry, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc, writeBatch, getDocs, query, where } from "firebase/firestore";
@@ -26,7 +26,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
   const [historyCustomerId, setHistoryCustomerId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [manualPrice, setManualPrice] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
 
   const [manualTime, setManualTime] = useState('');
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -42,8 +44,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setCustomerSearch('');
     setSelectedCustomerId('');
     setSelectedServiceId('');
+    setManualPrice(0);
     setManualTime('');
   };
+
+  const monthlyBookings = useMemo(() => {
+    const [year, month] = selectedDate.split('-').map(Number);
+    return bookings.filter(b => {
+      if (b.status === 'open' || b.status === 'cancelled' || b.status === 'blocked') return false;
+      const bDate = new Date(b.dateTime.replace(' ', 'T'));
+      return bDate.getFullYear() === year && (bDate.getMonth() + 1) === month;
+    }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }, [bookings, selectedDate]);
 
   const startHourNum = parseInt((settings?.businessHours?.start || "08:00").split(':')[0]);
   const endHourNum = parseInt((settings?.businessHours?.end || "19:00").split(':')[0]);
@@ -184,7 +196,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
           dateTime: `${selectedDate} ${hour}`,
           duration: service.duration,
-          originalPrice: service.price,
+          originalPrice: manualPrice || service.price,
           status: 'scheduled',
           depositStatus: 'paid',
           agreedToCancellationPolicy: true,
@@ -222,7 +234,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         // 1. Update booking status
         await updateDoc(doc(db, "bookings", booking.id), {
           status: 'completed',
-          paymentReceived: services.find(s => s.id === booking.serviceId)?.price || 0,
+          paymentReceived: booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0,
           paymentDate: new Date().toISOString(),
           usedProducts: usedProducts // Store what was used
         });
@@ -231,7 +243,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         await addDoc(collection(db, "transactions"), {
           type: 'receivable',
           description: `Atendimento: ${booking.serviceName} - ${booking.customerName}`,
-          amount: services.find(s => s.id === booking.serviceId)?.price || 0,
+          amount: booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0,
           date: booking.dateTime.split(' ')[0],
           status: 'paid',
           customerId: booking.customerId,
@@ -343,8 +355,26 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
+      {/* View Mode Toggle */}
+      <div className="flex gap-4 border-b border-gray-100 pb-4">
+        <button 
+          onClick={() => setViewMode('daily')} 
+          className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === 'daily' ? 'bg-tea-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
+        >
+          Visão Diária
+        </button>
+        <button 
+          onClick={() => setViewMode('monthly')} 
+          className={`px-6 py-3 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === 'monthly' ? 'bg-tea-900 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
+        >
+          Agenda do Mês
+        </button>
+      </div>
+
       {/* Header e Filtros */}
-      <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-6 items-end">
+      {viewMode === 'daily' ? (
+        <>
+          <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-6 items-end">
         <div className="flex-1 space-y-2">
           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Dia da Agenda</label>
           <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100" />
@@ -418,9 +448,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             return (
               <button 
                 key={hour} 
-                disabled={isProcessing || (data as any).isDurationBlock}
+                disabled={isProcessing}
                 onClick={() => setModal({ open: true, hour, type: data.type === 'locked' ? 'free' : (data.type === 'open' ? 'opened' : 'occupied') })}
-                className={`p-6 rounded-3xl transition-all flex flex-col items-center justify-center min-h-[100px] ${style} ${!(data as any).isDurationBlock ? 'hover:scale-105 active:scale-95' : ''}`}
+                className={`p-6 rounded-3xl transition-all flex flex-col items-center justify-center min-h-[100px] ${style} hover:scale-105 active:scale-95`}
               >
                 <span className="text-xl font-serif font-bold italic">{hour}</span>
                 <span className="text-[8px] font-bold uppercase tracking-widest mt-1 text-center">{label}</span>
@@ -429,6 +459,72 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           })}
         </div>
       </div>
+      </>
+      ) : (
+        <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden p-8">
+          <div className="mb-6 flex justify-between items-center">
+            <h3 className="text-2xl font-serif font-bold text-tea-950 italic">Agendamentos de {new Date(selectedDate + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</h3>
+            <div className="text-[10px] font-bold text-tea-600 uppercase tracking-widest bg-tea-50 px-4 py-2 rounded-full">
+              {monthlyBookings.length} Atendimentos
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-gray-50">
+                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Data / Hora</th>
+                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cliente</th>
+                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Procedimento</th>
+                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profissional</th>
+                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {monthlyBookings.map(b => (
+                  <tr key={b.id} className="group hover:bg-gray-50/50 transition-colors">
+                    <td className="py-4">
+                      <div className="font-bold text-tea-900">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</div>
+                      <div className="text-[10px] text-gray-400 font-bold uppercase">{b.dateTime.split(' ')[1]}</div>
+                    </td>
+                    <td className="py-4">
+                      <button 
+                        onClick={() => b.customerId && b.customerId !== 'none' && setHistoryCustomerId(b.customerId)}
+                        className="font-bold text-tea-950 hover:text-tea-700 transition-colors"
+                      >
+                        {b.customerName}
+                      </button>
+                    </td>
+                    <td className="py-4">
+                      <div className="text-xs font-medium text-tea-800">{b.serviceName}</div>
+                      <div className="text-[9px] text-gray-400 uppercase tracking-tighter">R$ {b.originalPrice?.toFixed(2) || '0,00'}</div>
+                    </td>
+                    <td className="py-4">
+                      <div className="text-[10px] font-bold text-gray-500 uppercase">{b.teamMemberName}</div>
+                    </td>
+                    <td className="py-4 text-right">
+                      <span className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
+                        b.status === 'completed' ? 'bg-green-100 text-green-600' : 
+                        b.status === 'scheduled' ? 'bg-tea-100 text-tea-700' : 
+                        'bg-orange-100 text-orange-600'
+                      }`}>
+                        {b.status === 'completed' ? 'Concluído' : b.status === 'scheduled' ? 'Agendado' : 'Pendente'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+                {monthlyBookings.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-20 text-center text-gray-300 italic font-serif text-lg">
+                      Nenhum agendamento encontrado para este mês.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Ação do Slot */}
       {modal.open && (
@@ -489,15 +585,32 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
                   <select 
                     value={selectedServiceId} 
-                    onChange={e => setSelectedServiceId(e.target.value)} 
+                    onChange={e => {
+                      const sid = e.target.value;
+                      setSelectedServiceId(sid);
+                      const s = services.find(item => item.id === sid);
+                      if (s) setManualPrice(s.price);
+                    }} 
                     className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                   >
                     <option value="">Selecione o serviço...</option>
-                    {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name} - R$ {s.price}</option>)}
+                    {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
 
+                  {selectedServiceId && (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Valor Acordado (R$)</label>
+                      <input 
+                        type="number" 
+                        value={manualPrice}
+                        onChange={e => setManualPrice(Number(e.target.value))}
+                        className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold text-tea-900"
+                      />
+                    </div>
+                  )}
+
                   <button 
-                    onClick={handleManualBooking} 
+                    onClick={() => handleManualBooking()} 
                     className="w-full py-5 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
                   >
                     Confirmar Agendamento
@@ -536,7 +649,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                      >
                       {getSlotData(modal.hour).booking?.customerName}
                      </button>
-                     <p className="text-xs text-tea-100 mt-2 font-medium">{getSlotData(modal.hour).booking?.serviceName || 'Serviço'}</p>
+                     <p className="text-xs text-tea-100 mt-2 font-medium">
+                      {getSlotData(modal.hour).booking?.serviceName || 'Serviço'}
+                      {getSlotData(modal.hour).booking?.originalPrice && (
+                        <span className="block text-[10px] opacity-80 mt-1">Valor Acordado: R$ {getSlotData(modal.hour).booking?.originalPrice.toFixed(2)}</span>
+                      )}
+                    </p>
                   </div>
                   
                   <div className="grid grid-cols-1 gap-3">

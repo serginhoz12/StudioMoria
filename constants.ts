@@ -1,8 +1,8 @@
 
 import { Service, SalonSettings, InventoryItem } from './types';
 
-export const APP_VERSION = "1.1.1";
-export const LAST_UPDATE_DATE = "08/03, 10:34";
+export const APP_VERSION = "1.1.2";
+export const LAST_UPDATE_DATE = "08/03, 15:52";
 
 export const INITIAL_SERVICES: Service[] = [
   { 
