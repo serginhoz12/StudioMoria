@@ -218,7 +218,9 @@ const App: React.FC = () => {
     });
 
     const unsubInventory = onSnapshot(collection(db, "inventory"), (snapshot) => {
-      setInventory(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as InventoryItem)));
+      const items = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as InventoryItem));
+      console.log(`Inventory listener fired. Items found: ${items.length}`);
+      setInventory(items);
     }, (error) => {
       handlePermissionError(error, "inventory");
     });
@@ -228,7 +230,7 @@ const App: React.FC = () => {
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
       unsubInventory();
     };
-  }, []);
+  }, [isMockMode]);
 
   // Increment visit count when on Customer Home
   useEffect(() => {
@@ -347,24 +349,35 @@ const App: React.FC = () => {
               return;
             }
             try {
-              await addDoc(collection(db, "inventory"), data);
+              console.log("Tentando cadastrar produto:", data.name);
+              // Clean up data: remove empty strings for dates
+              const cleanData = { ...data };
+              if (!cleanData.usageStartDate) delete cleanData.usageStartDate;
+              if (!cleanData.purchaseDate) cleanData.purchaseDate = new Date().toISOString().split('T')[0];
+
+              const docRef = await addDoc(collection(db, "inventory"), cleanData);
+              console.log("Produto cadastrado com ID:", docRef.id);
               
-              if (data.purchasePrice && data.purchasePrice > 0) {
-                const isInstallment = ['credit', 'store_installments'].includes(data.paymentMethod || '') && (data.installmentsCount || 1) > 1;
+              if (cleanData.purchasePrice && cleanData.purchasePrice > 0) {
+                const isInstallment = ['credit', 'store_installments'].includes(cleanData.paymentMethod || '') && (cleanData.installmentsCount || 1) > 1;
+                const pDate = cleanData.purchaseDate || new Date().toISOString().split('T')[0];
                 
                 if (isInstallment) {
                   const parentId = Math.random().toString(36).substr(2, 9);
-                  const count = data.installmentsCount || 1;
+                  const count = cleanData.installmentsCount || 1;
                   for (let i = 0; i < count; i++) {
+                    const dueDate = new Date(pDate);
+                    dueDate.setMonth(dueDate.getMonth() + i);
+                    
                     await addDoc(collection(db, "transactions"), {
                       type: 'payable',
-                      description: `Compra Estoque: ${data.name} (${i + 1}/${count})`,
-                      amount: Number((data.purchasePrice / count).toFixed(2)),
-                      date: data.purchaseDate,
-                      dueDate: new Date(new Date(data.purchaseDate).setMonth(new Date(data.purchaseDate).getMonth() + i)).toISOString().split('T')[0],
+                      description: `Compra Estoque: ${cleanData.name} (${i + 1}/${count})`,
+                      amount: Number((cleanData.purchasePrice / count).toFixed(2)),
+                      date: pDate,
+                      dueDate: dueDate.toISOString().split('T')[0],
                       status: i === 0 ? 'paid' : 'pending',
                       category: 'supplies',
-                      paymentMethod: data.paymentMethod,
+                      paymentMethod: cleanData.paymentMethod,
                       installmentNumber: i + 1,
                       installmentsCount: count,
                       parentTransactionId: parentId,
@@ -374,20 +387,25 @@ const App: React.FC = () => {
                 } else {
                   await addDoc(collection(db, "transactions"), {
                     type: 'payable',
-                    description: `Compra Estoque: ${data.name}`,
-                    amount: data.purchasePrice,
-                    date: data.purchaseDate,
+                    description: `Compra Estoque: ${cleanData.name}`,
+                    amount: cleanData.purchasePrice,
+                    date: pDate,
                     status: 'paid',
                     category: 'supplies',
-                    paymentMethod: data.paymentMethod,
+                    paymentMethod: cleanData.paymentMethod,
                     createdAt: new Date().toISOString()
                   });
                 }
               }
-              alert("Produto cadastrado e valor lançado no caixa com sucesso!");
-            } catch (err) {
+              alert(`Produto "${cleanData.name}" cadastrado com sucesso! ID: ${docRef.id}`);
+            } catch (err: any) {
               console.error("Erro ao cadastrar produto:", err);
-              alert("Erro ao cadastrar produto. Verifique sua conexão.");
+              if (err.code === 'permission-denied') {
+                window.dispatchEvent(new Event('moria_permission_denied'));
+                alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
+              } else {
+                alert(`Erro ao cadastrar produto: ${err.message || 'Verifique sua conexão.'}`);
+              }
             }
           }} 
         />;
