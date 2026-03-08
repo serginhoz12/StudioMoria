@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Customer, Booking, Transaction, WaitlistEntry, Service } from '../types';
+import { Customer, Booking, Transaction, WaitlistEntry } from '../types';
 
 import CustomerHistoryContent from './CustomerHistoryContent';
 
@@ -9,13 +9,10 @@ interface CustomerHistoryModalProps {
   bookings: Booking[];
   transactions: Transaction[];
   waitlist: WaitlistEntry[];
-  services?: Service[];
-  onUpdateBooking?: (id: string, data: Partial<Booking>) => void;
-  onUpdateTransaction?: (id: string, data: Partial<Transaction>) => void;
   onClose: () => void;
 }
 
-const CustomerHistoryModal: React.FC<CustomerHistoryModalProps> = ({ customer, bookings, transactions, waitlist, services = [], onUpdateBooking, onUpdateTransaction, onClose }) => {
+const CustomerHistoryModal: React.FC<CustomerHistoryModalProps> = ({ customer, bookings, transactions, waitlist, onClose }) => {
   return (
     <div className="fixed inset-0 z-[250] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-fade-in">
       <div className="bg-white w-full max-w-2xl rounded-[3rem] p-10 shadow-3xl max-h-[90vh] overflow-y-auto custom-scroll relative animate-slide-up">
@@ -45,9 +42,6 @@ const CustomerHistoryModal: React.FC<CustomerHistoryModalProps> = ({ customer, b
             bookings={bookings}
             transactions={transactions}
             waitlist={waitlist}
-            services={services}
-            onUpdateBooking={onUpdateBooking}
-            onUpdateTransaction={onUpdateTransaction}
           />
         </div>
       </div>

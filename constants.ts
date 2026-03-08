@@ -94,9 +94,14 @@ export const DEFAULT_SETTINGS: SalonSettings = {
     enabled: true,
     pointsPerReal: 1,
     minPointsToRedeem: 500,
-    rewardDescription: "R$ 50,00 de desconto em qualquer procedimento",
-    targetCustomerIds: []
-  }
+    rewardDescription: "R$ 50,00 de desconto em qualquer procedimento"
+  },
+  announcementBanner: {
+    enabled: true,
+    text: "GRANDE REINAUGURAÇÃO: 11 DE MARÇO"
+  },
+  monthlyGoal: 5000,
+  desiredProfit: 2000
 };
 
 export const INITIAL_INVENTORY: InventoryItem[] = [

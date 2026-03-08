@@ -60,6 +60,18 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         <span className="absolute right-full mr-4 bg-tea-900 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">Fale com a Moriá</span>
       </button>
 
+      {/* Banner de Inauguração */}
+      {settings.announcementBanner?.enabled && (
+        <div className="bg-orange-500 text-white py-3 px-4 text-center relative overflow-hidden group">
+          <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+          <p className="text-[10px] md:text-xs font-bold uppercase tracking-[0.3em] animate-pulse flex items-center justify-center gap-3">
+            <span>✨</span>
+            {settings.announcementBanner.text}
+            <span>✨</span>
+          </p>
+        </div>
+      )}
+
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex flex-col items-center justify-start bg-tea-900 overflow-hidden px-4 rounded-b-[4rem] md:rounded-b-[10rem]">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[60vh] bg-tea-400/10 rounded-full blur-[120px] pointer-events-none"></div>

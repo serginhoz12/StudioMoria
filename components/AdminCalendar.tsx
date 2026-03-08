@@ -14,11 +14,9 @@ interface AdminCalendarProps {
   teamMembers: TeamMember[];
   settings?: SalonSettings;
   onUpdateStatus?: (id: string, status: any) => void;
-  onUpdateBooking?: (id: string, data: Partial<Booking>) => void;
-  onUpdateTransaction?: (id: string, data: Partial<Transaction>) => void;
 }
 
-const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, settings, onUpdateBooking, onUpdateTransaction }) => {
+const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, settings }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
   const [modal, setModal] = useState<{ open: boolean; hour: string; type: 'free' | 'occupied' | 'opened' }>({ open: false, hour: '', type: 'free' });
@@ -595,14 +593,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       )}
       {/* Modal de Histórico da Cliente */}
       {historyCustomerId && (
-        <CustomerHistoryModal
+        <CustomerHistoryModal 
           customer={customers.find(c => c.id === historyCustomerId)!}
           bookings={bookings}
           transactions={transactions}
           waitlist={waitlist}
-          services={services}
-          onUpdateBooking={onUpdateBooking}
-          onUpdateTransaction={onUpdateTransaction}
           onClose={() => setHistoryCustomerId(null)}
         />
       )}

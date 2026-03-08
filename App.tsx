@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, InventoryItem } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS, INITIAL_INVENTORY } from './constants.ts';
 import { db, auth } from './firebase.ts';
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { signInAnonymously } from "firebase/auth";
 import { 
   collection, 
   onSnapshot, 
@@ -49,7 +49,6 @@ const App: React.FC = () => {
     return localStorage.getItem('moria_isAdminAuth') === 'true';
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [authReady, setAuthReady] = useState(false);
   
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
   const [services, setServices] = useState<Service[]>([]);
@@ -73,26 +72,11 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Firebase Auth: garantir autenticação antes de usar Firestore
+  // Firebase Auth Initialization
   useEffect(() => {
-    if (isMockMode) {
-      setAuthReady(true);
-      return;
+    if (!isMockMode) {
+      signInAnonymously(auth).catch(err => console.error("Erro no Auth Anônimo:", err));
     }
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setAuthReady(true);
-        return;
-      }
-      // Nenhum usuário: tentar login anônimo
-      signInAnonymously(auth)
-        .then(() => setAuthReady(true))
-        .catch((err) => {
-          console.error("Erro no Auth Anônimo:", err);
-          setAuthReady(true); // permitir carregar mesmo com falha (modo demo pode ativar depois)
-        });
-    });
-    return () => unsubscribe();
   }, [isMockMode]);
 
   // Persist session state
@@ -165,9 +149,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // Só conectar ao Firestore após o auth estar pronto
-    if (!authReady) return;
-
     const handlePermissionError = (error: any, collectionName: string) => {
       if (error.code === 'permission-denied') {
         if (!isMockMode) {
@@ -182,7 +163,10 @@ const App: React.FC = () => {
 
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
-        setSettings(snap.data() as SalonSettings);
+        const remoteData = snap.data() as SalonSettings;
+        // Merge DEFAULT_SETTINGS with remote data to ensure all fields exist
+        // but remote data takes precedence for existing values like visitCount
+        setSettings({ ...DEFAULT_SETTINGS, ...remoteData });
         setIsLoading(false);
       } else {
         setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
@@ -244,7 +228,7 @@ const App: React.FC = () => {
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
       unsubInventory();
     };
-  }, [authReady]);
+  }, []);
 
   // Increment visit count when on Customer Home
   useEffect(() => {
@@ -330,12 +314,12 @@ const App: React.FC = () => {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} inventory={inventory} isMockMode={isMockMode} />;
-        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} transactions={transactions} waitlist={waitlist} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} onUpdateBooking={(id, data) => !isMockMode && updateDoc(doc(db, "bookings", id), data)} onUpdateTransaction={(id, data) => !isMockMode && updateDoc(doc(db, "transactions", id), data)} />;
+        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} transactions={transactions} waitlist={waitlist} teamMembers={settings.teamMembers} settings={settings} onUpdateStatus={handleUpdateStatus} />;
         // FIX: Added missing 'services' prop to AdminConfirmations to resolve TS error
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} services={services} transactions={transactions} teamMembers={settings.teamMembers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={(id) => !isMockMode && deleteDoc(doc(db, "bookings", id))} waitlist={waitlist} onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))} onUpdateBooking={(id, data) => !isMockMode && updateDoc(doc(db, "bookings", id), data)} onUpdateTransaction={(id, data) => !isMockMode && updateDoc(doc(db, "transactions", id), data)} />;
-        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} waitlist={waitlist} services={services} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "customers", id), data)} onUpdateBooking={(id, data) => !isMockMode && updateDoc(doc(db, "bookings", id), data)} onUpdateTransaction={(id, data) => !isMockMode && updateDoc(doc(db, "transactions", id), data)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} bookings={bookings} customers={customers} services={services} inventory={inventory} onAdd={async (d) => { if(!isMockMode) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !isMockMode && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "transactions", id))} />;
-        case View.ADMIN_MARKETING: return <AdminMarketing settings={settings} onUpdateSettings={async (newSet) => { if (!isMockMode) await setDoc(doc(db, "settings", "main"), { ...newSet, lastUpdated: Date.now() }); }} customers={customers} promotions={promotions} services={services} bookings={bookings} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} services={services} transactions={transactions} teamMembers={settings.teamMembers} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={(id) => !isMockMode && deleteDoc(doc(db, "bookings", id))} waitlist={waitlist} onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))} />;
+        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} waitlist={waitlist} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "customers", id), data)} />;
+        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} bookings={bookings} customers={customers} services={services} settings={settings} inventory={inventory} onAdd={async (d) => { if(!isMockMode) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !isMockMode && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "transactions", id))} />;
+        case View.ADMIN_MARKETING: return <AdminMarketing customers={customers} promotions={promotions} services={services} bookings={bookings} />;
         case View.ADMIN_INVENTORY: return <AdminInventory 
           inventory={inventory} 
           onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} 
@@ -381,7 +365,7 @@ const App: React.FC = () => {
             }
           }} 
         />;
-        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} onUpdateBooking={(id, data) => !isMockMode && updateDoc(doc(db, "bookings", id), data)} onUpdateTransaction={(id, data) => !isMockMode && updateDoc(doc(db, "transactions", id), data)} />;
+        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
       }
     }
 

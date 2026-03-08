@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Customer, Booking, Transaction, WaitlistEntry, Service } from '../types';
+import { Customer, Booking, Transaction, WaitlistEntry } from '../types';
 import { db } from '../firebase.ts';
 import { collection, setDoc, doc, deleteDoc, updateDoc } from "firebase/firestore";
 import CustomerHistoryContent from './CustomerHistoryContent';
@@ -10,14 +10,11 @@ interface AdminClientsProps {
   bookings: Booking[];
   transactions: Transaction[];
   waitlist: WaitlistEntry[];
-  services: Service[];
   onDelete: (id: string) => void;
   onUpdate: (id: string, data: Partial<Customer>) => void;
-  onUpdateBooking?: (id: string, data: Partial<Booking>) => void;
-  onUpdateTransaction?: (id: string, data: Partial<Transaction>) => void;
 }
 
-const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transactions, waitlist, services = [], onDelete, onUpdate, onUpdateBooking, onUpdateTransaction }) => {
+const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transactions, waitlist, onDelete, onUpdate }) => {
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -33,9 +30,6 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
   });
 
   const filtered = customers.filter(c => {
-    const isTestUser = c.cpf.replace(/\D/g, '') === '33426618877';
-    if (isTestUser) return false;
-    
     return c.name.toLowerCase().includes(search.toLowerCase()) || 
            c.whatsapp.includes(search) ||
            c.cpf.includes(search);
@@ -237,9 +231,6 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   bookings={bookings}
                   transactions={transactions}
                   waitlist={waitlist}
-                  services={services}
-                  onUpdateBooking={onUpdateBooking}
-                  onUpdateTransaction={onUpdateTransaction}
                 />
               </div>
             </div>

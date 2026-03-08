@@ -160,6 +160,12 @@ export interface SalonSettings {
   comments?: { author: string; text: string; }[];
   photos?: string[];
   loyaltyConfig?: LoyaltyConfig;
+  announcementBanner?: {
+    enabled: boolean;
+    text: string;
+  };
+  monthlyGoal?: number;
+  desiredProfit?: number;
 }
 
 export interface InventoryItem {
@@ -185,6 +191,4 @@ export interface LoyaltyConfig {
   pointsPerReal: number;
   minPointsToRedeem: number;
   rewardDescription: string;
-  /** IDs das clientes que participam do programa. Vazio = nenhuma vê o card. */
-  targetCustomerIds?: string[];
 }

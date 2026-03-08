@@ -1,13 +1,11 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Promotion, Service, Booking, SalonSettings } from '../types';
+import { Customer, Promotion, Service, Booking } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
 
 interface AdminMarketingProps {
-  settings: SalonSettings;
-  onUpdateSettings: (newSettings: SalonSettings) => Promise<void>;
   customers: Customer[];
   promotions: Promotion[];
   services: Service[];
@@ -15,14 +13,12 @@ interface AdminMarketingProps {
 }
 
 const AdminMarketing: React.FC<AdminMarketingProps> = ({ 
-  settings,
-  onUpdateSettings,
   customers = [], 
   promotions = [], 
   services = [],
   bookings = []
 }) => {
-  const [activeTab, setActiveTab] = useState<'promotions' | 'tips' | 'loyalty'>('promotions');
+  const [activeTab, setActiveTab] = useState<'promotions' | 'tips'>('promotions');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
@@ -272,96 +268,17 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
             >
               Dicas de Estética ✨
             </button>
-            <button 
-              onClick={() => { setActiveTab('loyalty'); setShowForm(false); }}
-              className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-all pb-1 border-b-2 ${activeTab === 'loyalty' ? 'border-tea-900 text-tea-950' : 'border-transparent text-gray-400'}`}
-            >
-              Programa de Fidelidade 💎
-            </button>
           </div>
         </div>
-        {activeTab !== 'loyalty' && (
         <button 
           onClick={() => setShowForm(!showForm)} 
           className="w-full sm:w-auto bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
         >
           {showForm ? '← Voltar' : activeTab === 'promotions' ? '+ Nova Promoção' : '+ Nova Dica'}
         </button>
-        )}
       </div>
 
-      {activeTab === 'loyalty' ? (
-        <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm animate-slide-up">
-          <h3 className="text-2xl font-serif text-tea-950 mb-8 italic tracking-tight flex items-center gap-3">
-            <span className="text-3xl">💎</span> Programa de Fidelidade
-          </h3>
-          <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
-            <div className="flex items-center gap-4">
-              <input
-                type="checkbox"
-                id="loyalty-enabled"
-                checked={settings.loyaltyConfig?.enabled ?? false}
-                onChange={e => onUpdateSettings({
-                  ...settings,
-                  loyaltyConfig: { ...(settings.loyaltyConfig || { enabled: false, pointsPerReal: 1, minPointsToRedeem: 500, rewardDescription: '', targetCustomerIds: [] }), enabled: e.target.checked }
-                })}
-                className="w-5 h-5 rounded border-gray-300 text-tea-900 focus:ring-tea-500"
-              />
-              <label htmlFor="loyalty-enabled" className="text-sm font-bold text-tea-900 uppercase tracking-widest">Programa de fidelidade ativo</label>
-            </div>
-            {settings.loyaltyConfig?.enabled && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Pontos por R$ 1 gasto</label>
-                    <input type="number" min="0" step="0.5" className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
-                      value={settings.loyaltyConfig.pointsPerReal ?? 1}
-                      onChange={e => onUpdateSettings({ ...settings, loyaltyConfig: { ...settings.loyaltyConfig!, targetCustomerIds: settings.loyaltyConfig?.targetCustomerIds ?? [], pointsPerReal: Number(e.target.value) || 0 } })}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Pontos para resgatar</label>
-                    <input type="number" min="1" className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
-                      value={settings.loyaltyConfig.minPointsToRedeem ?? 500}
-                      onChange={e => onUpdateSettings({ ...settings, loyaltyConfig: { ...settings.loyaltyConfig!, targetCustomerIds: settings.loyaltyConfig?.targetCustomerIds ?? [], minPointsToRedeem: Number(e.target.value) || 500 } })}
-                    />
-                  </div>
-                  <div className="space-y-1 md:col-span-1">
-                    <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Descrição do prêmio</label>
-                    <input type="text" placeholder="Ex: R$ 50,00 de desconto..." className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
-                      value={settings.loyaltyConfig.rewardDescription ?? ''}
-                      onChange={e => onUpdateSettings({ ...settings, loyaltyConfig: { ...settings.loyaltyConfig!, targetCustomerIds: settings.loyaltyConfig?.targetCustomerIds ?? [], rewardDescription: e.target.value } })}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1 block">Clientes que participam do programa (somente estas verão o card)</label>
-                  <p className="text-[9px] text-gray-500 ml-1">Selecione as clientes que podem ver e acumular pontos. Se nenhuma for selecionada, o card não aparece para ninguém.</p>
-                  <div className="max-h-48 overflow-y-auto border border-tea-100 rounded-2xl bg-white p-3 space-y-1 custom-scroll">
-                    {customers.filter(c => c.cpf?.replace(/\D/g, '') !== '33426618877').map(c => {
-                      const ids = settings.loyaltyConfig?.targetCustomerIds ?? [];
-                      const isSelected = ids.includes(c.id);
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => {
-                            const newIds = isSelected ? ids.filter(id => id !== c.id) : [...ids, c.id];
-                            onUpdateSettings({ ...settings, loyaltyConfig: { ...(settings.loyaltyConfig || {}), targetCustomerIds: newIds, enabled: settings.loyaltyConfig?.enabled ?? false, pointsPerReal: settings.loyaltyConfig?.pointsPerReal ?? 1, minPointsToRedeem: settings.loyaltyConfig?.minPointsToRedeem ?? 500, rewardDescription: settings.loyaltyConfig?.rewardDescription ?? '' } });
-                          }}
-                          className={`w-full text-left px-4 py-3 rounded-xl text-sm font-bold transition-all ${isSelected ? 'bg-tea-900 text-white' : 'bg-gray-50 text-gray-600 hover:bg-tea-100'}`}
-                        >
-                          {c.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      ) : showForm ? (
+      {showForm ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-slide-up">
           <div className="lg:col-span-8 bg-white p-6 md:p-10 rounded-[3rem] shadow-sm border border-gray-100 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -1,67 +1,212 @@
 
 import React, { useState, useMemo } from 'react';
-import { Transaction, Customer, Booking, Service, InventoryItem } from '../types';
+import { Transaction, Customer, Booking, Service, SalonSettings, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  PieChart, Pie, Legend, LineChart, Line, AreaChart, Area
+} from 'recharts';
 
 interface AdminFinanceProps {
   transactions: Transaction[];
   bookings: Booking[];
   customers: Customer[];
   services: Service[];
+  settings: SalonSettings;
   inventory: InventoryItem[];
   onAdd?: (data: any) => Promise<void>;
   onUpdate?: (id: string, data: any) => void;
   onDelete?: (id: string) => void;
 }
 
-const FIXED_CATEGORIES = ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'] as const;
-type FixedCat = (typeof FIXED_CATEGORIES)[number];
-
-const FIXED_CATEGORY_LABELS: Record<FixedCat, string> = { water: 'Água', electricity: 'Luz', internet: 'Internet', salary: 'Pró-labore', tax: 'MEI', rent: 'Aluguel' };
-
-/** Identifica a categoria de custo fixo: pela categoria salva ou pela descrição do lançamento. */
-function getEffectiveFixedCategory(t: Transaction): FixedCat | null {
-  if (t.type !== 'payable') return null;
-  if (t.category && FIXED_CATEGORIES.includes(t.category as FixedCat)) return t.category as FixedCat;
-  const d = (t.description || '').toLowerCase().normalize('NFD').replace(/\u0300/g, '');
-  if (d.includes('internet')) return 'internet';
-  if (d.includes('aluguel')) return 'rent';
-  if (d.includes('agua')) return 'water';
-  if (d.includes('luz') || d.includes('energia') || d.includes('eletricidade')) return 'electricity';
-  if (d.includes('pro-labore') || d.includes('prolabore') || d.includes('salário') || d.includes('salario')) return 'salary';
-  if (d.includes('mei') || d.includes('imposto')) return 'tax';
-  return null;
-}
-
-const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactions, bookings, customers, services = [], inventory = [], onUpdate, onDelete }) => {
+const AdminFinance: React.FC<AdminFinanceProps> = ({ 
+  transactions: allTransactions, 
+  bookings, 
+  customers, 
+  services,
+  settings,
+  inventory,
+  onUpdate, 
+  onDelete 
+}) => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions'>('dashboard');
   const [showForm, setShowForm] = useState(false);
-  const now = new Date();
-  const [periodStart, setPeriodStart] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]);
-  const [periodEnd, setPeriodEnd] = useState(() => now.toISOString().split('T')[0]);
+  
+  // Filtro de Período (Início e Fim)
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]
+  });
   
   // Identificar ID do cliente de teste
   const testCustomerId = useMemo(() => customers.find(c => c.cpf === '33426618877')?.id, [customers]);
 
   // Filtrar transações de teste e de agendamentos cancelados
-  const baseTransactions = useMemo(() => {
+  const transactions = useMemo(() => {
     return allTransactions.filter(t => {
       const isTestUser = testCustomerId && t.customerId === testCustomerId;
+      
+      // Filter out transactions linked to cancelled bookings
       const linkedBooking = t.bookingId ? bookings.find(b => b.id === t.bookingId) : null;
       const isCancelledBooking = linkedBooking?.status === 'cancelled';
+      
       return !isTestUser && !isCancelledBooking;
     });
   }, [allTransactions, testCustomerId, bookings]);
 
-  // Filtrar por período selecionado
-  const transactions = useMemo(() => {
-    const start = new Date(periodStart).getTime();
-    const end = new Date(periodEnd + 'T23:59:59').getTime();
-    return baseTransactions.filter(t => {
-      const tDate = new Date(t.date).getTime();
-      return tDate >= start && tDate <= end;
+  // --- BUSINESS INTELLIGENCE CALCULATIONS ---
+  const filteredTransactions = useMemo(() => {
+    const start = new Date(dateRange.start + 'T00:00:00').getTime();
+    const end = new Date(dateRange.end + 'T23:59:59').getTime();
+    return transactions.filter(t => {
+      const d = new Date(t.date).getTime();
+      return d >= start && d <= end;
     });
-  }, [baseTransactions, periodStart, periodEnd]);
+  }, [transactions, dateRange]);
+
+  const filteredBookings = useMemo(() => {
+    const start = new Date(dateRange.start + 'T00:00:00').getTime();
+    const end = new Date(dateRange.end + 'T23:59:59').getTime();
+    return bookings.filter(b => {
+      const d = new Date(b.dateTime.replace(' ', 'T')).getTime();
+      return d >= start && d <= end && b.status !== 'cancelled';
+    });
+  }, [bookings, dateRange]);
+
+  // 1. Custos Fixos Reais (Pagos + Pendentes)
+  const fixedCostCategories = ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'];
+  const realFixedCosts = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.type === 'payable' && fixedCostCategories.includes(t.category as string))
+      .reduce((acc, t) => acc + t.amount, 0);
+  }, [filteredTransactions]);
+
+  // 2. Receita do Período (Faturado)
+  const periodRevenue = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.type === 'receivable' && t.status === 'paid')
+      .reduce((acc, t) => acc + t.amount, 0);
+  }, [filteredTransactions]);
+
+  // 3. Custos Variáveis (Insumos/Produtos)
+  const variableCosts = useMemo(() => {
+    return filteredTransactions
+      .filter(t => t.type === 'payable' && t.category === 'supplies')
+      .reduce((acc, t) => acc + t.amount, 0);
+  }, [filteredTransactions]);
+
+  // 4. Lucro ou Prejuízo Real
+  const realProfit = periodRevenue - realFixedCosts - variableCosts;
+
+  // 5. Ticket Médio
+  const completedBookings = filteredBookings.filter(b => b.status === 'completed');
+  const ticketMedio = completedBookings.length > 0 
+    ? periodRevenue / completedBookings.length 
+    : 0;
+
+  // 6. Ponto de Equilíbrio
+  const breakEvenPoint = ticketMedio > 0 ? realFixedCosts / ticketMedio : 0;
+
+  // 7. Meta de Faturamento
+  const revenueGoal = settings.monthlyGoal || 5000;
+  const goalProgress = (periodRevenue / revenueGoal) * 100;
+
+  // 8. Procedimentos mais lucrativos (Baseado em transações faturadas)
+  const profitableProcedures = useMemo(() => {
+    const stats: Record<string, { count: number, revenue: number }> = {};
+    filteredTransactions
+      .filter(t => t.type === 'receivable' && t.status === 'paid' && t.serviceName)
+      .forEach(t => {
+        const name = t.serviceName!;
+        if (!stats[name]) stats[name] = { count: 0, revenue: 0 };
+        stats[name].count += 1;
+        stats[name].revenue += t.amount;
+      });
+    return Object.entries(stats)
+      .map(([name, data]) => ({
+        name,
+        count: data.count,
+        revenue: data.revenue,
+        avg: data.revenue / data.count
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [filteredTransactions]);
+
+  // 9. Ranking de Clientes
+  const topCustomers = useMemo(() => {
+    const spenders: Record<string, { name: string, total: number }> = {};
+    filteredTransactions
+      .filter(t => t.type === 'receivable' && t.status === 'paid' && t.customerId)
+      .forEach(t => {
+        if (!spenders[t.customerId!]) spenders[t.customerId!] = { name: t.customerName || 'Cliente', total: 0 };
+        spenders[t.customerId!].total += t.amount;
+      });
+    return Object.entries(spenders)
+      .map(([id, data]) => ({ id, ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5);
+  }, [filteredTransactions]);
+
+  // 10. Faturamento por Dia
+  const dailyRevenueData = useMemo(() => {
+    const data: Record<string, number> = {};
+    
+    // Pre-fill all dates in range to ensure continuity in chart
+    const start = new Date(dateRange.start + 'T00:00:00');
+    const end = new Date(dateRange.end + 'T00:00:00');
+    const current = new Date(start);
+    
+    while (current <= end) {
+      const dateStr = current.toISOString().split('T')[0];
+      data[dateStr] = 0;
+      current.setDate(current.getDate() + 1);
+    }
+
+    filteredTransactions
+      .filter(t => t.type === 'receivable' && t.status === 'paid')
+      .forEach(t => {
+        const dateStr = t.date;
+        if (data[dateStr] !== undefined) {
+          data[dateStr] += t.amount;
+        }
+      });
+
+    return Object.entries(data)
+      .map(([date, revenue]) => ({
+        date,
+        displayDate: new Date(date + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        revenue
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [filteredTransactions, dateRange]);
+
+  // 11. Valor médio por hora trabalhada
+  const totalHours = completedBookings.reduce((acc, b) => acc + (b.duration / 60), 0);
+  const revenuePerHour = totalHours > 0 ? periodRevenue / totalHours : 0;
+
+  // 12. Previsão de faturamento do período
+  const futureBookings = filteredBookings.filter(b => b.status === 'scheduled');
+  const forecastedFutureRevenue = futureBookings.reduce((acc, b) => {
+    const service = services.find(s => s.id === b.serviceId);
+    return acc + (service?.price || 0);
+  }, 0);
+  const forecastTotal = periodRevenue + forecastedFutureRevenue;
+
+  // 13. Alertas Financeiros
+  const alerts = [];
+  if (periodRevenue < revenueGoal * 0.5 && new Date().getDate() > 15) {
+    alerts.push({ type: 'warning', text: 'Faturamento abaixo da meta esperada.' });
+  }
+  if (completedBookings.length < 10 && new Date().getDate() > 10) {
+    alerts.push({ type: 'info', text: 'Baixo volume de atendimentos no período.' });
+  }
+  if (realProfit < 0) {
+    alerts.push({ type: 'danger', text: 'Lucro negativo! Suas despesas estão superando as receitas.' });
+  }
+
+  const COLORS = ['#418d50', '#8ec99a', '#2a5b35', '#bbe1c2', '#1e3d28', '#5eaa6e'];
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState({
@@ -218,223 +363,186 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
     setCustomerSearch('');
   };
 
-  const totals = useMemo(() => {
-    const revenue = transactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
-    const expenses = transactions.filter(t => t.type === 'payable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
-    const pendingReceivable = transactions.filter(t => t.type === 'receivable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
-    const pendingPayable = transactions.filter(t => t.type === 'payable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
-    return { revenue, expenses, pendingReceivable, pendingPayable, balance: revenue - expenses };
-  }, [transactions]);
-
-  // Custos fixos: todos os lançamentos de despesa que são custo fixo (por categoria ou por descrição)
-  const fixedCostsForAnalysis = useMemo(() => {
-    return transactions.filter(t => getEffectiveFixedCategory(t) !== null);
-  }, [transactions]);
-
-  // Custos fixos sempre como valor positivo (despesa a cobrir) — nunca contabilizar como positivo na receita
-  const fixedCostsByCategory = useMemo(() => {
-    const map: Record<FixedCat, number> = { water: 0, electricity: 0, internet: 0, salary: 0, tax: 0, rent: 0 };
-    fixedCostsForAnalysis.forEach(t => {
-      const cat = getEffectiveFixedCategory(t);
-      if (cat) map[cat] += Math.abs(Number(t.amount));
-    });
-    return map;
-  }, [fixedCostsForAnalysis]);
-
-  const totalFixedCost = useMemo(() => fixedCostsForAnalysis.reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0), [fixedCostsForAnalysis]);
-
-  // Análise por procedimento: realizados no período, receita, custo de produtos, sugestão de preço
-  const procedureAnalysis = useMemo(() => {
-    const start = new Date(periodStart).getTime();
-    const end = new Date(periodEnd + 'T23:59:59').getTime();
-    const byService: Record<string, { service: Service; count: number; revenue: number; productCostPerProc: number; totalProductCost: number }> = {};
-
-    const completedInPeriod = bookings.filter(b => {
-      if (b.status !== 'completed') return false;
-      const t = new Date(b.dateTime.replace(' ', 'T')).getTime();
-      return t >= start && t <= end;
-    });
-
-    const paidByBookingId: Record<string, number> = {};
-    transactions.filter(t => t.type === 'receivable' && t.status === 'paid' && t.bookingId).forEach(t => {
-      const tDate = new Date(t.date).getTime();
-      if (tDate >= start && tDate <= end) paidByBookingId[t.bookingId!] = (paidByBookingId[t.bookingId!] || 0) + t.amount;
-    });
-
-    completedInPeriod.forEach(b => {
-      const sid = b.serviceId || b.serviceName;
-      if (!sid) return;
-      const service = services.find(s => s.id === sid || s.name === b.serviceName) || { id: sid, name: b.serviceName || sid, price: 0, duration: 0, description: '', category: '', isVisible: true, usedProducts: [] } as Service;
-      const key = service.id;
-      if (!byService[key]) byService[key] = { service, count: 0, revenue: 0, productCostPerProc: 0, totalProductCost: 0 };
-
-      byService[key].count += 1;
-      const paid = b.paymentReceived ?? paidByBookingId[b.id] ?? 0;
-      byService[key].revenue += paid;
-    });
-
-    Object.keys(byService).forEach(key => {
-      const row = byService[key];
-      let costPerProc = 0;
-      if (row.service.usedProducts?.length && inventory.length) {
-        row.service.usedProducts.forEach(up => {
-          const product = inventory.find(p => p.id === up.productId);
-          if (!product?.purchasePrice || !product?.netWeight || product.netWeight <= 0) return;
-          const costPerUnit = product.purchasePrice / product.netWeight;
-          costPerProc += costPerUnit * (up.consumption || 0);
-        });
-      }
-      row.productCostPerProc = costPerProc;
-      row.totalProductCost = costPerProc * row.count;
-    });
-
-    return Object.values(byService).sort((a, b) => b.count - a.count);
-  }, [bookings, transactions, services, inventory, periodStart, periodEnd]);
-
-  return (
-    <div className="space-y-8 animate-fade-in pb-20">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-sm gap-6">
-        <div>
-          <h2 className="text-3xl font-bold text-tea-950 font-serif italic">Caixa Moriá</h2>
-          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Ganhos e Despesas</p>
+  const renderDashboard = () => (
+    <div className="space-y-8 animate-fade-in">
+      {/* Alertas Financeiros */}
+      {alerts.length > 0 && (
+        <div className="space-y-3">
+          {alerts.map((alert, idx) => (
+            <div key={idx} className={`p-4 rounded-2xl border flex items-center gap-3 ${
+              alert.type === 'danger' ? 'bg-red-50 border-red-100 text-red-700' :
+              alert.type === 'warning' ? 'bg-orange-50 border-orange-100 text-orange-700' :
+              'bg-blue-50 border-blue-100 text-blue-700'
+            }`}>
+              <span className="text-xl">{alert.type === 'danger' ? '🚨' : alert.type === 'warning' ? '⚠️' : 'ℹ️'}</span>
+              <p className="text-xs font-bold uppercase tracking-widest">{alert.text}</p>
+            </div>
+          ))}
         </div>
-        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Período</label>
-            <input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} className="p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none border border-gray-100" />
-            <span className="text-gray-300">até</span>
-            <input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} className="p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none border border-gray-100" />
+      )}
+
+      {/* Painel de Performance Principal */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Faturamento (Período)</p>
+          <p className="text-3xl font-serif font-bold text-tea-900">R$ {periodRevenue.toLocaleString('pt-BR')}</p>
+          <div className="mt-4 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-tea-600" style={{ width: `${Math.min(goalProgress, 100)}%` }}></div>
           </div>
-          <button onClick={() => { resetForm(); setShowForm(true); }} className="bg-tea-900 text-white px-10 py-5 rounded-2xl font-bold uppercase text-[11px] tracking-widest hover:bg-black transition-all shadow-xl">+ Lançar Movimentação</button>
+          <p className="text-[8px] text-gray-400 mt-2 font-bold uppercase tracking-widest">{goalProgress.toFixed(1)}% da meta (R$ {revenueGoal})</p>
+        </div>
+
+        <div className={`${realProfit >= 0 ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'} p-8 rounded-[2.5rem] border shadow-sm`}>
+          <p className={`text-[10px] font-bold ${realProfit >= 0 ? 'text-green-700' : 'text-red-700'} uppercase tracking-widest mb-1`}>Lucro Real Estimado</p>
+          <p className={`text-3xl font-serif font-bold ${realProfit >= 0 ? 'text-green-900' : 'text-red-900'}`}>R$ {realProfit.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Receita - Custos Fixos - Insumos</p>
+        </div>
+
+        <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Ticket Médio</p>
+          <p className="text-3xl font-serif font-bold text-tea-900">R$ {ticketMedio.toLocaleString('pt-BR')}</p>
+          <p className="text-[8px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Média por atendimento concluído</p>
+        </div>
+
+        <div className="bg-tea-950 p-8 rounded-[2.5rem] text-white shadow-xl">
+          <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-1">Ponto de Equilíbrio</p>
+          <p className="text-3xl font-serif font-bold">{Math.ceil(breakEvenPoint)} Atend.</p>
+          <p className="text-[8px] text-tea-100 mt-2 font-bold uppercase tracking-widest">Para pagar R$ {realFixedCosts.toFixed(0)} de custos fixos</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
+      {/* Indicadores Secundários */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm">⏱️</div>
+          <div>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Valor / Hora</p>
+            <p className="text-xl font-serif font-bold text-tea-900">R$ {revenuePerHour.toFixed(2)}</p>
+          </div>
+        </div>
+        <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm">🔮</div>
+          <div>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Previsão Total</p>
+            <p className="text-xl font-serif font-bold text-tea-900">R$ {forecastTotal.toLocaleString('pt-BR')}</p>
+          </div>
+        </div>
+        <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 flex items-center gap-4">
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-2xl shadow-sm">📅</div>
+          <div>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Atendimentos</p>
+            <p className="text-xl font-serif font-bold text-tea-900">{completedBookings.length} Realizados</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Gráficos Visuais */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Faturamento Diário */}
+        <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
+          <h3 className="text-xl font-serif font-bold text-tea-950 italic mb-8">Faturamento por Dia</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={dailyRevenueData}>
+                <defs>
+                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#418d50" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#418d50" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
+                <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                  formatter={(value: any) => [`R$ ${value.toFixed(2)}`, 'Faturamento']}
+                />
+                <Area type="monotone" dataKey="revenue" stroke="#418d50" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Procedimentos Lucrativos */}
+        <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
+          <h3 className="text-xl font-serif font-bold text-tea-950 italic mb-8">Procedimentos Lucrativos</h3>
+          <div className="space-y-4">
+            {profitableProcedures.map((p, idx) => (
+              <div key={idx} className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-tea-900 text-white rounded-xl flex items-center justify-center font-bold text-sm">{idx + 1}</div>
+                  <div>
+                    <p className="text-xs font-bold text-tea-950">{p.name}</p>
+                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{p.count} atendimentos • R$ {p.avg.toFixed(0)} avg</p>
+                  </div>
+                </div>
+                <p className="text-sm font-bold text-tea-800">R$ {p.revenue.toFixed(0)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Ranking de Clientes */}
+        <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
+          <h3 className="text-xl font-serif font-bold text-tea-950 italic mb-8">Top Clientes (Mês)</h3>
+          <div className="space-y-4">
+            {topCustomers.map((c, idx) => (
+              <div key={idx} className="flex items-center justify-between p-4 bg-tea-50/30 rounded-2xl border border-tea-50">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-tea-200 text-tea-900 rounded-xl flex items-center justify-center font-bold text-sm">{idx + 1}</div>
+                  <p className="text-xs font-bold text-tea-950">{c.name}</p>
+                </div>
+                <p className="text-sm font-bold text-tea-800">R$ {c.total.toFixed(0)}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Detalhamento de Custos Fixos */}
+        <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
+          <h3 className="text-xl font-serif font-bold text-tea-950 italic mb-8">Custos Fixos Reais</h3>
+          <div className="space-y-3">
+            {fixedCostCategories.map(cat => {
+              const amount = filteredTransactions
+                .filter(t => t.type === 'payable' && t.category === cat)
+                .reduce((acc, t) => acc + t.amount, 0);
+              const labels: any = { water: 'Água', electricity: 'Luz', internet: 'Internet', salary: 'Pró-labore', tax: 'MEI', rent: 'Aluguel' };
+              return (
+                <div key={cat} className="flex justify-between items-center p-3 bg-gray-50/30 rounded-xl">
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{labels[cat]}</span>
+                  <span className="text-sm font-bold text-tea-900">R$ {amount.toFixed(2)}</span>
+                </div>
+              );
+            })}
+            <div className="pt-4 border-t border-gray-100 flex justify-between items-center">
+              <span className="text-sm font-bold text-tea-950 uppercase tracking-widest">Total Custos Fixos</span>
+              <span className="text-lg font-bold text-red-600">R$ {realFixedCosts.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTransactions = () => (
+    <div className="space-y-8 animate-fade-in">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-green-50 p-8 rounded-[2.5rem] border border-green-100 shadow-sm">
           <p className="text-[10px] font-bold text-green-700 uppercase tracking-widest mb-1">Entradas</p>
           <p className="text-3xl font-serif font-bold text-green-900">R$ {totals.revenue.toLocaleString('pt-BR')}</p>
-          <p className="text-[8px] text-green-600 mt-1">Recebidas no período</p>
         </div>
         <div className="bg-red-50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm">
           <p className="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-1">Saídas</p>
           <p className="text-3xl font-serif font-bold text-red-900">R$ {totals.expenses.toLocaleString('pt-BR')}</p>
-          <p className="text-[8px] text-red-600 mt-1">Pagas no período</p>
         </div>
         <div className="bg-orange-50 p-8 rounded-[2.5rem] border border-orange-100 shadow-sm">
-          <p className="text-[10px] font-bold text-orange-700 uppercase tracking-widest mb-1">A receber</p>
-          <p className="text-3xl font-serif font-bold text-orange-900">R$ {totals.pendingReceivable.toLocaleString('pt-BR')}</p>
-          <p className="text-[8px] text-orange-600 mt-1">Receitas pendentes</p>
-        </div>
-        <div className="bg-amber-50 p-8 rounded-[2.5rem] border border-amber-200 shadow-sm">
-          <p className="text-[10px] font-bold text-amber-800 uppercase tracking-widest mb-1">A pagar</p>
-          <p className="text-3xl font-serif font-bold text-amber-900">R$ {totals.pendingPayable.toLocaleString('pt-BR')}</p>
-          <p className="text-[8px] text-amber-700 mt-1">Despesas pendentes</p>
+          <p className="text-[10px] font-bold text-orange-700 uppercase tracking-widest mb-1">Pendente</p>
+          <p className="text-3xl font-serif font-bold text-orange-900">R$ {totals.pending.toLocaleString('pt-BR')}</p>
         </div>
         <div className="bg-tea-950 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10 text-5xl">💰</div>
           <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-1">Saldo Líquido</p>
           <p className="text-3xl font-serif font-bold">R$ {totals.balance.toLocaleString('pt-BR')}</p>
-          <p className="text-[8px] text-tea-200 mt-1">Entradas − Saídas pagas</p>
-        </div>
-      </div>
-
-      {/* Profitability Analysis */}
-      <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm space-y-8">
-        <div className="flex items-center gap-4">
-          <span className="text-3xl">📊</span>
-          <div>
-            <h3 className="text-xl font-serif font-bold text-tea-950 italic">Análise de Rentabilidade</h3>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Custo Fixo vs. Preço dos Procedimentos</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="space-y-4">
-            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest border-b border-gray-50 pb-2">Custos Fixos (período)</h4>
-            <p className="text-[9px] text-gray-400">Inclui lançamentos confirmados e pendentes no período selecionado.</p>
-            <div className="space-y-2">
-              {FIXED_CATEGORIES.map(cat => (
-                <div key={cat} className="flex justify-between text-sm">
-                  <span className="text-gray-500">{FIXED_CATEGORY_LABELS[cat]}</span>
-                  <span className="font-bold text-red-600">R$ {fixedCostsByCategory[cat].toFixed(2)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between text-sm pt-2 border-t border-gray-50 font-bold">
-                <span className="text-tea-950">Total Fixo (despesas)</span>
-                <span className="text-red-600">R$ {totalFixedCost.toFixed(2)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="md:col-span-2 bg-tea-50/30 p-8 rounded-3xl border border-tea-100 space-y-6">
-            <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest">Custo fixo × hora (referência)</h4>
-            <p className="text-xs text-gray-600 leading-relaxed">
-              Custos fixos são despesas (sempre negativos no fluxo). Para cobri-los, cada hora de trabalho deve render no mínimo:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="bg-white p-5 rounded-2xl shadow-sm">
-                <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Custo fixo/hora (est.)</p>
-                <p className="text-xl font-serif font-bold text-tea-900">
-                  R$ {(totalFixedCost / (22 * 8)).toFixed(2)}
-                </p>
-                <p className="text-[8px] text-gray-400 mt-1">* 22 dias/mês, 8h/dia</p>
-              </div>
-              <div className="bg-tea-900 p-5 rounded-2xl text-white shadow-lg">
-                <p className="text-[9px] font-bold text-tea-300 uppercase mb-1">Meta faturamento/hora</p>
-                <p className="text-xl font-serif font-bold">
-                  R$ {(totalFixedCost * 2.5 / (22 * 8)).toFixed(2)}
-                </p>
-                <p className="text-[8px] text-tea-100 mt-1">* Margem ~60%</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Precificação por procedimento */}
-        <div className="mt-10 pt-10 border-t border-gray-100">
-          <h4 className="text-xs font-bold text-tea-800 uppercase tracking-widest mb-2">Sugestão de precificação por procedimento</h4>
-          <p className="text-xs text-gray-600 leading-relaxed mb-6">
-            Comparando procedimentos realizados no período, valor cobrado e custo dos produtos utilizados em cada um.
-          </p>
-          {procedureAnalysis.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">Nenhum procedimento concluído no período selecionado.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200">
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest">Procedimento</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Realizados</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Receita total</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Receita/proc.</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Custo produto/proc.</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Custo produto total</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Margem (aprox.)</th>
-                    <th className="py-3 pr-4 font-bold text-tea-800 uppercase tracking-widest text-right">Preço mín. sugerido</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {procedureAnalysis.map(({ service, count, revenue, productCostPerProc, totalProductCost }) => {
-                    const revenuePerProc = count > 0 ? revenue / count : 0;
-                    const marginPct = revenue > 0 ? ((revenue - totalProductCost) / revenue) * 100 : 0;
-                    const suggestedMin = productCostPerProc > 0 ? productCostPerProc / 0.4 : revenuePerProc;
-                    return (
-                      <tr key={service.id} className="border-b border-gray-50 hover:bg-tea-50/30">
-                        <td className="py-4 pr-4 font-bold text-tea-950">{service.name}</td>
-                        <td className="py-4 pr-4 text-right">{count}</td>
-                        <td className="py-4 pr-4 text-right text-green-700 font-bold">R$ {revenue.toFixed(2)}</td>
-                        <td className="py-4 pr-4 text-right">R$ {revenuePerProc.toFixed(2)}</td>
-                        <td className="py-4 pr-4 text-right text-red-600">R$ {productCostPerProc.toFixed(2)}</td>
-                        <td className="py-4 pr-4 text-right text-red-600">R$ {totalProductCost.toFixed(2)}</td>
-                        <td className="py-4 pr-4 text-right">{marginPct.toFixed(0)}%</td>
-                        <td className="py-4 pr-4 text-right font-bold text-tea-800">R$ {suggestedMin.toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       </div>
 
@@ -450,7 +558,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {transactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
+              {filteredTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
                 <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group">
                   <td className="px-10 py-8 text-xs font-bold text-gray-500">{new Date(t.date).toLocaleDateString()}</td>
                   <td className="px-10 py-8">
@@ -483,13 +591,74 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({ transactions: allTransactio
                   </td>
                 </tr>
               ))}
-              {transactions.length === 0 && (
-                <tr><td colSpan={4} className="py-24 text-center text-gray-300 italic font-serif text-lg">Nenhum registro financeiro.</td></tr>
+              {filteredTransactions.length === 0 && (
+                <tr><td colSpan={4} className="py-24 text-center text-gray-300 italic font-serif text-lg">Nenhum registro financeiro neste período.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+  );
+
+  const totals = useMemo(() => {
+    const revenue = filteredTransactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
+    const expenses = filteredTransactions.filter(t => t.type === 'payable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
+    const pending = filteredTransactions.filter(t => t.type === 'receivable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
+    return { revenue, expenses, pending, balance: revenue - expenses };
+  }, [filteredTransactions]);
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-20">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-8 rounded-[3.5rem] border border-gray-100 shadow-sm gap-6">
+        <div>
+          <h2 className="text-3xl font-bold text-tea-950 font-serif italic">Caixa Moriá</h2>
+          <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-1">Gestão de Ganhos e Despesas</p>
+        </div>
+
+        {/* Filtro de Período */}
+        <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-2xl border border-gray-100">
+          <div className="flex flex-col">
+            <label className="text-[7px] font-bold text-gray-400 uppercase ml-1">Início</label>
+            <input 
+              type="date" 
+              value={dateRange.start} 
+              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+              className="bg-transparent text-[10px] font-bold uppercase tracking-widest outline-none cursor-pointer px-1 text-tea-900"
+            />
+          </div>
+          <div className="w-px h-6 bg-gray-200"></div>
+          <div className="flex flex-col">
+            <label className="text-[7px] font-bold text-gray-400 uppercase ml-1">Fim</label>
+            <input 
+              type="date" 
+              value={dateRange.end} 
+              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+              className="bg-transparent text-[10px] font-bold uppercase tracking-widest outline-none cursor-pointer px-1 text-tea-900"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+          <div className="bg-gray-100 p-1.5 rounded-2xl flex gap-1">
+            <button 
+              onClick={() => setActiveTab('dashboard')}
+              className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'dashboard' ? 'bg-white text-tea-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              Inteligência
+            </button>
+            <button 
+              onClick={() => setActiveTab('transactions')}
+              className={`px-6 py-3 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${activeTab === 'transactions' ? 'bg-white text-tea-900 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+            >
+              Lançamentos
+            </button>
+          </div>
+          <button onClick={() => { resetForm(); setShowForm(true); }} className="bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl">+ Novo</button>
+        </div>
+      </div>
+
+      {activeTab === 'dashboard' ? renderDashboard() : renderTransactions()}
 
       {showForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">

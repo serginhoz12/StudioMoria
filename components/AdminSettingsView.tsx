@@ -19,7 +19,6 @@ interface AdminSettingsViewProps {
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
   settings, 
   services = [],
-  customers = [],
   inventory = [],
   isMockMode
 }) => {
@@ -260,6 +259,67 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
              />
              <p className="text-[9px] text-gray-400 mt-2 ml-1 italic">* Após esta data, nenhum horário estará visível para as clientes no app.</p>
            </div>
+        </div>
+      </section>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+           <span className="text-3xl">🎯</span> Metas Financeiras
+        </h3>
+        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Meta de Faturamento Mensal (R$)</label>
+              <input 
+                type="number"
+                className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
+                value={settings.monthlyGoal || 0}
+                onChange={(e) => updateGlobalSettings({ ...settings, monthlyGoal: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Lucro Desejado (R$)</label>
+              <input 
+                type="number"
+                className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
+                value={settings.desiredProfit || 0}
+                onChange={(e) => updateGlobalSettings({ ...settings, desiredProfit: parseFloat(e.target.value) || 0 })}
+              />
+            </div>
+          </div>
+          <p className="text-[9px] text-gray-400 ml-1 italic">* Esses valores são usados para calcular o ponto de equilíbrio e alertas no painel de inteligência financeira.</p>
+        </div>
+      </section>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+           <span className="text-3xl">📢</span> Destaque de Inauguração
+        </h3>
+        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
+           <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-tea-100">
+              <div>
+                <p className="text-xs font-bold text-tea-900">Exibir Banner de Destaque</p>
+                <p className="text-[10px] text-gray-400">Ativa ou desativa a visibilidade do banner no topo do site.</p>
+              </div>
+              <button 
+                onClick={() => updateGlobalSettings({...settings, announcementBanner: { ... (settings.announcementBanner || { enabled: false, text: '' }), enabled: !settings.announcementBanner?.enabled }})}
+                className={`w-14 h-8 rounded-full transition-all relative ${settings.announcementBanner?.enabled ? 'bg-tea-600' : 'bg-gray-200'}`}
+              >
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.announcementBanner?.enabled ? 'right-1' : 'left-1 shadow-sm'}`}></div>
+              </button>
+           </div>
+           
+           {settings.announcementBanner?.enabled && (
+             <div className="space-y-2 animate-fade-in">
+                <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Texto do Banner</label>
+                <input 
+                  className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400" 
+                  value={settings.announcementBanner?.text || ''} 
+                  onChange={e => updateGlobalSettings({...settings, announcementBanner: { ... (settings.announcementBanner || { enabled: true, text: '' }), text: e.target.value }})} 
+                  placeholder="Ex: GRANDE REINAUGURAÇÃO: 11 DE MARÇO"
+                />
+             </div>
+           )}
         </div>
       </section>
 
