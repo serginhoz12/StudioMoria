@@ -350,71 +350,115 @@ const App: React.FC = () => {
         />;
         case View.ADMIN_INVENTORY: return <AdminInventory 
           inventory={inventory} 
-          onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} 
-          onDelete={(id) => !isMockMode && deleteDoc(doc(db, "inventory", id))} 
+          onUpdate={async (id, data) => {
+            if (isMockMode) return;
+            try {
+              if (!auth.currentUser) await signInAnonymously(auth);
+              await updateDoc(doc(db, "inventory", id), data);
+            } catch (err: any) {
+              console.error("Erro ao atualizar estoque:", err);
+              if (err.code === 'permission-denied') {
+                alert("Erro de permissão ao atualizar estoque.");
+              }
+            }
+          }} 
+          onDelete={async (id) => {
+            if (isMockMode) return;
+            try {
+              if (!auth.currentUser) await signInAnonymously(auth);
+              await deleteDoc(doc(db, "inventory", id));
+            } catch (err: any) {
+              console.error("Erro ao excluir do estoque:", err);
+              if (err.code === 'permission-denied') {
+                alert("Erro de permissão ao excluir do estoque.");
+              }
+            }
+          }} 
           onAdd={async (data) => {
             if(isMockMode) {
               alert("Modo de Demonstração: O item foi simulado, mas não será salvo permanentemente.");
               return;
             }
             try {
-              console.log("Tentando cadastrar produto:", data.name);
-              // Clean up data: remove empty strings for dates
-              const cleanData = { ...data };
-              if (!cleanData.usageStartDate) delete cleanData.usageStartDate;
-              if (!cleanData.purchaseDate) cleanData.purchaseDate = new Date().toISOString().split('T')[0];
+              // Ensure we are authenticated
+              if (!auth.currentUser) {
+                await signInAnonymously(auth);
+              }
 
-              const docRef = await addDoc(collection(db, "inventory"), cleanData);
-              console.log("Produto cadastrado com ID:", docRef.id);
+              console.log("Tentando cadastrar produto:", data.name);
+              
+              // Clean up data
+              const cleanData: any = {};
+              Object.keys(data).forEach(key => {
+                const val = (data as any)[key];
+                if (val !== undefined && val !== null && val !== '') {
+                  cleanData[key] = val;
+                } else if (typeof val === 'number') {
+                  cleanData[key] = val;
+                }
+              });
+
+              if (!cleanData.purchaseDate) cleanData.purchaseDate = new Date().toISOString().split('T')[0];
+              if (!cleanData.lastRestockedAt) cleanData.lastRestockedAt = new Date().toISOString();
+
+              let docRef;
+              try {
+                docRef = await addDoc(collection(db, "inventory"), cleanData);
+                console.log("Produto cadastrado com ID:", docRef.id);
+              } catch (invErr: any) {
+                console.error("Erro na coleção inventory:", invErr);
+                throw new Error(`Erro na coleção 'inventory': ${invErr.message}`);
+              }
               
               if (cleanData.purchasePrice && cleanData.purchasePrice > 0) {
-                const isInstallment = ['credit', 'store_installments'].includes(cleanData.paymentMethod || '') && (cleanData.installmentsCount || 1) > 1;
-                const pDate = cleanData.purchaseDate || new Date().toISOString().split('T')[0];
-                
-                if (isInstallment) {
-                  const parentId = Math.random().toString(36).substr(2, 9);
-                  const count = cleanData.installmentsCount || 1;
-                  for (let i = 0; i < count; i++) {
-                    const dueDate = new Date(pDate);
-                    dueDate.setMonth(dueDate.getMonth() + i);
-                    
+                try {
+                  const isInstallment = ['credit', 'store_installments'].includes(cleanData.paymentMethod || '') && (cleanData.installmentsCount || 1) > 1;
+                  const pDate = cleanData.purchaseDate;
+                  
+                  if (isInstallment) {
+                    const parentId = Math.random().toString(36).substr(2, 9);
+                    const count = cleanData.installmentsCount || 1;
+                    for (let i = 0; i < count; i++) {
+                      const dueDate = new Date(pDate);
+                      dueDate.setMonth(dueDate.getMonth() + i);
+                      
+                      await addDoc(collection(db, "transactions"), {
+                        type: 'payable',
+                        description: `Compra Estoque: ${cleanData.name} (${i + 1}/${count})`,
+                        amount: Number((cleanData.purchasePrice / count).toFixed(2)),
+                        date: pDate,
+                        dueDate: dueDate.toISOString().split('T')[0],
+                        status: i === 0 ? 'paid' : 'pending',
+                        category: 'supplies',
+                        paymentMethod: cleanData.paymentMethod,
+                        installmentNumber: i + 1,
+                        installmentsCount: count,
+                        parentTransactionId: parentId,
+                        createdAt: new Date().toISOString()
+                      });
+                    }
+                  } else {
                     await addDoc(collection(db, "transactions"), {
                       type: 'payable',
-                      description: `Compra Estoque: ${cleanData.name} (${i + 1}/${count})`,
-                      amount: Number((cleanData.purchasePrice / count).toFixed(2)),
+                      description: `Compra Estoque: ${cleanData.name}`,
+                      amount: cleanData.purchasePrice,
                       date: pDate,
-                      dueDate: dueDate.toISOString().split('T')[0],
-                      status: i === 0 ? 'paid' : 'pending',
+                      status: 'paid',
                       category: 'supplies',
                       paymentMethod: cleanData.paymentMethod,
-                      installmentNumber: i + 1,
-                      installmentsCount: count,
-                      parentTransactionId: parentId,
                       createdAt: new Date().toISOString()
                     });
                   }
-                } else {
-                  await addDoc(collection(db, "transactions"), {
-                    type: 'payable',
-                    description: `Compra Estoque: ${cleanData.name}`,
-                    amount: cleanData.purchasePrice,
-                    date: pDate,
-                    status: 'paid',
-                    category: 'supplies',
-                    paymentMethod: cleanData.paymentMethod,
-                    createdAt: new Date().toISOString()
-                  });
+                } catch (transErr: any) {
+                  console.error("Erro na coleção transactions ao salvar estoque:", transErr);
+                  // We don't throw here so the inventory item is still considered "added"
+                  alert(`O produto foi adicionado ao estoque, mas houve um erro ao registrar a transação financeira: ${transErr.message}`);
                 }
               }
-              alert(`Produto "${cleanData.name}" cadastrado com sucesso! ID: ${docRef.id}`);
+              alert(`Produto "${cleanData.name}" cadastrado com sucesso!`);
             } catch (err: any) {
               console.error("Erro ao cadastrar produto:", err);
-              if (err.code === 'permission-denied') {
-                window.dispatchEvent(new Event('moria_permission_denied'));
-                alert("Erro de permissão no Firebase. O sistema entrou em Modo de Demonstração.");
-              } else {
-                alert(`Erro ao cadastrar produto: ${err.message || 'Verifique sua conexão.'}`);
-              }
+              alert(`Erro ao cadastrar produto: ${err.message || 'Verifique sua conexão.'}`);
             }
           }} 
         />;

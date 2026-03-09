@@ -11,7 +11,9 @@ interface AdminInventoryProps {
 
 const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, onDelete, onAdd }) => {
   const [isAdding, setIsAdding] = useState(false);
-  const [newItem, setNewItem] = useState<Omit<InventoryItem, 'id'>>({
+  const [editingId, setEditingId] = useState<string | null>(null);
+  
+  const initialItem: Omit<InventoryItem, 'id'> = {
     name: '',
     category: '',
     quantity: 0,
@@ -26,43 +28,47 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
     usageStartDate: '',
     paymentMethod: 'pix' as any,
     installmentsCount: 1
-  });
+  };
 
+  const [formItem, setFormItem] = useState<Omit<InventoryItem, 'id'>>(initialItem);
   const [isSaving, setIsSaving] = useState(false);
 
   const categories = Array.from(new Set(inventory.map(item => item.category)));
 
-  const handleAdd = async () => {
-    if (!newItem.name || !newItem.category) {
+  const handleEdit = (item: InventoryItem) => {
+    const { id, ...rest } = item;
+    setEditingId(id);
+    setFormItem(rest);
+    setIsAdding(true);
+  };
+
+  const handleSave = async () => {
+    if (!formItem.name || !formItem.category) {
       alert("Por favor, preencha o nome e a categoria do produto.");
       return;
     }
     
     setIsSaving(true);
     try {
-      await onAdd(newItem);
+      if (editingId) {
+        await onUpdate(editingId, formItem);
+      } else {
+        await onAdd(formItem);
+      }
       setIsAdding(false);
-      setNewItem({
-        name: '',
-        category: '',
-        quantity: 0,
-        minQuantity: 0,
-        unit: 'un',
-        lastRestockedAt: new Date().toISOString(),
-        netWeight: 0,
-        grossWeight: 0,
-        weightUnit: 'g',
-        purchasePrice: 0,
-        purchaseDate: new Date().toISOString().split('T')[0],
-        usageStartDate: '',
-        paymentMethod: 'pix',
-        installmentsCount: 1
-      });
+      setEditingId(null);
+      setFormItem(initialItem);
     } catch (err) {
       console.error("Erro ao salvar item no componente:", err);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCancel = () => {
+    setIsAdding(false);
+    setEditingId(null);
+    setFormItem(initialItem);
   };
 
   return (
@@ -72,12 +78,14 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
           <h2 className="text-2xl font-serif font-bold text-tea-900">Estoque</h2>
           <p className="text-sm text-gray-500">Gerencie os produtos e materiais do salão</p>
         </div>
-        <button 
-          onClick={() => setIsAdding(true)}
-          className="bg-tea-800 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-tea-900 transition-colors shadow-md"
-        >
-          + Novo Item
-        </button>
+        {!isAdding && (
+          <button 
+            onClick={() => setIsAdding(true)}
+            className="bg-tea-800 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-tea-900 transition-colors shadow-md"
+          >
+            + Novo Item
+          </button>
+        )}
       </div>
 
       {/* Low Stock Alert */}
@@ -94,14 +102,16 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
 
       {isAdding && (
         <div className="bg-white p-6 rounded-2xl shadow-xl border border-tea-100 animate-in fade-in slide-in-from-top-4">
-          <h3 className="text-lg font-bold text-tea-900 mb-4">Adicionar Novo Item</h3>
+          <h3 className="text-lg font-bold text-tea-900 mb-4">
+            {editingId ? 'Editar Item' : 'Adicionar Novo Item'}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Nome do Produto</label>
               <input 
                 type="text" 
-                value={newItem.name}
-                onChange={e => setNewItem({...newItem, name: e.target.value})}
+                value={formItem.name}
+                onChange={e => setFormItem({...formItem, name: e.target.value})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
                 placeholder="Ex: Cera de Mel"
               />
@@ -110,8 +120,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Categoria</label>
               <input 
                 type="text" 
-                value={newItem.category}
-                onChange={e => setNewItem({...newItem, category: e.target.value})}
+                value={formItem.category}
+                onChange={e => setFormItem({...formItem, category: e.target.value})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
                 placeholder="Ex: Depilação"
                 list="categories"
@@ -125,13 +135,13 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <div className="flex gap-2">
                 <input 
                   type="number" 
-                  value={newItem.quantity}
-                  onChange={e => setNewItem({...newItem, quantity: Number(e.target.value)})}
+                  value={formItem.quantity || ''}
+                  onChange={e => setFormItem({...formItem, quantity: e.target.value === '' ? 0 : Number(e.target.value)})}
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
                 />
                 <select 
-                  value={newItem.unit}
-                  onChange={e => setNewItem({...newItem, unit: e.target.value})}
+                  value={formItem.unit}
+                  onChange={e => setFormItem({...formItem, unit: e.target.value})}
                   className="px-2 py-2 rounded-xl border border-gray-200 outline-none"
                 >
                   <option value="un">un</option>
@@ -146,8 +156,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Estoque Mínimo</label>
               <input 
                 type="number" 
-                value={newItem.minQuantity}
-                onChange={e => setNewItem({...newItem, minQuantity: Number(e.target.value)})}
+                value={formItem.minQuantity || ''}
+                onChange={e => setFormItem({...formItem, minQuantity: e.target.value === '' ? 0 : Number(e.target.value)})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
@@ -156,13 +166,13 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <div className="flex gap-2">
                 <input 
                   type="number" 
-                  value={newItem.netWeight}
-                  onChange={e => setNewItem({...newItem, netWeight: Number(e.target.value)})}
+                  value={formItem.netWeight || ''}
+                  onChange={e => setFormItem({...formItem, netWeight: e.target.value === '' ? 0 : Number(e.target.value)})}
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
                 />
                 <select 
-                  value={newItem.weightUnit}
-                  onChange={e => setNewItem({...newItem, weightUnit: e.target.value})}
+                  value={formItem.weightUnit}
+                  onChange={e => setFormItem({...formItem, weightUnit: e.target.value})}
                   className="px-2 py-2 rounded-xl border border-gray-200 outline-none"
                 >
                   <option value="g">g</option>
@@ -176,8 +186,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Peso Bruto</label>
               <input 
                 type="number" 
-                value={newItem.grossWeight}
-                onChange={e => setNewItem({...newItem, grossWeight: Number(e.target.value)})}
+                value={formItem.grossWeight || ''}
+                onChange={e => setFormItem({...formItem, grossWeight: e.target.value === '' ? 0 : Number(e.target.value)})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
@@ -185,8 +195,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Valor da Compra (R$)</label>
               <input 
                 type="number" 
-                value={newItem.purchasePrice}
-                onChange={e => setNewItem({...newItem, purchasePrice: Number(e.target.value)})}
+                value={formItem.purchasePrice || ''}
+                onChange={e => setFormItem({...formItem, purchasePrice: e.target.value === '' ? 0 : Number(e.target.value)})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
@@ -194,8 +204,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data da Compra</label>
               <input 
                 type="date" 
-                value={newItem.purchaseDate}
-                onChange={e => setNewItem({...newItem, purchaseDate: e.target.value})}
+                value={formItem.purchaseDate}
+                onChange={e => setFormItem({...formItem, purchaseDate: e.target.value})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
@@ -203,16 +213,16 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data Início de Uso</label>
               <input 
                 type="date" 
-                value={newItem.usageStartDate}
-                onChange={e => setNewItem({...newItem, usageStartDate: e.target.value})}
+                value={formItem.usageStartDate}
+                onChange={e => setFormItem({...formItem, usageStartDate: e.target.value})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Forma de Pagamento</label>
               <select 
-                value={newItem.paymentMethod}
-                onChange={e => setNewItem({...newItem, paymentMethod: e.target.value as any, installmentsCount: 1})}
+                value={formItem.paymentMethod}
+                onChange={e => setFormItem({...formItem, paymentMethod: e.target.value as any, installmentsCount: 1})}
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               >
                 <option value="pix">PIX</option>
@@ -221,14 +231,14 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                 <option value="store_installments">Parcelado pela Loja</option>
               </select>
             </div>
-            {['credit', 'store_installments'].includes(newItem.paymentMethod || '') && (
+            {['credit', 'store_installments'].includes(formItem.paymentMethod || '') && (
               <div>
                 <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Parcelas</label>
                 <input 
                   type="number" 
                   min="1"
-                  value={newItem.installmentsCount}
-                  onChange={e => setNewItem({...newItem, installmentsCount: Number(e.target.value)})}
+                  value={formItem.installmentsCount || ''}
+                  onChange={e => setFormItem({...formItem, installmentsCount: e.target.value === '' ? 1 : Number(e.target.value)})}
                   className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
                 />
               </div>
@@ -236,17 +246,17 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
           </div>
           <div className="flex justify-end gap-3 mt-6">
             <button 
-              onClick={() => setIsAdding(false)}
+              onClick={handleCancel}
               className="px-4 py-2 text-gray-400 font-bold uppercase text-[10px] tracking-widest"
             >
               Cancelar
             </button>
             <button 
-              onClick={handleAdd}
+              onClick={handleSave}
               disabled={isSaving}
               className="bg-tea-800 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg disabled:opacity-50"
             >
-              {isSaving ? 'Salvando...' : 'Salvar Item'}
+              {isSaving ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Salvar Item'}
             </button>
           </div>
         </div>
@@ -309,12 +319,22 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                   )}
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button 
-                    onClick={() => { if(confirm('Excluir este item?')) onDelete(item.id); }}
-                    className="text-gray-300 hover:text-red-500 transition-colors"
-                  >
-                    🗑️
-                  </button>
+                  <div className="flex justify-end gap-2">
+                    <button 
+                      onClick={() => handleEdit(item)}
+                      className="text-gray-300 hover:text-tea-600 transition-colors"
+                      title="Editar"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      onClick={() => { if(confirm('Excluir este item?')) onDelete(item.id); }}
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                      title="Excluir"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
