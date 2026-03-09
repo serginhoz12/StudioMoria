@@ -521,7 +521,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               >
                 <div className="flex items-center gap-3">
                   <span className="font-serif font-bold italic text-tea-900">{b.dateTime.split(' ')[1]}</span>
-                  <span className="text-[10px] font-bold text-gray-600">{b.customerName.split(' ')[0]}</span>
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-bold text-gray-900">{b.customerName}</span>
+                    <span className="text-[8px] font-medium text-tea-600 uppercase tracking-wider">{b.serviceName}</span>
+                  </div>
                 </div>
                 <span className="text-[8px] font-bold text-orange-600 uppercase tracking-tighter bg-orange-50 px-2 py-1 rounded-full">Extra</span>
               </button>
@@ -544,10 +547,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             } else if (data.type === 'scheduled' || data.type === 'completed' || data.type === 'pending' || (data as any).isDurationBlock) {
               if ((data as any).isDurationBlock) {
                 style = "bg-tea-800/80 text-white/80 border-tea-800 cursor-not-allowed shadow-inner";
-                label = "Duração: " + (data.booking?.customerName.split(' ')[0] || "Ocupado");
+                const b = data.booking;
+                label = `Duração: ${b?.customerName.split(' ')[0] || "Ocupado"}${b?.serviceName ? ` (${b.serviceName})` : ''}`;
               } else {
                 style = "bg-tea-900 text-white border-tea-900 cursor-pointer shadow-lg";
-                label = data.booking?.customerName.split(' ')[0] || "Ocupado";
+                const b = data.booking;
+                label = `${b?.customerName.split(' ')[0] || "Ocupado"}${b?.serviceName ? ` - ${b.serviceName}` : ''}`;
               }
             } else {
               // Bloqueado mas clicável para abrir

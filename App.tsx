@@ -276,14 +276,18 @@ const App: React.FC = () => {
     if (!currentUser) { setView(View.CUSTOMER_LOGIN); return; }
     if (isMockMode) return;
     const srv = services.find(s => s.id === sid);
+    if (!srv) {
+      alert("Erro: Procedimento não encontrado.");
+      return;
+    }
     const booking = {
       customerId: currentUser.id,
       customerName: currentUser.name,
       serviceId: sid,
-      serviceName: srv?.name || '',
+      serviceName: srv.name,
       dateTime: dt,
-      duration: srv?.duration || 30,
-      originalPrice: srv?.price || 0,
+      duration: srv.duration || 30,
+      originalPrice: srv.price || 0,
       status: 'pending',
       depositStatus: 'pending',
       teamMemberId: mid || '',

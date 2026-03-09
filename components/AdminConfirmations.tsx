@@ -258,8 +258,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    >
                     {b.customerName || 'Cliente'}
                    </button>
-                   <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">
-                     {b.serviceName || 'Serviço'}
+                   <p className="text-[12px] text-tea-800 font-bold uppercase tracking-wider mb-1">
+                     {b.serviceName || 'Procedimento não identificado'}
                    </p>
                    <div className="flex items-center gap-2 mt-1">
                      <span className="text-[9px] font-bold text-gray-400 uppercase">R$</span>

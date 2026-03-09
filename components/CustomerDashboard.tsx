@@ -101,8 +101,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         const [date] = slot.dateTime.split(' ');
         const pro = settings.teamMembers.find(m => m.id === slot.teamMemberId);
         const closingTimeStr = pro?.businessHours?.end || settings.businessHours.end;
-        const closingTime = new Date(`${date}T${closingTimeStr}`).getTime();
-        const maxEndTime = closingTime + (120 * 60 * 1000); // + 2 hours
+        
+        // Use a more robust date construction to avoid timezone issues
+        const closingTime = new Date(`${date}T${closingTimeStr}:00`).getTime();
+        
+        // CLT: Max 2 hours overtime (120 minutes). 
+        // We block if the service ends even 1 second after the 2h limit.
+        const maxEndTime = closingTime + (120 * 60 * 1000); 
         if (slotEnd > maxEndTime) return false;
 
         return true;
@@ -110,7 +115,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     }
 
     return nonOverlappingOpenSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
-  }, [bookings, selectedService, settings.businessHours.end]);
+  }, [bookings, selectedService, settings.businessHours.end, settings.teamMembers]);
 
   const groupedSlots = useMemo(() => {
     const groups: { [key: string]: Booking[] } = {};
@@ -140,14 +145,21 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     setIsBooking(true);
     try {
       const bookingRef = doc(db, "bookings", slot.id);
+      const serviceToBook = selectedService || services.find(s => s.id === slot.serviceId);
+      
+      if (!serviceToBook) {
+        alert("Erro: Procedimento não identificado. Por favor, selecione o serviço novamente.");
+        return;
+      }
+
       await updateDoc(bookingRef, {
         customerId: customer.id,
         customerName: customer.name,
-        serviceId: selectedService.id,
-        serviceName: selectedService.name,
+        serviceId: serviceToBook.id,
+        serviceName: serviceToBook.name,
         status: 'pending', // Vai para aprovação da Moriá
-        originalPrice: selectedService.price,
-        duration: selectedService.duration,
+        originalPrice: serviceToBook.price,
+        duration: serviceToBook.duration,
         updatedAt: new Date().toISOString()
       });
 
