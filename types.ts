@@ -29,6 +29,10 @@ export interface Customer {
   loyaltyPoints?: number;
   isLoyaltyEnabled?: boolean;
   birthday?: string; // YYYY-MM-DD
+  createdAt?: any; // ISO format or Firestore Timestamp
+  createdBy?: 'client' | 'admin';
+  registrationDate?: any;
+  dateCreated?: any;
 }
 
 export interface Service {

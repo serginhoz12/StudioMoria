@@ -641,7 +641,18 @@ const App: React.FC = () => {
                 }
               }
 
-              const user = { id, name: n, whatsapp: w, cpf: finalCpf, password: p, receivesNotifications: not, agreedToTerms: true, history: [] };
+              const user: Customer = { 
+                id, 
+                name: n, 
+                whatsapp: w, 
+                cpf: finalCpf, 
+                password: p, 
+                receivesNotifications: not, 
+                agreedToTerms: true, 
+                history: [],
+                createdAt: new Date().toISOString(),
+                createdBy: 'client'
+              };
               await setDoc(doc(db, "customers", id), user);
               setCurrentUser(user);
               setCustomerInitialTab('home');
@@ -750,7 +761,9 @@ const App: React.FC = () => {
                   password: randomPass, 
                   receivesNotifications: true,
                   agreedToTerms: true,
-                  history: []
+                  history: [],
+                  createdAt: new Date().toISOString(),
+                  createdBy: 'client'
                 };
                 await setDoc(doc(db, "customers", id), user);
                 console.log("Novo cliente cadastrado:", user.id);

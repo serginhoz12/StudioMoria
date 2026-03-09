@@ -35,6 +35,21 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
            c.cpf.includes(search);
   });
 
+  const parseDate = (date: any) => {
+    if (!date) return null;
+    if (typeof date === 'string') return new Date(date);
+    if (date.seconds) return new Date(date.seconds * 1000);
+    if (date.toDate && typeof date.toDate === 'function') return date.toDate();
+    return new Date(date);
+  };
+
+  const getCreationDate = (customer: Customer) => {
+    const date = customer.createdAt || customer.registrationDate || customer.dateCreated;
+    const parsed = parseDate(date);
+    if (parsed && !isNaN(parsed.getTime())) return parsed;
+    return null;
+  };
+
   const handleEditClick = () => {
     if (selectedCustomer) {
       setEditData({ 
@@ -77,7 +92,9 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
       password: newCustomer.password || (newCustomer.cpf ? cleanCpf.substring(0, 4) : '1234'), 
       receivesNotifications: true,
       agreedToTerms: true,
-      history: []
+      history: [],
+      createdAt: new Date().toISOString(),
+      createdBy: 'admin'
     };
 
     try {
@@ -192,6 +209,15 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                         {hasAlert && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Índice de cancelamento alto"></span>}
                       </div>
                       <p className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-widest">{customer.whatsapp}</p>
+                      <p className="text-[9px] text-tea-600/60 mt-0.5 italic font-medium">
+                        {(() => {
+                          const date = getCreationDate(customer);
+                          if (date) {
+                            return <>Desde: {date.toLocaleDateString('pt-BR')} {customer.createdBy === 'admin' ? '(Equipe)' : '(App)'}</>;
+                          }
+                          return <>Cadastro Legado</>;
+                        })()}
+                      </p>
                     </div>
                     <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">👤</div>
                   </div>
@@ -213,9 +239,18 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   </div>
                   <div>
                     <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedCustomer.name}</h3>
-                    <div className="flex gap-3 mt-1">
+                    <div className="flex gap-3 mt-1 flex-wrap">
                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-100">CPF: {selectedCustomer.cpf}</span>
                       <span className="text-[9px] font-bold text-tea-600 uppercase tracking-widest bg-tea-50 px-3 py-1 rounded-full border border-tea-100">WhatsApp: {selectedCustomer.whatsapp}</span>
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-100">
+                        {(() => {
+                          const date = getCreationDate(selectedCustomer);
+                          if (date) {
+                            return <>Cadastrada em: {date.toLocaleString('pt-BR')} {selectedCustomer.createdBy === 'admin' ? '(pela equipe)' : '(pelo cliente)'}</>;
+                          }
+                          return <>Cadastro Legado</>;
+                        })()}
+                      </span>
                     </div>
                   </div>
                 </div>
