@@ -8,6 +8,7 @@ import {
   PieChart, Pie, Legend 
 } from 'recharts';
 import CustomerHistoryModal from './CustomerHistoryModal';
+import BusinessInsights from './BusinessInsights';
 
 interface AdminDashboardProps {
   bookings: Booking[];
@@ -50,7 +51,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
     const testCustomerId = customers.find(c => c.cpf === '33426618877')?.id;
 
     const fTransactions = transactions.filter(t => {
-      const d = new Date(t.dueDate || t.date).getTime();
+      const dateStr = t.dueDate || t.date;
+      const d = new Date(dateStr + 'T00:00:00').getTime();
       const isTestUser = testCustomerId && t.customerId === testCustomerId;
       
       // Filter out transactions linked to cancelled bookings
@@ -248,6 +250,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
           )}
         </div>
       </div>
+
+      {/* AI Insights Section */}
+      <BusinessInsights 
+        bookings={bookings}
+        transactions={transactions}
+        customers={customers}
+        inventory={inventory}
+      />
 
       {/* Grid de KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

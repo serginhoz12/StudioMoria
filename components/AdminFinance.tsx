@@ -60,7 +60,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     const start = new Date(dateRange.start + 'T00:00:00').getTime();
     const end = new Date(dateRange.end + 'T23:59:59').getTime();
     return transactions.filter(t => {
-      const d = new Date(t.date).getTime();
+      const d = new Date(t.date + 'T00:00:00').getTime();
       return d >= start && d <= end;
     });
   }, [transactions, dateRange]);
@@ -558,9 +558,9 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredTransactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => (
+              {filteredTransactions.sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime()).map(t => (
                 <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group">
-                  <td className="px-10 py-8 text-xs font-bold text-gray-500">{new Date(t.date).toLocaleDateString()}</td>
+                  <td className="px-10 py-8 text-xs font-bold text-gray-500">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</td>
                   <td className="px-10 py-8">
                     <p className="font-bold text-tea-950 text-sm">{t.description}</p>
                     <div className="flex gap-2 mt-1">

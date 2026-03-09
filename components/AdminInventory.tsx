@@ -313,8 +313,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                 </td>
                 <td className="px-6 py-4">
                   <div className="text-xs text-tea-800 font-medium">R$ {item.purchasePrice?.toFixed(2) || '0,00'}</div>
-                  <div className="text-[9px] text-gray-400 uppercase">Compra: {item.purchaseDate ? new Date(item.purchaseDate).toLocaleDateString('pt-BR') : '-'}</div>
-                  <div className="text-[9px] text-tea-600 uppercase">Uso: {item.usageStartDate ? new Date(item.usageStartDate).toLocaleDateString('pt-BR') : '-'}</div>
+                  <div className="text-[9px] text-gray-400 uppercase">Compra: {item.purchaseDate ? new Date(item.purchaseDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</div>
+                  <div className="text-[9px] text-tea-600 uppercase">Uso: {item.usageStartDate ? new Date(item.usageStartDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</div>
                 </td>
                 <td className="px-6 py-4 text-center">
                   <div className="flex items-center justify-center gap-2">

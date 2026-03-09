@@ -11,7 +11,7 @@ interface CustomerHistoryContentProps {
 
 const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ customer, bookings, transactions, waitlist }) => {
   const myBookings = bookings.filter(b => b.customerId === customer.id).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime());
-  const myTransactions = transactions.filter(t => t.customerId === customer.id).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const myTransactions = transactions.filter(t => t.customerId === customer.id).sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime());
   const myWaitlist = waitlist.filter(w => w.customerId === customer.id).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const totalSpent = myTransactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0);
@@ -72,7 +72,7 @@ const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ custome
             <div key={trans.id} className="flex justify-between p-6 bg-gray-50/30 rounded-[2rem] items-center border border-gray-50 hover:border-tea-100 transition-all">
               <div>
                 <p className="font-bold text-tea-900 text-sm">{trans.description}</p>
-                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">{new Date(trans.date).toLocaleDateString()}</p>
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">{new Date(trans.date + 'T00:00:00').toLocaleDateString()}</p>
               </div>
               <div className="text-right">
                 <p className={`font-bold text-sm ${trans.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
