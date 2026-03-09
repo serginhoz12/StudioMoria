@@ -71,23 +71,35 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     const fullDateTime = `${selectedDate} ${hour}`;
     const currentTime = new Date(`${selectedDate}T${hour}`).getTime();
 
-    // 1. Check if there's an exact booking at this time
-    const exactBooking = bookings.find(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status !== 'cancelled');
-    if (exactBooking) return { type: exactBooking.status, booking: exactBooking };
+    const slotStart = currentTime;
+    const slotEnd = currentTime + 30 * 60 * 1000;
 
-    // 2. Check if this slot is covered by a previous booking's duration
-    const coveringBooking = bookings.find(b => {
-      // Only consider active bookings for the same professional on the same day
+    // 1. Prioritize actual appointments (scheduled, pending, completed)
+    // Check if any appointment covers this slot (either exact match or duration overlap)
+    const appointment = bookings.find(b => {
       if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
       if (!b.dateTime.startsWith(selectedDate)) return false;
       
       const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
       const bDuration = b.duration || 30;
       const bEnd = bStart + bDuration * 60 * 1000;
-      return currentTime >= bStart && currentTime < bEnd;
+      
+      // Overlap check: bStart < slotEnd && bEnd > slotStart
+      return bStart < slotEnd && bEnd > slotStart;
     });
 
-    if (coveringBooking) return { type: 'occupied', booking: coveringBooking, isDurationBlock: true };
+    if (appointment) {
+      const isExact = appointment.dateTime === fullDateTime;
+      return { 
+        type: isExact ? appointment.status : 'occupied', 
+        booking: appointment,
+        isDurationBlock: !isExact
+      };
+    }
+
+    // 2. If no appointment, check for "open" slots (liberated for site)
+    const openSlot = bookings.find(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status === 'open');
+    if (openSlot) return { type: 'open', booking: openSlot };
 
     return { type: 'locked' };
   };
@@ -185,6 +197,26 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     if (!customer || !service) return alert("Selecione cliente e serviço.");
     if (hour === 'Extra' && !manualTime) return alert("Defina o horário do atendimento.");
 
+    // Check for conflicts
+    const newStart = new Date(`${selectedDate}T${hour}`).getTime();
+    const newEnd = newStart + service.duration * 60 * 1000;
+
+    const conflict = bookings.find(b => {
+      if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
+      if (!b.dateTime.startsWith(selectedDate)) return false;
+      
+      const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+      const bDuration = b.duration || 30;
+      const bEnd = bStart + bDuration * 60 * 1000;
+      
+      // Overlap check: newStart < bEnd && newEnd > bStart
+      return newStart < bEnd && newEnd > bStart;
+    });
+
+    if (conflict) {
+      if (!confirm(`Atenção: Este agendamento sobrepõe o atendimento de ${conflict.customerName} (${conflict.dateTime.split(' ')[1]}). Deseja continuar mesmo assim?`)) return;
+    }
+
     try {
       if (!(db as any)._isMock) {
         await addDoc(collection(db, "bookings"), {
@@ -198,6 +230,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           duration: service.duration,
           originalPrice: manualPrice || service.price,
           status: 'scheduled',
+          isManual: true,
           depositStatus: 'paid',
           agreedToCancellationPolicy: true,
           policyAgreedAt: new Date().toISOString()
@@ -420,6 +453,38 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         </div>
       </div>
 
+      {/* Agendamentos Extra / Fora do Horário */}
+      {bookings.filter(b => {
+        if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
+        if (!b.dateTime.startsWith(selectedDate)) return false;
+        const hour = b.dateTime.split(' ')[1];
+        return !timeSlots.includes(hour);
+      }).length > 0 && (
+        <div className="bg-orange-50/50 p-6 rounded-[2.5rem] border border-orange-100 space-y-4">
+          <h4 className="text-[10px] font-bold text-orange-800 uppercase tracking-widest ml-2">Agendamentos Fora do Horário Padrão</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {bookings.filter(b => {
+              if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
+              if (!b.dateTime.startsWith(selectedDate)) return false;
+              const hour = b.dateTime.split(' ')[1];
+              return !timeSlots.includes(hour);
+            }).map(b => (
+              <button 
+                key={b.id}
+                onClick={() => setModal({ open: true, hour: b.dateTime.split(' ')[1], type: 'occupied' })}
+                className="p-4 bg-white rounded-2xl border border-orange-100 shadow-sm flex items-center justify-between hover:scale-105 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="font-serif font-bold italic text-tea-900">{b.dateTime.split(' ')[1]}</span>
+                  <span className="text-[10px] font-bold text-gray-600">{b.customerName.split(' ')[0]}</span>
+                </div>
+                <span className="text-[8px] font-bold text-orange-600 uppercase tracking-tighter bg-orange-50 px-2 py-1 rounded-full">Extra</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Grid de Horários */}
       <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden p-8">
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -485,7 +550,13 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                   <tr key={b.id} className="group hover:bg-gray-50/50 transition-colors">
                     <td className="py-4">
                       <div className="font-bold text-tea-900">{new Date(b.dateTime.replace(' ', 'T')).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</div>
-                      <div className="text-[10px] text-gray-400 font-bold uppercase">{b.dateTime.split(' ')[1]}</div>
+                      <div className="text-[10px] text-gray-400 font-bold uppercase">
+                        {b.dateTime.split(' ')[1]} - {(() => {
+                          const start = new Date(b.dateTime.replace(' ', 'T'));
+                          const end = new Date(start.getTime() + (b.duration || 30) * 60000);
+                          return end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        })()}
+                      </div>
                     </td>
                     <td className="py-4">
                       <button 
@@ -496,7 +567,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       </button>
                     </td>
                     <td className="py-4">
-                      <div className="text-xs font-medium text-tea-800">{b.serviceName}</div>
+                      <div className="text-xs font-medium text-tea-800 flex items-center gap-2">
+                        {b.serviceName}
+                        {b.isManual && <span className="text-[7px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">Manual</span>}
+                      </div>
                       <div className="text-[9px] text-gray-400 uppercase tracking-tighter">R$ {b.originalPrice?.toFixed(2) || '0,00'}</div>
                     </td>
                     <td className="py-4">

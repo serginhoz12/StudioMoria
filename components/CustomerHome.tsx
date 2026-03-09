@@ -26,10 +26,58 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
   const [selectedSlot, setSelectedSlot] = useState<Booking | null>(null);
 
   const availableSlots = useMemo(() => {
-    return bookings.filter(b => 
-      b.status === 'open'
-    ).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
-  }, [bookings]);
+    const today = new Date().toISOString().split('T')[0];
+    
+    // 1. Get all active bookings (pending, scheduled, completed)
+    const activeBookings = bookings.filter(b => 
+      ['pending', 'scheduled', 'completed'].includes(b.status) && 
+      b.dateTime >= today
+    );
+
+    // 2. Identify slots that are NOT covered by any active booking's duration
+    const nonOverlappingOpenSlots = bookings.filter(slot => {
+      if (slot.status !== 'open' || slot.dateTime < today) return false;
+      const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
+      
+      const isOccupied = activeBookings.some(b => {
+        if (slot.teamMemberId && b.teamMemberId && slot.teamMemberId !== b.teamMemberId) return false;
+        const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+        const bDuration = b.duration || 30;
+        const bEnd = bStart + bDuration * 60 * 1000;
+        return slotStart >= bStart && slotStart < bEnd;
+      });
+
+      return !isOccupied;
+    });
+
+    // 3. If a service is selected, ensure the entire duration fits without hitting another booking or closing time
+    if (selectedServiceDetail) {
+      const serviceDurationMs = selectedServiceDetail.duration * 60 * 1000;
+      
+      return nonOverlappingOpenSlots.filter(slot => {
+        const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
+        const slotEnd = slotStart + serviceDurationMs;
+
+        // Check for conflicts with other bookings that start after this slot
+        const hasConflict = activeBookings.some(b => {
+          if (slot.teamMemberId && b.teamMemberId && slot.teamMemberId !== b.teamMemberId) return false;
+          const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+          return bStart > slotStart && bStart < slotEnd;
+        });
+
+        if (hasConflict) return false;
+
+        // Check if the service exceeds business hours
+        const [date] = slot.dateTime.split(' ');
+        const closingTime = new Date(`${date}T${settings.businessHours.end}`).getTime();
+        if (slotEnd > closingTime) return false;
+
+        return true;
+      }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    }
+
+    return nonOverlappingOpenSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+  }, [bookings, selectedServiceDetail, settings.businessHours.end]);
   
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
