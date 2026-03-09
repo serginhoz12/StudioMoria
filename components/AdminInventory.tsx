@@ -88,6 +88,16 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
         )}
       </div>
 
+      {/* Dica de Uso */}
+      {!isAdding && inventory.length > 0 && (
+        <div className="bg-tea-50 border border-tea-100 p-4 rounded-2xl flex items-center gap-3">
+          <span className="text-xl">💡</span>
+          <p className="text-xs text-tea-900 font-medium">
+            Para alterar as informações de um produto, basta clicar no botão <span className="font-bold text-tea-700">"EDITAR"</span> localizado no final da linha de cada item na tabela abaixo.
+          </p>
+        </div>
+      )}
+
       {/* Low Stock Alert */}
       {inventory.some(item => item.quantity <= item.minQuantity) && (
         <div className="bg-orange-50 border-l-4 border-orange-400 p-4 rounded-r-xl">
@@ -262,8 +272,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <table className="w-full text-left">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto">
+        <table className="w-full text-left min-w-[800px]">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Produto</th>
@@ -271,11 +281,27 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Compra / Uso</th>
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Quantidade</th>
               <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
-              <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Ações</th>
+              <th className="px-6 py-4 text-[10px] font-bold text-tea-900 uppercase tracking-widest text-center bg-tea-50/50">Ações de Gestão</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {inventory.map(item => (
+            {inventory.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-6 py-12 text-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <span className="text-4xl">📦</span>
+                    <p className="text-gray-500 font-medium">Nenhum produto cadastrado no estoque.</p>
+                    <button 
+                      onClick={() => setIsAdding(true)}
+                      className="text-tea-700 font-bold hover:underline"
+                    >
+                      Clique aqui para adicionar seu primeiro item
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              inventory.map(item => (
               <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="font-bold text-tea-900">{item.name}</div>
@@ -318,26 +344,28 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                     <span className="px-2 py-1 bg-green-100 text-green-600 rounded-full text-[8px] font-bold uppercase tracking-widest">OK</span>
                   )}
                 </td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-2">
+                <td className="px-6 py-4 text-center bg-tea-50/30 border-l border-tea-50">
+                  <div className="flex justify-center gap-3">
                     <button 
                       onClick={() => handleEdit(item)}
-                      className="text-gray-300 hover:text-tea-600 transition-colors"
-                      title="Editar"
+                      className="flex items-center gap-2 px-5 py-2.5 bg-tea-700 text-white rounded-xl hover:bg-tea-800 transition-all shadow-lg active:scale-95 ring-2 ring-tea-100"
+                      title="Editar este produto"
                     >
-                      ✏️
+                      <span className="text-base">✏️</span>
+                      <span className="text-xs font-bold uppercase tracking-wide">Editar</span>
                     </button>
                     <button 
-                      onClick={() => { if(confirm('Excluir este item?')) onDelete(item.id); }}
-                      className="text-gray-300 hover:text-red-500 transition-colors"
-                      title="Excluir"
+                      onClick={() => { if(confirm('Deseja realmente excluir este item do estoque?')) onDelete(item.id); }}
+                      className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all shadow-lg active:scale-95 ring-2 ring-red-100"
+                      title="Excluir este produto"
                     >
-                      🗑️
+                      <span className="text-base">🗑️</span>
+                      <span className="text-xs font-bold uppercase tracking-wide">Excluir</span>
                     </button>
                   </div>
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

@@ -334,11 +334,108 @@ const App: React.FC = () => {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} inventory={inventory} isMockMode={isMockMode} />;
-        case View.ADMIN_CALENDAR: return <AdminCalendar bookings={bookings} services={services} customers={customers} transactions={transactions} waitlist={waitlist} teamMembers={settings.teamMembers} inventory={inventory} settings={settings} onUpdateStatus={handleUpdateStatus} onUpdateInventory={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} />;
+        case View.ADMIN_CALENDAR: return <AdminCalendar 
+          bookings={bookings} 
+          services={services} 
+          customers={customers} 
+          transactions={transactions} 
+          waitlist={waitlist} 
+          teamMembers={settings.teamMembers} 
+          inventory={inventory} 
+          settings={settings} 
+          onUpdateStatus={handleUpdateStatus} 
+          onUpdateInventory={(id, data) => {
+            if (isMockMode) {
+              setInventory(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
+              return;
+            }
+            updateDoc(doc(db, "inventory", id), data);
+          }} 
+        />;
         // FIX: Added missing 'services' prop to AdminConfirmations to resolve TS error
-        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations bookings={bookings} customers={customers} services={services} transactions={transactions} teamMembers={settings.teamMembers} inventory={inventory} settings={settings} onUpdateStatus={handleUpdateStatus} onUpdateDeposit={handleUpdateDeposit} onDeleteBooking={(id) => !isMockMode && deleteDoc(doc(db, "bookings", id))} waitlist={waitlist} onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))} onUpdateInventory={(id, data) => !isMockMode && updateDoc(doc(db, "inventory", id), data)} />;
-        case View.ADMIN_CLIENTS: return <AdminClients customers={customers} bookings={bookings} transactions={transactions} waitlist={waitlist} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "customers", id))} onUpdate={(id, data) => !isMockMode && updateDoc(doc(db, "customers", id), data)} />;
-        case View.ADMIN_FINANCE: return <AdminFinance transactions={transactions} bookings={bookings} customers={customers} services={services} settings={settings} inventory={inventory} onAdd={async (d) => { if(!isMockMode) await addDoc(collection(db, "transactions"), d); }} onUpdate={(id, d) => !isMockMode && updateDoc(doc(db, "transactions", id), d)} onDelete={(id) => !isMockMode && deleteDoc(doc(db, "transactions", id))} />;
+        case View.ADMIN_CONFIRMATIONS: return <AdminConfirmations 
+          bookings={bookings} 
+          customers={customers} 
+          services={services} 
+          transactions={transactions} 
+          teamMembers={settings.teamMembers} 
+          inventory={inventory} 
+          settings={settings} 
+          onUpdateStatus={handleUpdateStatus} 
+          onUpdateDeposit={handleUpdateDeposit} 
+          onDeleteBooking={(id) => {
+            if (isMockMode) {
+              setBookings(prev => prev.filter(b => b.id !== id));
+              return;
+            }
+            deleteDoc(doc(db, "bookings", id));
+          }} 
+          waitlist={waitlist} 
+          onRemoveWaitlist={(id) => {
+            if (isMockMode) {
+              setWaitlist(prev => prev.filter(w => w.id !== id));
+              return;
+            }
+            deleteDoc(doc(db, "waitlist", id));
+          }} 
+          onUpdateInventory={(id, data) => {
+            if (isMockMode) {
+              setInventory(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
+              return;
+            }
+            updateDoc(doc(db, "inventory", id), data);
+          }} 
+        />;
+        case View.ADMIN_CLIENTS: return <AdminClients 
+          customers={customers} 
+          bookings={bookings} 
+          transactions={transactions} 
+          waitlist={waitlist} 
+          onDelete={(id) => {
+            if (isMockMode) {
+              setCustomers(prev => prev.filter(c => c.id !== id));
+              return;
+            }
+            deleteDoc(doc(db, "customers", id));
+          }} 
+          onUpdate={(id, data) => {
+            if (isMockMode) {
+              setCustomers(prev => prev.map(c => c.id === id ? { ...c, ...data } : c));
+              return;
+            }
+            updateDoc(doc(db, "customers", id), data);
+          }} 
+        />;
+        case View.ADMIN_FINANCE: return <AdminFinance 
+          transactions={transactions} 
+          bookings={bookings} 
+          customers={customers} 
+          services={services} 
+          settings={settings} 
+          inventory={inventory} 
+          onAdd={async (d) => { 
+            if(isMockMode) {
+              const newT = { ...d, id: Math.random().toString(36).substr(2, 9) } as Transaction;
+              setTransactions(prev => [...prev, newT]);
+              return;
+            }
+            await addDoc(collection(db, "transactions"), d); 
+          }} 
+          onUpdate={(id, d) => {
+            if (isMockMode) {
+              setTransactions(prev => prev.map(t => t.id === id ? { ...t, ...d } : t));
+              return;
+            }
+            updateDoc(doc(db, "transactions", id), d);
+          }} 
+          onDelete={(id) => {
+            if (isMockMode) {
+              setTransactions(prev => prev.filter(t => t.id !== id));
+              return;
+            }
+            deleteDoc(doc(db, "transactions", id));
+          }} 
+        />;
         case View.ADMIN_MARKETING: return <AdminMarketing 
           customers={customers} 
           promotions={promotions} 
@@ -351,7 +448,10 @@ const App: React.FC = () => {
         case View.ADMIN_INVENTORY: return <AdminInventory 
           inventory={inventory} 
           onUpdate={async (id, data) => {
-            if (isMockMode) return;
+            if (isMockMode) {
+              setInventory(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
+              return;
+            }
             try {
               if (!auth.currentUser) await signInAnonymously(auth);
               await updateDoc(doc(db, "inventory", id), data);
@@ -363,7 +463,10 @@ const App: React.FC = () => {
             }
           }} 
           onDelete={async (id) => {
-            if (isMockMode) return;
+            if (isMockMode) {
+              setInventory(prev => prev.filter(item => item.id !== id));
+              return;
+            }
             try {
               if (!auth.currentUser) await signInAnonymously(auth);
               await deleteDoc(doc(db, "inventory", id));
@@ -376,7 +479,9 @@ const App: React.FC = () => {
           }} 
           onAdd={async (data) => {
             if(isMockMode) {
-              alert("Modo de Demonstração: O item foi simulado, mas não será salvo permanentemente.");
+              const newItem = { ...data, id: Math.random().toString(36).substr(2, 9) } as InventoryItem;
+              setInventory(prev => [...prev, newItem]);
+              alert("Modo de Demonstração: O item foi adicionado localmente.");
               return;
             }
             try {
