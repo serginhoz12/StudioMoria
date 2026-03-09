@@ -265,7 +265,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </button>
         </div>
 
-        {activeTab === 'home' && settings.loyaltyConfig?.enabled && (
+        {activeTab === 'home' && settings.loyaltyConfig?.enabled && customer.isLoyaltyEnabled !== false && (
           <div className="bg-white p-8 rounded-[3.5rem] border border-tea-100 shadow-xl relative overflow-hidden animate-slide-up">
             <div className="absolute top-0 right-0 p-6 opacity-5 text-8xl">💎</div>
             <div className="relative z-10">

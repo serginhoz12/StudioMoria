@@ -79,6 +79,12 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
             <span className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.3em]">Membro Gold Moriá</span>
             <h2 className="text-4xl font-serif font-bold text-tea-950 italic leading-tight">{customer.name}</h2>
             <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Documento: {customer.cpf}</p>
+            {customer.isLoyaltyEnabled !== false && (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xl">💎</span>
+                <span className="text-sm font-bold text-tea-900">{customer.loyaltyPoints || 0} Pontos de Fidelidade</span>
+              </div>
+            )}
           </div>
           <div className="bg-tea-50 px-6 py-3 rounded-2xl border border-tea-100 flex items-center gap-3">
              <div className="w-3 h-3 bg-tea-500 rounded-full animate-pulse"></div>

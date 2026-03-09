@@ -512,18 +512,35 @@ const App: React.FC = () => {
           onLogin={async (identifier, pass) => {
             const cleanInput = identifier.replace(/\D/g, '');
             
-            // Try local search first (WhatsApp)
-            let user = customers.find(c => c.whatsapp.replace(/\D/g, '') === cleanInput && c.password === pass);
+            // Try local search first (WhatsApp or CPF)
+            let user = customers.find(c => {
+              const cleanWa = c.whatsapp.replace(/\D/g, '');
+              const cleanCpf = c.cpf.replace(/\D/g, '');
+              return (cleanWa === cleanInput || cleanCpf === cleanInput) && c.password === pass;
+            });
             
             // If not found and list might be empty due to permissions, try direct query
             if (!user && !isMockMode) {
               try {
+                // Try WhatsApp
                 const qWa = query(collection(db, "customers"), where("whatsapp", "==", cleanInput));
                 const snapWa = await getDocs(qWa);
                 if (!snapWa.empty) {
                   const found = snapWa.docs[0].data() as Customer;
                   if (found.password === pass) {
                     user = { ...found, id: snapWa.docs[0].id };
+                  }
+                }
+
+                // If still not found, try CPF
+                if (!user) {
+                  const qCpf = query(collection(db, "customers"), where("cpf", "==", identifier)); // CPF might have dots/dashes in DB
+                  const snapCpf = await getDocs(qCpf);
+                  if (!snapCpf.empty) {
+                    const found = snapCpf.docs[0].data() as Customer;
+                    if (found.password === pass) {
+                      user = { ...found, id: snapCpf.docs[0].id };
+                    }
                   }
                 }
               } catch (err) {
