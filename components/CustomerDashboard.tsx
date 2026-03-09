@@ -97,10 +97,13 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 
         if (hasConflict) return false;
 
-        // Check if the service exceeds business hours
+        // Check if the service exceeds business hours (Allow up to 2 hours overtime per CLT)
         const [date] = slot.dateTime.split(' ');
-        const closingTime = new Date(`${date}T${settings.businessHours.end}`).getTime();
-        if (slotEnd > closingTime) return false;
+        const pro = settings.teamMembers.find(m => m.id === slot.teamMemberId);
+        const closingTimeStr = pro?.businessHours?.end || settings.businessHours.end;
+        const closingTime = new Date(`${date}T${closingTimeStr}`).getTime();
+        const maxEndTime = closingTime + (120 * 60 * 1000); // + 2 hours
+        if (slotEnd > maxEndTime) return false;
 
         return true;
       }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));

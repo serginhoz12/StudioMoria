@@ -58,15 +58,26 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
   }, [bookings, selectedDate]);
 
-  const startHourNum = parseInt((settings?.businessHours?.start || "08:00").split(':')[0]);
-  const endHourNum = parseInt((settings?.businessHours?.end || "19:00").split(':')[0]);
+  const selectedPro = useMemo(() => teamMembers.find(m => m.id === selectedProId), [teamMembers, selectedProId]);
 
-  const timeSlots = Array.from({ length: (endHourNum - startHourNum) * 2 }, (_, i) => {
-    const totalMinutes = startHourNum * 60 + i * 30;
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-  });
+  const timeSlots = useMemo(() => {
+    const start = selectedPro?.businessHours?.start || settings?.businessHours?.start || "08:00";
+    const end = selectedPro?.businessHours?.end || settings?.businessHours?.end || "19:00";
+    
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+    
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+    
+    const slots = [];
+    for (let t = startTotal; t < endTotal; t += 30) {
+      const h = Math.floor(t / 60);
+      const m = t % 60;
+      slots.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+    }
+    return slots;
+  }, [selectedPro, settings?.businessHours]);
 
   const getSlotData = (hour: string) => {
     const fullDateTime = `${selectedDate} ${hour}`;
@@ -133,7 +144,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         if (!confirm(`Hoje é dia de folga de ${pro.name}. Deseja liberar a agenda mesmo assim?`)) return;
       }
 
-      if (!confirm(`Deseja liberar TODOS os horários de ${settings?.businessHours?.start} às ${settings?.businessHours?.end} para o dia ${new Date(selectedDate + 'T00:00:00').toLocaleDateString()}?`)) return;
+      const start = pro?.businessHours?.start || settings?.businessHours?.start || "08:00";
+      const end = pro?.businessHours?.end || settings?.businessHours?.end || "19:00";
+      if (!confirm(`Deseja liberar TODOS os horários de ${start} às ${end} para o dia ${new Date(selectedDate + 'T00:00:00').toLocaleDateString()}?`)) return;
       
       setIsProcessing(true);
       try {
