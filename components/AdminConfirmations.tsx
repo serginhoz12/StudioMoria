@@ -42,6 +42,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [usedProducts, setUsedProducts] = useState<{ productId: string; quantity: number }[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [editingPrices, setEditingPrices] = useState<{ [key: string]: number }>({});
 
   const handleCompleteService = async () => {
     if (!performingService || !performanceData.teamMemberId || !performanceData.serviceId || !performanceData.price) return alert("Preencha todos os campos.");
@@ -186,10 +187,16 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const handleAction = async (id: string, status: 'scheduled' | 'cancelled') => {
     try {
       if (!(db as any)._isMock) {
-        await updateDoc(doc(db, "bookings", id), { 
+        const updateData: any = { 
           status,
           updatedAt: new Date().toISOString()
-        });
+        };
+        
+        if (status === 'scheduled' && editingPrices[id] !== undefined) {
+          updateData.originalPrice = editingPrices[id];
+        }
+
+        await updateDoc(doc(db, "bookings", id), updateData);
       }
       if (onUpdateStatus) {
         onUpdateStatus(id, status);
@@ -240,9 +247,18 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    </button>
                    <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">
                      {b.serviceName || 'Serviço'}
-                     {b.originalPrice && <span className="ml-2 text-gray-400">• R$ {b.originalPrice.toFixed(2)}</span>}
                    </p>
-                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">🗓️ {b.dateTime}</p>
+                   <div className="flex items-center gap-2 mt-1">
+                     <span className="text-[9px] font-bold text-gray-400 uppercase">R$</span>
+                     <input 
+                       type="number" 
+                       value={editingPrices[b.id] !== undefined ? editingPrices[b.id] : (b.originalPrice || 0)}
+                       onChange={e => setEditingPrices({ ...editingPrices, [b.id]: Number(e.target.value) })}
+                       className="w-20 p-1 bg-gray-50 border border-gray-100 rounded-lg text-[10px] font-bold text-tea-900 outline-none focus:ring-1 focus:ring-tea-200"
+                     />
+                     <span className="text-[8px] text-orange-500 font-bold uppercase tracking-tighter bg-orange-50 px-2 py-0.5 rounded-full">Ajustar Valor</span>
+                   </div>
+                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">🗓️ {b.dateTime}</p>
                    {b.teamMemberName && <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">👤 Profissional: {b.teamMemberName}</p>}
                 </div>
               </div>

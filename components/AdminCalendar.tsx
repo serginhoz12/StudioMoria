@@ -38,6 +38,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   // State for product usage during completion
   const [usedProducts, setUsedProducts] = useState<{ productId: string; quantity: number }[]>([]);
   const [productSearch, setProductSearch] = useState('');
+  const [editingPriceValue, setEditingPriceValue] = useState<number | null>(null);
 
   // Added resetForm function to fix "Cannot find name 'resetForm'" error
   const resetForm = () => {
@@ -175,6 +176,23 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       } finally {
         setIsProcessing(false);
       }
+    }
+  };
+
+  const handleUpdatePrice = async (bookingId: string, newPrice: number) => {
+    if ((db as any)._isMock) return;
+    try {
+      setIsProcessing(true);
+      await updateDoc(doc(db, "bookings", bookingId), {
+        originalPrice: newPrice,
+        updatedAt: new Date().toISOString()
+      });
+      alert("Valor atualizado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao atualizar valor:", error);
+      alert("Erro ao atualizar valor.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -514,7 +532,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               <button 
                 key={hour} 
                 disabled={isProcessing}
-                onClick={() => setModal({ open: true, hour, type: data.type === 'locked' ? 'free' : (data.type === 'open' ? 'opened' : 'occupied') })}
+                onClick={() => {
+                  const data = getSlotData(hour);
+                  setModal({ open: true, hour, type: data.type === 'locked' ? 'free' : (data.type === 'open' ? 'opened' : 'occupied') });
+                  if (data.booking) setEditingPriceValue(data.booking.originalPrice || 0);
+                }}
                 className={`p-6 rounded-3xl transition-all flex flex-col items-center justify-center min-h-[100px] ${style} hover:scale-105 active:scale-95`}
               >
                 <span className="text-xl font-serif font-bold italic">{hour}</span>
@@ -571,7 +593,20 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         {b.serviceName}
                         {b.isManual && <span className="text-[7px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">Manual</span>}
                       </div>
-                      <div className="text-[9px] text-gray-400 uppercase tracking-tighter">R$ {b.originalPrice?.toFixed(2) || '0,00'}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-[9px] text-gray-400 uppercase tracking-tighter">R$ {b.originalPrice?.toFixed(2) || '0,00'}</div>
+                        <button 
+                          onClick={() => {
+                            const newPrice = prompt("Novo valor para este procedimento:", b.originalPrice?.toString());
+                            if (newPrice !== null && !isNaN(Number(newPrice))) {
+                              handleUpdatePrice(b.id, Number(newPrice));
+                            }
+                          }}
+                          className="text-[8px] text-tea-600 font-bold uppercase hover:underline"
+                        >
+                          Ajustar
+                        </button>
+                      </div>
                     </td>
                     <td className="py-4">
                       <div className="text-[10px] font-bold text-gray-500 uppercase">{b.teamMemberName}</div>
@@ -732,6 +767,25 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                   </div>
                   
                   <div className="grid grid-cols-1 gap-3">
+                    <div className="p-6 bg-orange-50 rounded-[2rem] border border-orange-100 space-y-3">
+                      <p className="text-[9px] font-bold text-orange-800 uppercase tracking-widest text-center">Ajustar Valor do Procedimento</p>
+                      <div className="flex gap-2">
+                        <input 
+                          type="number" 
+                          value={editingPriceValue || 0}
+                          onChange={e => setEditingPriceValue(Number(e.target.value))}
+                          className="flex-1 p-3 bg-white border border-orange-100 rounded-xl text-xs outline-none font-bold text-tea-900" 
+                        />
+                        <button 
+                          onClick={() => handleUpdatePrice(getSlotData(modal.hour).booking!.id, editingPriceValue || 0)}
+                          disabled={isProcessing}
+                          className="px-4 bg-tea-900 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                        >
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4">
                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center">Produtos Utilizados</p>
                       
