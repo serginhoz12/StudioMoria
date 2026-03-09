@@ -27,6 +27,7 @@ export interface Customer {
   agreedToTerms: boolean;
   history: Booking[];
   loyaltyPoints?: number;
+  isLoyaltyEnabled?: boolean;
   birthday?: string; // YYYY-MM-DD
 }
 

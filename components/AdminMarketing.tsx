@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Promotion, Service, Booking } from '../types';
+import { Customer, Promotion, Service, Booking, SalonSettings } from '../types';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../firebase.ts';
 import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
@@ -10,15 +10,21 @@ interface AdminMarketingProps {
   promotions: Promotion[];
   services: Service[];
   bookings: Booking[];
+  settings: SalonSettings;
+  onUpdateSettings: (data: Partial<SalonSettings>) => void;
+  onUpdateCustomer: (id: string, data: Partial<Customer>) => void;
 }
 
 const AdminMarketing: React.FC<AdminMarketingProps> = ({ 
   customers = [], 
   promotions = [], 
   services = [],
-  bookings = []
+  bookings = [],
+  settings,
+  onUpdateSettings,
+  onUpdateCustomer
 }) => {
-  const [activeTab, setActiveTab] = useState<'promotions' | 'tips'>('promotions');
+  const [activeTab, setActiveTab] = useState<'promotions' | 'tips' | 'loyalty'>('promotions');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [selectedPromotion, setSelectedPromotion] = useState<Promotion | null>(null);
@@ -268,17 +274,187 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
             >
               Dicas de Estética ✨
             </button>
+            <button 
+              onClick={() => { setActiveTab('loyalty'); setShowForm(false); }}
+              className={`text-[10px] font-bold uppercase tracking-[0.2em] transition-all pb-1 border-b-2 ${activeTab === 'loyalty' ? 'border-tea-900 text-tea-950' : 'border-transparent text-gray-400'}`}
+            >
+              Fidelidade 💎
+            </button>
           </div>
         </div>
-        <button 
-          onClick={() => setShowForm(!showForm)} 
-          className="w-full sm:w-auto bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
-        >
-          {showForm ? '← Voltar' : activeTab === 'promotions' ? '+ Nova Promoção' : '+ Nova Dica'}
-        </button>
+        {activeTab !== 'loyalty' && (
+          <button 
+            onClick={() => setShowForm(!showForm)} 
+            className="w-full sm:w-auto bg-tea-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] shadow-xl hover:bg-black transition-all"
+          >
+            {showForm ? '← Voltar' : activeTab === 'promotions' ? '+ Nova Promoção' : '+ Nova Dica'}
+          </button>
+        )}
       </div>
 
-      {showForm ? (
+      {activeTab === 'loyalty' ? (
+        <div className="space-y-8 animate-slide-up">
+          <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+              <div>
+                <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Configuração do Programa</h3>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Defina como suas clientes ganham e usam pontos</p>
+              </div>
+              <div className="flex items-center gap-4 bg-tea-50 p-2 rounded-2xl">
+                <span className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-4">Status do Programa:</span>
+                <button 
+                  onClick={() => onUpdateSettings({ 
+                    loyaltyConfig: { 
+                      ...(settings.loyaltyConfig || { enabled: false, pointsPerReal: 1, minPointsToRedeem: 100, rewardDescription: '' }), 
+                      enabled: !settings.loyaltyConfig?.enabled 
+                    } 
+                  })}
+                  className={`px-6 py-2 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all ${settings.loyaltyConfig?.enabled ? 'bg-tea-900 text-white shadow-lg' : 'bg-white text-gray-400'}`}
+                >
+                  {settings.loyaltyConfig?.enabled ? 'Ativo ✓' : 'Inativo ✕'}
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Pontos por Real (R$ 1,00)</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    value={settings.loyaltyConfig?.pointsPerReal || 0} 
+                    onChange={e => onUpdateSettings({ 
+                      loyaltyConfig: { 
+                        ...(settings.loyaltyConfig || { enabled: false, pointsPerReal: 1, minPointsToRedeem: 100, rewardDescription: '' }), 
+                        pointsPerReal: Number(e.target.value) 
+                      } 
+                    })}
+                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all" 
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-tea-600 uppercase">Pontos</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Mínimo para Resgate</label>
+                <div className="relative">
+                  <input 
+                    type="number" 
+                    value={settings.loyaltyConfig?.minPointsToRedeem || 0} 
+                    onChange={e => onUpdateSettings({ 
+                      loyaltyConfig: { 
+                        ...(settings.loyaltyConfig || { enabled: false, pointsPerReal: 1, minPointsToRedeem: 100, rewardDescription: '' }), 
+                        minPointsToRedeem: Number(e.target.value) 
+                      } 
+                    })}
+                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all" 
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-tea-600 uppercase">Pontos</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Prêmio do Resgate</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: R$ 50 de desconto ou Hidratação Grátis"
+                  value={settings.loyaltyConfig?.rewardDescription || ''} 
+                  onChange={e => onUpdateSettings({ 
+                    loyaltyConfig: { 
+                      ...(settings.loyaltyConfig || { enabled: false, pointsPerReal: 1, minPointsToRedeem: 100, rewardDescription: '' }), 
+                      rewardDescription: e.target.value 
+                    } 
+                  })}
+                  className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all" 
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
+              <div>
+                <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Gestão de Clientes</h3>
+                <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">Habilite ou desabilite o programa para clientes específicos</p>
+              </div>
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => {
+                    if (confirm("Deseja habilitar o programa para TODAS as clientes?")) {
+                      customers.forEach(c => onUpdateCustomer(c.id, { isLoyaltyEnabled: true }));
+                    }
+                  }}
+                  className="px-6 py-3 bg-tea-50 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-100 transition-all"
+                >
+                  Habilitar Todos
+                </button>
+                <button 
+                  onClick={() => {
+                    if (confirm("Deseja desabilitar o programa para TODAS as clientes?")) {
+                      customers.forEach(c => onUpdateCustomer(c.id, { isLoyaltyEnabled: false }));
+                    }
+                  }}
+                  className="px-6 py-3 bg-red-50 text-red-600 rounded-xl font-bold uppercase text-[9px] tracking-widest hover:bg-red-100 transition-all"
+                >
+                  Desabilitar Todos
+                </button>
+              </div>
+            </div>
+
+            <div className="mb-6">
+              <input 
+                type="text" 
+                placeholder="Buscar cliente por nome ou WhatsApp..." 
+                value={searchTerm} 
+                onChange={e => setSearchTerm(e.target.value)} 
+                className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all text-sm" 
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {customers.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase()) || c.whatsapp.includes(searchTerm)).map(c => (
+                <div key={c.id} className="p-6 bg-gray-50 rounded-3xl border border-gray-100 flex items-center justify-between hover:border-tea-200 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center font-bold text-tea-900 shadow-sm">
+                      {c.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-bold text-tea-950 text-sm">{c.name}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-tea-600 font-bold">{c.loyaltyPoints || 0} pts</span>
+                        <span className="text-[10px] text-gray-300">•</span>
+                        <span className="text-[10px] text-gray-400">{c.whatsapp}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => {
+                        const min = settings.loyaltyConfig?.minPointsToRedeem || 0;
+                        const current = c.loyaltyPoints || 0;
+                        if (current < min) return alert(`A cliente precisa de pelo menos ${min} pontos para resgatar.`);
+                        if (confirm(`Deseja resgatar os pontos de ${c.name}? Isso deduzirá ${min} pontos do saldo.`)) {
+                          onUpdateCustomer(c.id, { loyaltyPoints: current - min });
+                          alert("Pontos resgatados com sucesso!");
+                        }
+                      }}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${(c.loyaltyPoints || 0) >= (settings.loyaltyConfig?.minPointsToRedeem || 0) ? 'bg-orange-100 text-orange-600 hover:bg-orange-200 shadow-sm' : 'bg-gray-50 text-gray-200 cursor-not-allowed'}`}
+                      title="Resgatar Prêmio"
+                    >
+                      🎁
+                    </button>
+                    <button 
+                      onClick={() => onUpdateCustomer(c.id, { isLoyaltyEnabled: !c.isLoyaltyEnabled })}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${c.isLoyaltyEnabled ? 'bg-tea-900 text-white shadow-md' : 'bg-white text-gray-300 border border-gray-200'}`}
+                      title={c.isLoyaltyEnabled ? 'Desabilitar Fidelidade' : 'Habilitar Fidelidade'}
+                    >
+                      {c.isLoyaltyEnabled ? '💎' : '⚪'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : showForm ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-slide-up">
           <div className="lg:col-span-8 bg-white p-6 md:p-10 rounded-[3rem] shadow-sm border border-gray-100 space-y-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

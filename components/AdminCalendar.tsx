@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { Booking, Service, TeamMember, SalonSettings, Customer, Transaction, WaitlistEntry, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
-import { collection, addDoc, deleteDoc, doc, updateDoc, writeBatch, getDocs, query, where } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, updateDoc, writeBatch, getDocs, query, where, increment } from "firebase/firestore";
 import CustomerHistoryModal from './CustomerHistoryModal';
 
 interface AdminCalendarProps {
@@ -313,6 +313,20 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             if (item) {
               await onUpdateInventory(item.id, {
                 quantity: Math.max(0, item.quantity - used.quantity)
+              });
+            }
+          }
+        }
+
+        // 4. Award Loyalty Points
+        if (settings?.loyaltyConfig?.enabled) {
+          const customer = customers.find(c => c.id === booking.customerId);
+          // Award points if program is enabled globally AND customer is enabled (or not explicitly disabled)
+          if (customer && customer.isLoyaltyEnabled !== false) {
+            const pointsToAward = Math.floor((booking.originalPrice || 0) * (settings.loyaltyConfig.pointsPerReal || 1));
+            if (pointsToAward > 0) {
+              await updateDoc(doc(db, "customers", customer.id), {
+                loyaltyPoints: increment(pointsToAward)
               });
             }
           }

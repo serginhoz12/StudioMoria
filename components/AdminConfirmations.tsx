@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Booking, Customer, WaitlistEntry, Service, TeamMember, Transaction, InventoryItem, SalonSettings } from '../types';
 import { db } from '../firebase.ts';
-import { collection, addDoc, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, addDoc, deleteDoc, doc, updateDoc, increment } from "firebase/firestore";
 import CustomerHistoryModal from './CustomerHistoryModal';
 
 interface AdminConfirmationsProps {
@@ -112,6 +112,19 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
 
         // 4. Remove from waitlist
         await deleteDoc(doc(db, "waitlist", performingService.id));
+
+        // 5. Award Loyalty Points
+        if (settings?.loyaltyConfig?.enabled) {
+          const customer = customers.find(c => c.id === finalCustomerId);
+          if (customer && customer.isLoyaltyEnabled !== false) {
+            const pointsToAward = Math.floor(performanceData.price * (settings.loyaltyConfig.pointsPerReal || 1));
+            if (pointsToAward > 0) {
+              await updateDoc(doc(db, "customers", customer.id), {
+                loyaltyPoints: increment(pointsToAward)
+              });
+            }
+          }
+        }
       }
       
       setPerformingService(null);
