@@ -37,6 +37,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'faturas'>(initialTab);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [isBooking, setIsBooking] = useState(false);
 
   const handleCancelBooking = async (id: string) => {
@@ -126,6 +127,15 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     });
     return groups;
   }, [availableSlots]);
+
+  const availableDays = useMemo(() => {
+    return Object.keys(groupedSlots).sort();
+  }, [groupedSlots]);
+
+  const slotsForSelectedDay = useMemo(() => {
+    if (!selectedDay) return [];
+    return groupedSlots[selectedDay] || [];
+  }, [groupedSlots, selectedDay]);
 
   const pendingInvoices = useMemo(() => {
     return transactions.filter(t => t.customerId === customer.id && t.type === 'receivable' && t.status === 'pending');
@@ -326,29 +336,50 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
               </div>
             ) : (
               <div className="space-y-8 animate-slide-up">
-                <button onClick={() => setSelectedService(null)} className="text-[10px] font-bold text-tea-600 uppercase tracking-widest flex items-center gap-2">
+                <button onClick={() => { setSelectedService(null); setSelectedDay(null); }} className="text-[10px] font-bold text-tea-600 uppercase tracking-widest flex items-center gap-2">
                   ← Voltar para Serviços
                 </button>
                 
                 <div className="p-8 bg-white rounded-[3rem] shadow-sm border border-gray-100 space-y-4 text-center">
                   <h3 className="text-2xl font-serif text-tea-950 font-bold italic">{selectedService.name}</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Escolha o melhor horário para você</p>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                    {selectedDay ? 'Escolha o melhor horário' : 'Escolha o melhor dia'}
+                  </p>
                 </div>
 
                 <div className="space-y-8">
-                  {Object.keys(groupedSlots).length > 0 ? (
-                    <div className="space-y-8 max-h-[50vh] overflow-y-auto pr-2 custom-scroll">
-                      {Object.entries(groupedSlots).map(([date, slots]: [string, any]) => (
-                        <div key={date} className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-px flex-1 bg-gray-100"></div>
-                            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">
-                              {new Date(date + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                  {availableDays.length > 0 ? (
+                    <div className="animate-fade-in">
+                      {!selectedDay ? (
+                        <div className="grid grid-cols-2 gap-3">
+                          {availableDays.map(day => (
+                            <button 
+                              key={day} 
+                              onClick={() => setSelectedDay(day)}
+                              className="p-6 bg-white border border-tea-100 text-tea-900 rounded-[2rem] font-bold text-xs shadow-sm hover:bg-tea-50 transition-all active:scale-95 flex flex-col items-center gap-1"
+                            >
+                              <span className="opacity-40 text-[8px] uppercase">
+                                {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long' })}
+                              </span>
+                              <span>{new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-6 animate-fade-in">
+                          <div className="flex justify-between items-center px-2">
+                            <span className="text-[10px] font-bold text-tea-800 uppercase tracking-widest">
+                              Horários para {new Date(selectedDay + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
                             </span>
-                            <div className="h-px flex-1 bg-gray-100"></div>
+                            <button 
+                              onClick={() => setSelectedDay(null)}
+                              className="text-[9px] font-bold text-tea-600 uppercase tracking-widest hover:underline"
+                            >
+                              ← Mudar Dia
+                            </button>
                           </div>
                           <div className="grid grid-cols-3 gap-3">
-                            {(slots as Booking[]).map(slot => (
+                            {slotsForSelectedDay.map(slot => (
                               <button 
                                 key={slot.id} 
                                 disabled={isBooking}
@@ -360,7 +391,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                             ))}
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
                   ) : (
                     <div className="p-10 bg-tea-50 rounded-[3rem] border border-tea-100 text-center space-y-6">

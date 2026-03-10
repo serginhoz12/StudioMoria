@@ -24,6 +24,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
   const [isProcessing, setIsProcessing] = useState(false);
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Booking | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const availableSlots = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -81,6 +82,20 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
 
     return nonOverlappingOpenSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
   }, [bookings, selectedServiceDetail, settings.businessHours.end]);
+
+  const availableDays = useMemo(() => {
+    const days = new Set<string>();
+    availableSlots.forEach(slot => {
+      const day = slot.dateTime.split(' ')[0];
+      days.add(day);
+    });
+    return Array.from(days).sort();
+  }, [availableSlots]);
+
+  const slotsForSelectedDay = useMemo(() => {
+    if (!selectedDay) return [];
+    return availableSlots.filter(slot => slot.dateTime.startsWith(selectedDay));
+  }, [availableSlots, selectedDay]);
   
   const scrollToId = (id: string) => {
     const element = document.getElementById(id);
@@ -98,6 +113,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
   const closeServiceModal = () => {
     setSelectedServiceDetail(null);
     setSelectedSlot(null);
+    setSelectedDay(null);
   };
 
   return (
@@ -337,29 +353,60 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               </div>
 
               <div className="space-y-6">
-                <h4 className="text-[11px] font-bold text-tea-900 uppercase tracking-widest border-b border-gray-100 pb-2">Horários Disponíveis</h4>
-                {availableSlots.length > 0 ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    {availableSlots.slice(0, 12).map(slot => (
-                      <button 
-                        key={slot.id} 
-                        onClick={() => {
-                          setSelectedSlot(slot);
-                          setIsWaitlistMode(false);
-                          if (currentUser) {
-                            onAuthClick(); 
-                            closeServiceModal();
-                          } else {
-                            setShowQuickAuth(true);
-                          }
-                        }}
-                        className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-[10px] shadow-lg hover:bg-black transition-all active:scale-95 flex flex-col items-center"
-                      >
-                        <span className="opacity-60 text-[8px] uppercase">{new Date(slot.dateTime.replace(/\[object Object\]/gi, '').replace(' ', 'T')).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
-                        <span>{slot.dateTime.replace(/\[object Object\]/gi, '').split(' ')[1] || '--:--'}</span>
-                      </button>
-                    ))}
-                  </div>
+                <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                  <h4 className="text-[11px] font-bold text-tea-900 uppercase tracking-widest">
+                    {selectedDay ? 'Selecione o Horário' : 'Selecione o Dia'}
+                  </h4>
+                  {selectedDay && (
+                    <button 
+                      onClick={() => setSelectedDay(null)}
+                      className="text-[9px] font-bold text-tea-600 uppercase tracking-widest hover:underline"
+                    >
+                      ← Voltar aos Dias
+                    </button>
+                  )}
+                </div>
+
+                {availableDays.length > 0 ? (
+                  <>
+                    {!selectedDay ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {availableDays.map(day => (
+                          <button 
+                            key={day} 
+                            onClick={() => setSelectedDay(day)}
+                            className="p-4 bg-white border border-tea-100 text-tea-900 rounded-2xl font-bold text-[10px] shadow-sm hover:bg-tea-50 transition-all active:scale-95 flex flex-col items-center"
+                          >
+                            <span className="opacity-60 text-[8px] uppercase">
+                              {new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' })}
+                            </span>
+                            <span>{new Date(day + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3 animate-fade-in">
+                        {slotsForSelectedDay.map(slot => (
+                          <button 
+                            key={slot.id} 
+                            onClick={() => {
+                              setSelectedSlot(slot);
+                              setIsWaitlistMode(false);
+                              if (currentUser) {
+                                onAuthClick(); 
+                                closeServiceModal();
+                              } else {
+                                setShowQuickAuth(true);
+                              }
+                            }}
+                            className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-[10px] shadow-lg hover:bg-black transition-all active:scale-95 flex flex-col items-center"
+                          >
+                            <span>{slot.dateTime.split(' ')[1]}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="p-8 bg-tea-50 rounded-3xl text-center space-y-4">
                     <p className="text-xs text-tea-700 font-medium italic">Nenhum horário disponível no momento.</p>
@@ -379,7 +426,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
                     </button>
                   </div>
                 )}
-                {availableSlots.length > 0 && (
+                
+                {availableDays.length > 0 && (
                    <div className="pt-4">
                       <p className="text-[9px] text-gray-400 text-center uppercase tracking-widest mb-4">Ou se preferir ser avisada de novos horários:</p>
                       <button 
