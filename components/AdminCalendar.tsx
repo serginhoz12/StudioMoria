@@ -49,6 +49,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setManualTime('');
   };
 
+  const timeToMinutes = (time: string) => {
+    if (!time) return 0;
+    const [h, m] = time.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const minutesToTime = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+  };
+
   const monthlyBookings = useMemo(() => {
     const [year, month] = selectedDate.split('-').map(Number);
     return bookings.filter(b => {
@@ -61,20 +73,20 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const selectedPro = useMemo(() => teamMembers.find(m => m.id === selectedProId), [teamMembers, selectedProId]);
 
   const timeSlots = useMemo(() => {
-    const start = selectedPro?.businessHours?.start || settings?.businessHours?.start || "08:00";
-    const end = selectedPro?.businessHours?.end || settings?.businessHours?.end || "19:00";
+    const salonStart = settings?.businessHours?.start || "08:00";
+    const salonEnd = settings?.businessHours?.end || "19:00";
     
-    const [startH, startM] = start.split(':').map(Number);
-    const [endH, endM] = end.split(':').map(Number);
+    // Profissional pode ter horário próprio, mas respeitamos o limite do expediente do salão
+    const rawStart = selectedPro?.businessHours?.start || salonStart;
+    const rawEnd = selectedPro?.businessHours?.end || salonEnd;
     
-    const startTotal = startH * 60 + startM;
-    const endTotal = endH * 60 + endM;
+    // Interseção: o mais tarde dos inícios e o mais cedo dos fins (expediente)
+    const startMin = Math.max(timeToMinutes(rawStart), timeToMinutes(salonStart));
+    const endMin = Math.min(timeToMinutes(rawEnd), timeToMinutes(salonEnd));
     
     const slots = [];
-    for (let t = startTotal; t < endTotal; t += 30) {
-      const h = Math.floor(t / 60);
-      const m = t % 60;
-      slots.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+    for (let t = startMin; t < endMin; t += 30) {
+      slots.push(minutesToTime(t));
     }
     return slots;
   }, [selectedPro, settings?.businessHours]);
@@ -144,28 +156,44 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         if (!confirm(`Hoje é dia de folga de ${pro.name}. Deseja liberar a agenda mesmo assim?`)) return;
       }
 
-      const start = pro?.businessHours?.start || settings?.businessHours?.start || "08:00";
-      const end = pro?.businessHours?.end || settings?.businessHours?.end || "19:00";
+      const salonStart = settings?.businessHours?.start || "08:00";
+      const salonEnd = settings?.businessHours?.end || "19:00";
+      const rawStart = pro?.businessHours?.start || salonStart;
+      const rawEnd = pro?.businessHours?.end || salonEnd;
+      
+      const startMin = Math.max(timeToMinutes(rawStart), timeToMinutes(salonStart));
+      const endMin = Math.min(timeToMinutes(rawEnd), timeToMinutes(salonEnd));
+      const start = minutesToTime(startMin);
+      const end = minutesToTime(endMin);
+
       if (!confirm(`Deseja liberar TODOS os horários de ${start} às ${end} para o dia ${new Date(selectedDate + 'T00:00:00').toLocaleDateString()}?`)) return;
       
       setIsProcessing(true);
       try {
+        const batch = writeBatch(db);
+        let count = 0;
         for (const hour of timeSlots) {
           const slot = getSlotData(hour);
           if (slot.type === 'locked') {
-            await addDoc(collection(db, "bookings"), {
+            const newDocRef = doc(collection(db, "bookings"));
+            batch.set(newDocRef, {
               dateTime: `${selectedDate} ${hour}`,
               status: 'open',
               teamMemberId: selectedProId,
-              teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
+              teamMemberName: pro?.name || 'Profissional',
               customerName: 'LIBERADO PARA CLIENTES',
               customerId: 'none',
               createdAt: new Date().toISOString()
             });
+            count++;
           }
         }
-        alert("Agenda do dia liberada com sucesso!");
+        if (count > 0) {
+          await batch.commit();
+        }
+        alert(`${count} horários liberados com sucesso!`);
       } catch (e) {
+        console.error(e);
         alert("Erro ao liberar agenda.");
       } finally {
         setIsProcessing(false);
@@ -179,12 +207,15 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       
       setIsProcessing(true);
       try {
+        const batch = writeBatch(db);
         const openBookings = bookings.filter(b => b.status === 'open' && b.dateTime.startsWith(selectedDate) && b.teamMemberId === selectedProId);
-        for (const b of openBookings) {
-          await deleteDoc(doc(db, "bookings", b.id));
-        }
-        alert("Horários bloqueados com sucesso.");
+        openBookings.forEach(b => {
+          batch.delete(doc(db, "bookings", b.id));
+        });
+        await batch.commit();
+        alert(`${openBookings.length} horários bloqueados com sucesso.`);
       } catch (e) {
+        console.error(e);
         alert("Erro ao bloquear horários.");
       } finally {
         setIsProcessing(false);
@@ -370,41 +401,54 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       let currentDate = new Date(start);
       const pro = teamMembers.find(m => m.id === selectedProId);
       
+      let batch = writeBatch(db);
+      let operationCount = 0;
+
       while (currentDate <= end) {
         const dateStr = currentDate.toISOString().split('T')[0];
         const dayOfWeek = currentDate.getDay();
 
         // Pula dias de folga do profissional
-        if (pro?.offDays?.includes(dayOfWeek)) {
-          currentDate.setDate(currentDate.getDate() + 1);
-          continue;
-        }
-        
-        // Respeita o horário de funcionamento do salão (timeSlots já é baseado nisso)
-        for (const hour of timeSlots) {
-          const fullDateTime = `${dateStr} ${hour}`;
-          
-          // Verifica se já existe algo nesse horário para evitar duplicatas
-          const exists = bookings.some(b => 
-            b.dateTime === fullDateTime && 
-            b.teamMemberId === selectedProId && 
-            b.status !== 'cancelled'
-          );
-          
-          if (!exists) {
-            await addDoc(collection(db, "bookings"), {
-              dateTime: fullDateTime,
-              status: 'open',
-              teamMemberId: selectedProId,
-              teamMemberName: pro?.name || 'Profissional',
-              customerName: 'LIBERADO PARA CLIENTES',
-              customerId: 'none',
-              createdAt: new Date().toISOString()
-            });
+        if (!pro?.offDays?.includes(dayOfWeek)) {
+          // Respeita o horário de funcionamento do salão (timeSlots já é baseado nisso)
+          for (const hour of timeSlots) {
+            const fullDateTime = `${dateStr} ${hour}`;
+            
+            // Verifica se já existe algo nesse horário para evitar duplicatas
+            const exists = bookings.some(b => 
+              b.dateTime === fullDateTime && 
+              b.teamMemberId === selectedProId && 
+              b.status !== 'cancelled'
+            );
+            
+            if (!exists) {
+              const newDocRef = doc(collection(db, "bookings"));
+              batch.set(newDocRef, {
+                dateTime: fullDateTime,
+                status: 'open',
+                teamMemberId: selectedProId,
+                teamMemberName: pro?.name || 'Profissional',
+                customerName: 'LIBERADO PARA CLIENTES',
+                customerId: 'none',
+                createdAt: new Date().toISOString()
+              });
+              operationCount++;
+
+              if (operationCount >= 400) {
+                await batch.commit();
+                batch = writeBatch(db);
+                operationCount = 0;
+              }
+            }
           }
         }
         currentDate.setDate(currentDate.getDate() + 1);
       }
+      
+      if (operationCount > 0) {
+        await batch.commit();
+      }
+      
       alert("Período liberado com sucesso!");
       setIsBulkModalOpen(false);
     } catch (e) {
