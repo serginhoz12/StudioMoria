@@ -451,6 +451,7 @@ const App: React.FC = () => {
         />;
         case View.ADMIN_INVENTORY: return <AdminInventory 
           inventory={inventory} 
+          customers={customers}
           onUpdate={async (id, data) => {
             if (isMockMode) {
               setInventory(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
@@ -570,6 +571,78 @@ const App: React.FC = () => {
               alert(`Erro ao cadastrar produto: ${err.message || 'Verifique sua conexão.'}`);
             }
           }} 
+          onSellProduct={async (sale) => {
+            if (isMockMode) {
+              const saleId = Math.random().toString(36).substr(2, 9);
+              const fullSale = { ...sale, id: saleId };
+              
+              // Update inventory
+              setInventory(prev => prev.map(item => 
+                item.id === sale.productId ? { ...item, quantity: item.quantity - sale.quantity } : item
+              ));
+              
+              // Update customer history
+              setCustomers(prev => prev.map(c => 
+                c.id === sale.customerId ? { ...c, productHistory: [...(c.productHistory || []), fullSale] } : c
+              ));
+              
+              // Add transaction
+              const transId = Math.random().toString(36).substr(2, 9);
+              setTransactions(prev => [...prev, {
+                id: transId,
+                type: 'receivable',
+                description: `Venda: ${sale.productName} para ${sale.customerName}`,
+                amount: sale.price,
+                date: sale.saleDate,
+                status: 'paid',
+                customerId: sale.customerId,
+                customerName: sale.customerName,
+                createdAt: new Date().toISOString()
+              } as any]);
+              
+              alert("Venda realizada com sucesso (Modo Demonstração)!");
+              return;
+            }
+            
+            try {
+              if (!auth.currentUser) await signInAnonymously(auth);
+              
+              // 1. Update inventory
+              const item = inventory.find(i => i.id === sale.productId);
+              if (item) {
+                await updateDoc(doc(db, "inventory", item.id), {
+                  quantity: item.quantity - sale.quantity
+                });
+              }
+              
+              // 2. Add to customer history
+              const customer = customers.find(c => c.id === sale.customerId);
+              if (customer) {
+                const saleId = Math.random().toString(36).substr(2, 9);
+                const fullSale = { ...sale, id: saleId };
+                await updateDoc(doc(db, "customers", customer.id), {
+                  productHistory: [...(customer.productHistory || []), fullSale]
+                });
+              }
+              
+              // 3. Add transaction
+              await addDoc(collection(db, "transactions"), {
+                type: 'receivable',
+                description: `Venda: ${sale.productName} para ${sale.customerName}`,
+                amount: sale.price,
+                date: sale.saleDate,
+                status: 'paid',
+                customerId: sale.customerId,
+                customerName: sale.customerName,
+                createdAt: new Date().toISOString()
+              });
+              
+              alert("Venda registrada com sucesso!");
+            } catch (err: any) {
+              console.error("Erro ao registrar venda:", err);
+              alert("Erro ao registrar venda: " + err.message);
+            }
+          }}
         />;
         default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
       }

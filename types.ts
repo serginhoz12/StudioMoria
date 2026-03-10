@@ -26,6 +26,7 @@ export interface Customer {
   receivesNotifications: boolean;
   agreedToTerms: boolean;
   history: Booking[];
+  productHistory?: ProductSale[];
   loyaltyPoints?: number;
   isLoyaltyEnabled?: boolean;
   birthday?: string; // YYYY-MM-DD
@@ -186,6 +187,7 @@ export interface InventoryItem {
   weightUnit?: string;
   purchasePrice?: number;
   purchaseDate?: string;
+  expiryDate?: string;
   usageStartDate?: string;
   paymentMethod?: PaymentMethod;
   installmentsCount?: number;
@@ -196,4 +198,17 @@ export interface LoyaltyConfig {
   pointsPerReal: number;
   minPointsToRedeem: number;
   rewardDescription: string;
+}
+
+export interface ProductSale {
+  id: string;
+  productId: string;
+  productName: string;
+  customerId: string;
+  customerName: string;
+  quantity: number;
+  price: number;
+  saleDate: string;
+  expiryDate?: string;
+  reminderSent?: boolean;
 }

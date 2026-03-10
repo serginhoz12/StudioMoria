@@ -90,6 +90,35 @@ const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ custome
         </div>
       </section>
 
+      {/* Histórico de Produtos */}
+      {customer.productHistory && customer.productHistory.length > 0 && (
+        <section>
+          <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.2em] mb-8 border-b border-gray-50 pb-4">Produtos Adquiridos</h4>
+          <div className="space-y-4">
+            {customer.productHistory.sort((a,b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()).map(sale => (
+              <div key={sale.id} className="flex justify-between p-6 bg-white border border-gray-50 rounded-[2rem] items-center hover:border-tea-100 transition-all shadow-sm">
+                <div className="flex-1">
+                  <p className="font-bold text-tea-950 text-sm leading-tight">{sale.productName}</p>
+                  <div className="flex items-center gap-4 mt-1">
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">
+                      💰 R$ {sale.price.toFixed(2)} • 📦 Qtd: {sale.quantity} • 🗓️ Compra: {new Date(sale.saleDate + 'T00:00:00').toLocaleDateString()}
+                    </p>
+                  </div>
+                  {sale.expiryDate && (
+                    <p className={`text-[9px] font-bold uppercase mt-1 ${new Date(sale.expiryDate).getTime() < new Date().getTime() + (15 * 24 * 60 * 60 * 1000) ? 'text-red-500' : 'text-orange-600'}`}>
+                      ⚠️ Vencimento do Produto: {new Date(sale.expiryDate + 'T00:00:00').toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="w-10 h-10 bg-tea-50 text-tea-700 rounded-xl flex items-center justify-center text-lg">
+                  🛍️
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Histórico de Lista de Espera */}
       {myWaitlist.length > 0 && (
         <section>

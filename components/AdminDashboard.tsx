@@ -207,6 +207,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
     return inventory.filter(item => item.quantity <= item.minQuantity);
   }, [inventory]);
 
+  const expiringItems = useMemo(() => {
+    const thirtyDaysFromNow = new Date().getTime() + (30 * 24 * 60 * 60 * 1000);
+    return inventory.filter(item => item.expiryDate && new Date(item.expiryDate).getTime() <= thirtyDaysFromNow);
+  }, [inventory]);
+
   const stats = [
     { label: 'Visitas ao Site', value: totalVisits.toLocaleString(), icon: '👁️', color: 'bg-indigo-50 text-indigo-600' },
     { label: 'Custos Fixos', value: `R$ ${fixedCosts.toLocaleString('pt-BR')}`, icon: '🏠', color: 'bg-orange-50 text-orange-600' },
@@ -338,6 +343,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
             ))}
             {lowStockItems.length === 0 && (
               <p className="text-center py-10 text-gray-300 italic text-sm">Estoque em dia.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Alerta de Vencimento de Produtos */}
+        <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-bold text-tea-900 font-serif italic">Produtos a Vencer</h3>
+            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${expiringItems.length > 0 ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+              {expiringItems.length} Alertas
+            </span>
+          </div>
+          <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scroll">
+            {expiringItems.map(item => (
+              <div key={item.id} className="flex items-center justify-between p-3 bg-red-50/30 rounded-2xl border border-red-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xs">📅</div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800">{item.name}</p>
+                    <p className={`text-[8px] font-bold uppercase tracking-widest ${new Date(item.expiryDate!).getTime() < new Date().getTime() ? 'text-red-700' : 'text-red-500'}`}>
+                      {new Date(item.expiryDate!).getTime() < new Date().getTime() ? 'VENCIDO EM: ' : 'VENCE EM: '} 
+                      {new Date(item.expiryDate! + 'T00:00:00').toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {expiringItems.length === 0 && (
+              <p className="text-center py-10 text-gray-300 italic text-sm">Nenhum produto próximo ao vencimento.</p>
             )}
           </div>
         </div>

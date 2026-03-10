@@ -1,17 +1,25 @@
 
 import React, { useState } from 'react';
-import { InventoryItem } from '../types';
+import { InventoryItem, Customer, ProductSale } from '../types';
 
 interface AdminInventoryProps {
   inventory: InventoryItem[];
+  customers: Customer[];
   onUpdate: (id: string, data: Partial<InventoryItem>) => void;
   onDelete: (id: string) => void;
   onAdd: (data: Omit<InventoryItem, 'id'>) => void;
+  onSellProduct: (sale: Omit<ProductSale, 'id'>) => void;
 }
 
-const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, onDelete, onAdd }) => {
+const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, onUpdate, onDelete, onAdd, onSellProduct }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sellingItem, setSellingItem] = useState<InventoryItem | null>(null);
+  const [saleForm, setSaleForm] = useState({
+    customerId: '',
+    quantity: 1,
+    price: 0
+  });
   
   const initialItem: Omit<InventoryItem, 'id'> = {
     name: '',
@@ -25,6 +33,7 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
     weightUnit: 'g',
     purchasePrice: 0,
     purchaseDate: new Date().toISOString().split('T')[0],
+    expiryDate: '',
     usageStartDate: '',
     paymentMethod: 'pix' as any,
     installmentsCount: 1
@@ -220,6 +229,15 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
               />
             </div>
             <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data de Vencimento</label>
+              <input 
+                type="date" 
+                value={formItem.expiryDate || ''}
+                onChange={e => setFormItem({...formItem, expiryDate: e.target.value})}
+                className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+              />
+            </div>
+            <div>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data Início de Uso</label>
               <input 
                 type="date" 
@@ -314,6 +332,11 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                 <td className="px-6 py-4">
                   <div className="text-xs text-tea-800 font-medium">R$ {item.purchasePrice?.toFixed(2) || '0,00'}</div>
                   <div className="text-[9px] text-gray-400 uppercase">Compra: {item.purchaseDate ? new Date(item.purchaseDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</div>
+                  {item.expiryDate && (
+                    <div className={`text-[9px] font-bold uppercase ${new Date(item.expiryDate).getTime() < new Date().getTime() + (30 * 24 * 60 * 60 * 1000) ? 'text-red-500' : 'text-orange-600'}`}>
+                      Venc: {new Date(item.expiryDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                    </div>
+                  )}
                   <div className="text-[9px] text-tea-600 uppercase">Uso: {item.usageStartDate ? new Date(item.usageStartDate + 'T00:00:00').toLocaleDateString('pt-BR') : '-'}</div>
                 </td>
                 <td className="px-6 py-4 text-center">
@@ -345,22 +368,35 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
                   )}
                 </td>
                 <td className="px-6 py-4 text-center bg-tea-50/30 border-l border-tea-50">
-                  <div className="flex justify-center gap-3">
+                  <div className="flex flex-col gap-2 items-center">
+                    <div className="flex justify-center gap-2">
+                      <button 
+                        onClick={() => handleEdit(item)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-tea-700 text-white rounded-lg hover:bg-tea-800 transition-all shadow-sm active:scale-95"
+                        title="Editar este produto"
+                      >
+                        <span className="text-xs">✏️</span>
+                        <span className="text-[10px] font-bold uppercase">Editar</span>
+                      </button>
+                      <button 
+                        onClick={() => { if(confirm('Deseja realmente excluir este item do estoque?')) onDelete(item.id); }}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all shadow-sm active:scale-95"
+                        title="Excluir este produto"
+                      >
+                        <span className="text-xs">🗑️</span>
+                        <span className="text-[10px] font-bold uppercase">Excluir</span>
+                      </button>
+                    </div>
                     <button 
-                      onClick={() => handleEdit(item)}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-tea-700 text-white rounded-xl hover:bg-tea-800 transition-all shadow-lg active:scale-95 ring-2 ring-tea-100"
-                      title="Editar este produto"
+                      onClick={() => {
+                        setSellingItem(item);
+                        setSaleForm({ customerId: '', quantity: 1, price: 0 });
+                      }}
+                      className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-sm active:scale-95"
+                      title="Vender para cliente"
                     >
-                      <span className="text-base">✏️</span>
-                      <span className="text-xs font-bold uppercase tracking-wide">Editar</span>
-                    </button>
-                    <button 
-                      onClick={() => { if(confirm('Deseja realmente excluir este item do estoque?')) onDelete(item.id); }}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all shadow-lg active:scale-95 ring-2 ring-red-100"
-                      title="Excluir este produto"
-                    >
-                      <span className="text-base">🗑️</span>
-                      <span className="text-xs font-bold uppercase tracking-wide">Excluir</span>
+                      <span className="text-xs">💰</span>
+                      <span className="text-[10px] font-bold uppercase">Vender p/ Cliente</span>
                     </button>
                   </div>
                 </td>
@@ -369,6 +405,102 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, onUpdate, on
           </tbody>
         </table>
       </div>
+      {/* Modal de Venda */}
+      {sellingItem && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2.5rem] p-8 max-w-md w-full shadow-2xl border border-tea-100 animate-in zoom-in-95 duration-200">
+            <h3 className="text-xl font-serif font-bold text-tea-900 mb-6 italic">Vender Produto</h3>
+            
+            <div className="space-y-4">
+              <div className="p-4 bg-tea-50 rounded-2xl border border-tea-100 mb-4">
+                <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest mb-1">Produto Selecionado</p>
+                <p className="font-bold text-tea-900">{sellingItem.name}</p>
+                <p className="text-xs text-gray-500">Estoque disponível: {sellingItem.quantity} {sellingItem.unit}</p>
+                {sellingItem.expiryDate && (
+                  <p className="text-[10px] text-orange-600 font-bold mt-1">Vencimento: {new Date(sellingItem.expiryDate + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Selecionar Cliente</label>
+                <select 
+                  value={saleForm.customerId}
+                  onChange={e => setSaleForm({...saleForm, customerId: e.target.value})}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-100 focus:ring-2 focus:ring-tea-500 outline-none bg-gray-50 text-sm"
+                >
+                  <option value="">Selecione uma cliente...</option>
+                  {customers.sort((a, b) => a.name.localeCompare(b.name)).map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Quantidade</label>
+                  <input 
+                    type="number" 
+                    min="1"
+                    max={sellingItem.quantity}
+                    value={saleForm.quantity}
+                    onChange={e => setSaleForm({...saleForm, quantity: Number(e.target.value)})}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-100 focus:ring-2 focus:ring-tea-500 outline-none bg-gray-50 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Preço de Venda (R$)</label>
+                  <input 
+                    type="number" 
+                    value={saleForm.price}
+                    onChange={e => setSaleForm({...saleForm, price: Number(e.target.value)})}
+                    className="w-full px-4 py-3 rounded-2xl border border-gray-100 focus:ring-2 focus:ring-tea-500 outline-none bg-gray-50 text-sm"
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button 
+                onClick={() => setSellingItem(null)}
+                className="flex-1 px-6 py-3 text-gray-400 font-bold uppercase text-[10px] tracking-widest hover:bg-gray-50 rounded-2xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={() => {
+                  if (!saleForm.customerId) {
+                    alert("Por favor, selecione uma cliente.");
+                    return;
+                  }
+                  if (saleForm.quantity > sellingItem.quantity) {
+                    alert("Quantidade superior ao estoque disponível.");
+                    return;
+                  }
+                  
+                  const customer = customers.find(c => c.id === saleForm.customerId);
+                  
+                  onSellProduct({
+                    productId: sellingItem.id,
+                    productName: sellingItem.name,
+                    customerId: saleForm.customerId,
+                    customerName: customer?.name || 'Cliente',
+                    quantity: saleForm.quantity,
+                    price: saleForm.price,
+                    saleDate: new Date().toISOString().split('T')[0],
+                    expiryDate: sellingItem.expiryDate
+                  });
+                  
+                  setSellingItem(null);
+                }}
+                className="flex-1 bg-tea-900 text-white px-6 py-3 rounded-2xl text-[10px] font-bold uppercase tracking-widest shadow-lg hover:bg-black transition-all"
+              >
+                Confirmar Venda
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -265,6 +265,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     };
   }, [lastProcedure, services]);
 
+  const expiringProducts = useMemo(() => {
+    if (!customer.productHistory) return [];
+    const fifteenDaysFromNow = new Date().getTime() + (15 * 24 * 60 * 60 * 1000);
+    return customer.productHistory.filter(sale => 
+      sale.expiryDate && new Date(sale.expiryDate).getTime() <= fifteenDaysFromNow
+    );
+  }, [customer.productHistory]);
+
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in font-sans">
       <header className="bg-gradient-to-b from-tea-900 to-tea-950 pt-16 pb-28 px-8 rounded-b-[5rem] shadow-2xl relative overflow-hidden">
@@ -317,6 +325,27 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
         )}
 
+        {activeTab === 'home' && expiringProducts.length > 0 && (
+          <div className="bg-red-50 p-8 rounded-[3.5rem] border border-red-100 shadow-xl animate-slide-up mb-8">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-xl">⚠️</div>
+              <h4 className="text-sm font-bold text-red-900 uppercase tracking-widest">Atenção ao Vencimento</h4>
+            </div>
+            <p className="text-xs text-red-700 mb-4">Você possui produtos adquiridos que estão próximos do vencimento ou já venceram:</p>
+            <div className="space-y-3">
+              {expiringProducts.map(sale => (
+                <div key={sale.id} className="bg-white/60 p-4 rounded-2xl border border-red-50">
+                  <p className="text-xs font-bold text-red-900">{sale.productName}</p>
+                  <p className="text-[10px] font-bold text-red-600 uppercase tracking-widest mt-1">
+                    {new Date(sale.expiryDate!).getTime() < new Date().getTime() ? 'VENCIDO EM: ' : 'VENCE EM: '}
+                    {new Date(sale.expiryDate! + 'T00:00:00').toLocaleDateString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+ 
         {activeTab === 'agendar' && (
           <div className="space-y-8 animate-slide-up">
             {!selectedService ? (
