@@ -2,8 +2,9 @@
 import { Service, SalonSettings, InventoryItem } from './types';
 
 declare const __BUILD_DATE__: string;
+declare const __APP_VERSION__: string;
 
-export const APP_VERSION = "1.1.4";
+export const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : "1.1.4";
 export const LAST_UPDATE_DATE = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : "12/03, 14:17";
 
 export const INITIAL_SERVICES: Service[] = [
