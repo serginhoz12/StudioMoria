@@ -880,6 +880,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
 
+                    {selectedServiceId && (
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Valor Acordado (R$)</label>
+                        <input 
+                          type="number" 
+                          value={manualPrice}
+                          onChange={e => setManualPrice(Number(e.target.value))}
+                          className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold text-tea-900"
+                        />
+                      </div>
+                    )}
+
                     <button 
                       onClick={() => handleManualBooking()} 
                       className="w-full py-5 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
@@ -968,6 +980,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       <option value="">Selecione o serviço...</option>
                       {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+
+                    {selectedServiceId && (
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Valor Acordado (R$)</label>
+                        <input 
+                          type="number" 
+                          value={manualPrice}
+                          onChange={e => setManualPrice(Number(e.target.value))}
+                          className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold text-tea-900"
+                        />
+                      </div>
+                    )}
 
                     <button 
                       onClick={() => handleManualBooking()} 
