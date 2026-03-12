@@ -101,7 +101,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           type: 'receivable',
           description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)`,
           amount: totalAmount,
-          date: selectedBookingForPayment.dateTime.split(' ')[0],
+          date: new Date().toISOString().split('T')[0],
           status: 'paid',
           customerId: selectedBookingForPayment.customerId,
           customerName: selectedBookingForPayment.customerName,

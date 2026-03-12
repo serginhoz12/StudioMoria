@@ -324,7 +324,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           originalPrice: manualPrice || service.price,
           status: 'scheduled',
           isManual: true,
-          depositStatus: 'paid',
+          depositStatus: 'pending',
           agreedToCancellationPolicy: true,
           policyAgreedAt: new Date().toISOString()
         };
@@ -397,13 +397,16 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
         await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), updateData);
 
-        // 2. Create transaction (only if not already paid)
-        if (selectedBookingForPayment.depositStatus !== 'paid') {
+        // 2. Create transaction
+        const shouldCreateTransaction = selectedBookingForPayment.depositStatus !== 'paid' || 
+                                       (selectedBookingForPayment.status === 'completed' && confirm("Este atendimento já consta como pago. Deseja gerar um NOVO lançamento no caixa mesmo assim?"));
+
+        if (shouldCreateTransaction) {
           await addDoc(collection(db, "transactions"), {
             type: 'receivable',
             description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}`,
             amount: totalAmount,
-            date: selectedBookingForPayment.dateTime.split(' ')[0],
+            date: new Date().toISOString().split('T')[0],
             status: 'paid',
             customerId: selectedBookingForPayment.customerId,
             customerName: selectedBookingForPayment.customerName,
@@ -1050,34 +1053,64 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                           >
                             {booking.customerName}
                           </button>
-                          <p className="text-[10px] text-tea-100 mt-1 font-medium">
-                            {booking.serviceName} - R$ {booking.originalPrice?.toFixed(2)}
-                          </p>
+                          <div className="flex items-center justify-center gap-2 mt-1">
+                            <p className="text-[10px] text-tea-100 font-medium">
+                              {booking.serviceName} - R$ {booking.originalPrice?.toFixed(2)}
+                            </p>
+                            <button 
+                              onClick={() => {
+                                const newPrice = prompt("Novo valor para este procedimento:", booking.originalPrice?.toString());
+                                if (newPrice !== null && !isNaN(Number(newPrice))) {
+                                  handleUpdatePrice(booking.id, Number(newPrice));
+                                }
+                              }}
+                              className="text-[8px] bg-white/10 hover:bg-white/20 px-2 py-1 rounded font-bold uppercase tracking-tighter"
+                            >
+                              Ajustar
+                            </button>
+                          </div>
+                          {booking.status === 'completed' && (
+                            <span className="inline-block mt-2 px-3 py-1 bg-green-500/30 text-green-200 rounded-full text-[8px] font-bold uppercase tracking-widest border border-green-500/30">
+                              ✓ Finalizado
+                            </span>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
-                          {booking.depositStatus !== 'paid' && (
+                          {booking.status !== 'completed' ? (
+                            <>
+                              {booking.depositStatus !== 'paid' && (
+                                <button 
+                                  onClick={() => handleCompleteBooking(booking, true)} 
+                                  disabled={isProcessing}
+                                  className="col-span-2 py-3 bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-200 rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                                >
+                                  💰 Confirmar Pagamento Antecipado
+                                </button>
+                              )}
+                              <button 
+                                onClick={() => handleCompleteBooking(booking)} 
+                                disabled={isProcessing}
+                                className="py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                              >
+                                Concluir
+                              </button>
+                              <button 
+                                onClick={() => handleCloseSlot(booking.id)} 
+                                className="py-3 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                              >
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
                             <button 
-                              onClick={() => handleCompleteBooking(booking, true)} 
+                              onClick={() => handleCompleteBooking(booking)} 
                               disabled={isProcessing}
-                              className="col-span-2 py-3 bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-200 rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                              className="col-span-2 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
                             >
-                              💰 Confirmar Pagamento Antecipado
+                              🔄 Re-lançar no Caixa
                             </button>
                           )}
-                          <button 
-                            onClick={() => handleCompleteBooking(booking)} 
-                            disabled={isProcessing}
-                            className="py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
-                          >
-                            Concluir
-                          </button>
-                          <button 
-                            onClick={() => handleCloseSlot(booking.id)} 
-                            className="py-3 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
-                          >
-                            Cancelar
-                          </button>
                         </div>
                       </div>
                     ))}

@@ -7,9 +7,10 @@ interface CustomerHistoryContentProps {
   bookings: Booking[];
   transactions: Transaction[];
   waitlist: WaitlistEntry[];
+  onUpdatePrice?: (bookingId: string, newPrice: number) => Promise<void>;
 }
 
-const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ customer, bookings, transactions, waitlist }) => {
+const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ customer, bookings, transactions, waitlist, onUpdatePrice }) => {
   const myBookings = bookings.filter(b => b.customerId === customer.id).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime());
   const myTransactions = transactions.filter(t => t.customerId === customer.id).sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime());
   const myWaitlist = waitlist.filter(w => w.customerId === customer.id).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -39,11 +40,26 @@ const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ custome
               <div>
                 <p className="font-bold text-tea-950 text-lg leading-tight">{booking.serviceName}</p>
                 <div className="flex items-center gap-4 mt-2">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
-                    🗓️ {booking.dateTime.replace(/\[object Object\]/gi, '').trim()} 
-                    {booking.originalPrice ? ` • R$ ${booking.originalPrice.toFixed(2)}` : ''}
-                    {booking.teamMemberName ? ` • 👤 ${booking.teamMemberName}` : ''}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                      🗓️ {booking.dateTime.replace(/\[object Object\]/gi, '').trim()} 
+                      {booking.originalPrice ? ` • R$ ${booking.originalPrice.toFixed(2)}` : ''}
+                      {booking.teamMemberName ? ` • 👤 ${booking.teamMemberName}` : ''}
+                    </p>
+                    {onUpdatePrice && (
+                      <button 
+                        onClick={() => {
+                          const newPrice = prompt("Novo valor para este procedimento:", booking.originalPrice?.toString());
+                          if (newPrice !== null && !isNaN(Number(newPrice))) {
+                            onUpdatePrice(booking.id, Number(newPrice));
+                          }
+                        }}
+                        className="text-[8px] text-tea-600 font-bold uppercase hover:underline bg-tea-50 px-2 py-0.5 rounded"
+                      >
+                        Ajustar Valor
+                      </button>
+                    )}
+                  </div>
                   {booking.paymentMethod && (
                     <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest bg-tea-50 px-2 py-0.5 rounded">
                       💳 {booking.paymentMethod === 'pix' ? 'PIX' : booking.paymentMethod === 'debit' ? 'Débito' : 'Crédito'}

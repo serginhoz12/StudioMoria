@@ -191,30 +191,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
     if (!(db as any)._isMock) {
       try {
         const service = services.find(s => s.id === booking.serviceId);
-        const price = service?.price || 0;
+        const price = booking.originalPrice || service?.price || 0;
 
         // 1. Update booking status
         await updateDoc(doc(db, "bookings", booking.id), {
           status: 'completed',
           paymentReceived: price,
-          paymentDate: new Date().toISOString()
+          paymentDate: new Date().toISOString(),
+          depositStatus: 'paid'
         });
 
-        // 2. Create transaction
-        await addDoc(collection(db, "transactions"), {
-          type: 'receivable',
-          description: `Atendimento: ${booking.serviceName} - ${booking.customerName}`,
-          amount: price,
-          date: booking.dateTime.split(' ')[0],
-          status: 'paid',
-          customerId: booking.customerId,
-          customerName: booking.customerName,
-          bookingId: booking.id,
-          serviceName: booking.serviceName,
-          procedureDate: booking.dateTime,
-          paidAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        });
+        // 2. Create transaction (only if not already paid)
+        if (booking.depositStatus !== 'paid') {
+          await addDoc(collection(db, "transactions"), {
+            type: 'receivable',
+            description: `Atendimento: ${booking.serviceName} - ${booking.customerName}`,
+            amount: price,
+            date: new Date().toISOString().split('T')[0],
+            status: 'paid',
+            customerId: booking.customerId,
+            customerName: booking.customerName,
+            bookingId: booking.id,
+            serviceName: booking.serviceName,
+            procedureDate: booking.dateTime,
+            paidAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          });
+        }
 
         alert("Atendimento concluído e lançado no caixa!");
       } catch (e) {

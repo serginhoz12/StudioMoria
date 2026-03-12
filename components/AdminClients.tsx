@@ -159,6 +159,20 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
     return { paid, pending, cancelledCount, reschedules, latePayments };
   };
 
+  const handleUpdatePrice = async (bookingId: string, newPrice: number) => {
+    if (!(db as any)._isMock) {
+      try {
+        await updateDoc(doc(db, "bookings", bookingId), {
+          originalPrice: newPrice,
+          price: newPrice
+        });
+        alert("Valor atualizado com sucesso.");
+      } catch (e) {
+        alert("Erro ao atualizar valor.");
+      }
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in pb-20">
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
@@ -266,6 +280,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   bookings={bookings}
                   transactions={transactions}
                   waitlist={waitlist}
+                  onUpdatePrice={handleUpdatePrice}
                 />
               </div>
             </div>
