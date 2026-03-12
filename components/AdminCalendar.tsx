@@ -98,8 +98,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     const slotStart = currentTime;
     const slotEnd = currentTime + 30 * 60 * 1000;
 
-    // Find ALL appointments that cover this slot
-    const appointments = bookings.filter(b => {
+    // 1. Find active appointments (scheduled/completed)
+    const occupied = bookings.filter(b => {
       if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
       if (!b.dateTime.startsWith(selectedDate)) return false;
       
@@ -111,18 +111,20 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       return bStart < slotEnd && bEnd > slotStart;
     });
 
-    if (appointments.length > 0) {
-      const isExact = appointments.some(b => b.dateTime === fullDateTime);
+    // 2. Find open slots (liberated for site)
+    const open = bookings.filter(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status === 'open');
+
+    if (occupied.length > 0) {
+      const isExact = occupied.some(b => b.dateTime === fullDateTime);
       return { 
         type: 'occupied', 
-        bookings: appointments,
-        isDurationBlock: !isExact && appointments.every(b => b.dateTime !== fullDateTime)
+        bookings: occupied,
+        openSlots: open,
+        isDurationBlock: !isExact && occupied.every(b => b.dateTime !== fullDateTime)
       };
     }
 
-    // 2. If no appointment, check for "open" slots (liberated for site)
-    const openSlots = bookings.filter(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status === 'open');
-    if (openSlots.length > 0) return { type: 'open', bookings: openSlots };
+    if (open.length > 0) return { type: 'open', bookings: open };
 
     return { type: 'locked' };
   };
@@ -258,39 +260,44 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     if (!customer || !service) return alert("Selecione cliente e serviço.");
     if (hour === 'Extra' && !manualTime) return alert("Defina o horário do atendimento.");
 
-    // Check for conflicts
-    const newStart = new Date(`${selectedDate}T${hour}`).getTime();
-    const newEnd = newStart + service.duration * 60 * 1000;
+    const fullDateTime = `${selectedDate} ${hour}`;
+    
+    // 1. Check for an 'open' slot to consume
+    const openSlot = bookings.find(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status === 'open');
 
-    // Remove conflict warning as simultaneous bookings are allowed
-    /*
-    const conflict = bookings.find(b => {
-      if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
-      if (!b.dateTime.startsWith(selectedDate)) return false;
-      
-      const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
-      const bDuration = b.duration || 30;
-      const bEnd = bStart + bDuration * 60 * 1000;
-      
-      // Overlap check: newStart < bEnd && newEnd > bStart
-      return newStart < bEnd && newEnd > bStart;
-    });
+    // 2. If no open slot, check for conflicts (overlap with existing scheduled/completed)
+    if (!openSlot) {
+      const newStart = new Date(`${selectedDate}T${hour}`).getTime();
+      const newEnd = newStart + service.duration * 60 * 1000;
 
-    if (conflict) {
-      if (!confirm(`Atenção: Este agendamento sobrepõe o atendimento de ${conflict.customerName} (${conflict.dateTime.split(' ')[1]}). Deseja continuar mesmo assim?`)) return;
+      const conflict = bookings.find(b => {
+        if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
+        if (!b.dateTime.startsWith(selectedDate)) return false;
+        
+        const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+        const bDuration = b.duration || 30;
+        const bEnd = bStart + bDuration * 60 * 1000;
+        
+        // Overlap check: newStart < bEnd && newEnd > bStart
+        return newStart < bEnd && newEnd > bStart;
+      });
+
+      if (conflict) {
+        alert(`Não é possível sobrepor atendimentos. O horário já está ocupado por ${conflict.customerName}. Se deseja realizar atendimentos simultâneos, abra uma nova vaga primeiro.`);
+        return;
+      }
     }
-    */
 
     try {
       if (!(db as any)._isMock) {
-        await addDoc(collection(db, "bookings"), {
+        const bookingData = {
           customerId: customer.id,
           customerName: customer.name,
           serviceId: service.id,
           serviceName: service.name,
           teamMemberId: selectedProId,
           teamMemberName: teamMembers.find(m => m.id === selectedProId)?.name,
-          dateTime: `${selectedDate} ${hour}`,
+          dateTime: fullDateTime,
           duration: service.duration,
           originalPrice: manualPrice || service.price,
           status: 'scheduled',
@@ -298,7 +305,15 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           depositStatus: 'paid',
           agreedToCancellationPolicy: true,
           policyAgreedAt: new Date().toISOString()
-        });
+        };
+
+        if (openSlot) {
+          // Consume the open slot
+          await updateDoc(doc(db, "bookings", openSlot.id), bookingData);
+        } else {
+          // Create new booking
+          await addDoc(collection(db, "bookings"), bookingData);
+        }
 
         // Remove from waitlist if exists
         try {
@@ -388,6 +403,36 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     }
     setModal({ open: false, hour: '', type: 'free' });
     setUsedProducts([]);
+  };
+
+  const handleReschedule = async (booking: Booking) => {
+    const newDateTime = prompt("Nova data e hora (AAAA-MM-DD HH:mm):", booking.dateTime);
+    if (!newDateTime) return;
+
+    const regex = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
+    if (!regex.test(newDateTime)) {
+      alert("Formato inválido. Use AAAA-MM-DD HH:mm");
+      return;
+    }
+
+    if ((db as any)._isMock) {
+      alert("Simulação: Reagendado para " + newDateTime);
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await updateDoc(doc(db, "bookings", booking.id), {
+        dateTime: newDateTime,
+        updatedAt: new Date().toISOString()
+      });
+      alert("Agendamento reagendado com sucesso!");
+    } catch (e) {
+      console.error("Erro ao reagendar:", e);
+      alert("Erro ao reagendar.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleBulkRelease = async () => {
@@ -645,7 +690,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                   <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Cliente</th>
                   <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Procedimento</th>
                   <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Profissional</th>
-                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Status</th>
+                  <th className="pb-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -693,13 +738,33 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       <div className="text-[10px] font-bold text-gray-500 uppercase">{b.teamMemberName}</div>
                     </td>
                     <td className="py-4 text-right">
-                      <span className={`px-3 py-1 rounded-full text-[8px] font-bold uppercase tracking-widest ${
-                        b.status === 'completed' ? 'bg-green-100 text-green-600' : 
-                        b.status === 'scheduled' ? 'bg-tea-100 text-tea-700' : 
-                        'bg-orange-100 text-orange-600'
-                      }`}>
-                        {b.status === 'completed' ? 'Concluído' : b.status === 'scheduled' ? 'Agendado' : 'Pendente'}
-                      </span>
+                      <div className="flex justify-end gap-2">
+                        {b.status !== 'completed' && (
+                          <>
+                            <button 
+                              onClick={() => handleCompleteBooking(b)}
+                              className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all text-xs"
+                              title="Concluir"
+                            >
+                              ✅
+                            </button>
+                            <button 
+                              onClick={() => handleReschedule(b)}
+                              className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all text-xs"
+                              title="Reagendar"
+                            >
+                              🗓️
+                            </button>
+                          </>
+                        )}
+                        <button 
+                          onClick={() => handleCloseSlot(b.id)}
+                          className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-all text-xs"
+                          title="Cancelar"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -941,6 +1006,38 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         </div>
                       </div>
                     ))}
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-100 space-y-3">
+                    <div className="flex items-center justify-between px-2">
+                       <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Vagas Simultâneas</p>
+                       <span className="text-[9px] font-bold text-tea-600 bg-tea-50 px-2 py-1 rounded-full">
+                         {(getSlotData(modal.hour) as any).openSlots?.length || 0} Disponível(is)
+                       </span>
+                    </div>
+                    
+                    <button 
+                      onClick={() => handleOpenSlot(modal.hour)} 
+                      className="w-full py-3 bg-tea-50 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-100 transition-all border border-tea-100"
+                    >
+                      ➕ Abrir Nova Vaga Simultânea
+                    </button>
+
+                    {((getSlotData(modal.hour) as any).openSlots?.length || 0) > 0 && (
+                      <div className="space-y-2">
+                        {(getSlotData(modal.hour) as any).openSlots.map((b: Booking, idx: number) => (
+                          <div key={b.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+                            <span className="text-[9px] font-bold text-gray-500 uppercase">Vaga Aberta #{idx + 1}</span>
+                            <button 
+                              onClick={() => handleCloseSlot(b.id)} 
+                              className="text-red-400 hover:text-red-600 text-[9px] font-bold uppercase tracking-widest"
+                            >
+                              Bloquear
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-8 bg-gray-50 rounded-[2.5rem] space-y-5 border border-gray-100">
