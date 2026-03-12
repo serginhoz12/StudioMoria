@@ -26,6 +26,10 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newService, setNewService] = useState<Partial<Service>>({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0, usedProducts: [] });
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
+  const [newTransactionCategory, setNewTransactionCategory] = useState('');
+
+  const defaultTransactionCategories = ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros'];
+  const currentTransactionCategories = settings.transactionCategories || defaultTransactionCategories;
 
   const calculateServiceCost = (service: Partial<Service>) => {
     if (!service.usedProducts) return 0;
@@ -73,6 +77,27 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const removeTeamMember = (id: string) => {
     if (confirm("Remover profissional permanentemente?")) {
       const updated = { ...settings, teamMembers: settings.teamMembers.filter(m => m.id !== id) };
+      updateGlobalSettings(updated);
+    }
+  };
+
+  const addTransactionCategory = () => {
+    if (newTransactionCategory.trim()) {
+      const updated = { 
+        ...settings, 
+        transactionCategories: [...currentTransactionCategories, newTransactionCategory.trim()] 
+      };
+      updateGlobalSettings(updated);
+      setNewTransactionCategory('');
+    }
+  };
+
+  const removeTransactionCategory = (category: string) => {
+    if (confirm(`Remover categoria "${category}"?`)) {
+      const updated = { 
+        ...settings, 
+        transactionCategories: currentTransactionCategories.filter(c => c !== category) 
+      };
       updateGlobalSettings(updated);
     }
   };
@@ -288,6 +313,43 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             </div>
           </div>
           <p className="text-[9px] text-gray-400 ml-1 italic">* Esses valores são usados para calcular o ponto de equilíbrio e alertas no painel de inteligência financeira.</p>
+        </div>
+      </section>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+           <span className="text-3xl">📂</span> Categorias Financeiras
+        </h3>
+        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-8">
+          <div className="flex gap-4">
+            <input 
+              placeholder="Nova categoria (ex: Marketing, Limpeza)..." 
+              className="flex-grow p-5 bg-white rounded-2xl font-bold outline-none shadow-inner border border-tea-100" 
+              value={newTransactionCategory} 
+              onChange={e => setNewTransactionCategory(e.target.value)} 
+            />
+            <button 
+              onClick={addTransactionCategory} 
+              className="bg-tea-800 text-white px-10 py-5 rounded-2xl font-bold hover:bg-tea-950 transition-colors shadow-lg uppercase text-[10px] tracking-widest"
+            >
+              Adicionar
+            </button>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            {currentTransactionCategories.map(cat => (
+              <div key={cat} className="flex items-center gap-2 bg-white px-5 py-3 rounded-2xl border border-tea-100 shadow-sm group">
+                <span className="text-xs font-bold text-tea-900">{cat}</span>
+                <button 
+                  onClick={() => removeTransactionCategory(cat)}
+                  className="text-red-300 hover:text-red-500 transition-colors ml-2 opacity-0 group-hover:opacity-100"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-gray-400 ml-1 italic">* Essas categorias estarão disponíveis ao lançar novas despesas ou receitas no módulo financeiro.</p>
         </div>
       </section>
 

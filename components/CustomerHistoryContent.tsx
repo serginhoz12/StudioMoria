@@ -44,6 +44,12 @@ const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ custome
                     {booking.originalPrice ? ` • R$ ${booking.originalPrice.toFixed(2)}` : ''}
                     {booking.teamMemberName ? ` • 👤 ${booking.teamMemberName}` : ''}
                   </p>
+                  {booking.paymentMethod && (
+                    <p className="text-[9px] text-tea-600 font-bold uppercase tracking-widest bg-tea-50 px-2 py-0.5 rounded">
+                      💳 {booking.paymentMethod === 'pix' ? 'PIX' : booking.paymentMethod === 'debit' ? 'Débito' : 'Crédito'}
+                      {booking.paymentType === 'installments' && ` (${booking.installmentsCount}x)`}
+                    </p>
+                  )}
                   {booking.rescheduledCount ? <span className="text-[9px] text-orange-600 font-bold bg-orange-50 px-2 py-0.5 rounded italic">Remarcado {booking.rescheduledCount}x</span> : null}
                 </div>
               </div>

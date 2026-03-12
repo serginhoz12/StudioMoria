@@ -86,6 +86,9 @@ export interface Booking {
   finalPrice?: number;
   paymentReceived?: number;
   paymentDate?: string;
+  paymentMethod?: PaymentMethod;
+  paymentType?: 'sight' | 'installments';
+  installmentsCount?: number;
 }
 
 export type PaymentMethod = 'pix' | 'debit' | 'credit' | 'store_installments';
@@ -107,7 +110,7 @@ export interface Transaction {
   isRecurring?: boolean;
   estimatedAmount?: number;
   realAmount?: number;
-  category?: 'water' | 'electricity' | 'internet' | 'salary' | 'tax' | 'rent' | 'supplies' | 'other';
+  category?: string;
   paymentMethod?: PaymentMethod;
   installmentsCount?: number;
   installmentNumber?: number;
@@ -172,6 +175,7 @@ export interface SalonSettings {
   };
   monthlyGoal?: number;
   desiredProfit?: number;
+  transactionCategories?: string[];
 }
 
 export interface InventoryItem {

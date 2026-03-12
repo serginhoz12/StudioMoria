@@ -101,7 +101,8 @@ export const DEFAULT_SETTINGS: SalonSettings = {
     text: "GRANDE REINAUGURAÇÃO: 11 DE MARÇO"
   },
   monthlyGoal: 5000,
-  desiredProfit: 2000
+  desiredProfit: 2000,
+  transactionCategories: ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros']
 };
 
 export const INITIAL_INVENTORY: InventoryItem[] = [

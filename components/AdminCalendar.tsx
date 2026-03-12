@@ -40,6 +40,27 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [productSearch, setProductSearch] = useState('');
   const [editingPriceValue, setEditingPriceValue] = useState<number | null>(null);
 
+  // Payment Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix'>('pix');
+  const [paymentType, setPaymentType] = useState<'sight' | 'installments'>('sight');
+  const [installmentsCount, setInstallmentsCount] = useState(1);
+  const [installmentValue, setInstallmentValue] = useState(0);
+
+  // Auto-calculate installment value
+  React.useEffect(() => {
+    if (selectedBookingForPayment) {
+      const total = selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0;
+      if (paymentType === 'sight') {
+        setInstallmentValue(total);
+        setInstallmentsCount(1);
+      } else {
+        setInstallmentValue(Number((total / installmentsCount).toFixed(2)));
+      }
+    }
+  }, [installmentsCount, paymentType, selectedBookingForPayment, services]);
+
   // Added resetForm function to fix "Cannot find name 'resetForm'" error
   const resetForm = () => {
     setCustomerSearch('');
@@ -339,30 +360,46 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     }
   };
 
-  const handleCompleteBooking = async (booking: Booking) => {
+  const handleCompleteBooking = (booking: Booking) => {
+    setSelectedBookingForPayment(booking);
+    setInstallmentValue(booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0);
+    setIsPaymentModalOpen(true);
+  };
+
+  const confirmPaymentAndComplete = async () => {
+    if (!selectedBookingForPayment) return;
+    
     if (!(db as any)._isMock) {
       setIsProcessing(true);
       try {
+        const totalAmount = selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0;
+        
         // 1. Update booking status
-        await updateDoc(doc(db, "bookings", booking.id), {
+        await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), {
           status: 'completed',
-          paymentReceived: booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0,
+          paymentReceived: totalAmount,
           paymentDate: new Date().toISOString(),
-          usedProducts: usedProducts // Store what was used
+          paymentMethod: paymentMethod,
+          paymentType: paymentType,
+          installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
+          usedProducts: usedProducts
         });
 
-        // 2. Create transaction
+        // 2. Create transaction (always single transaction for total amount)
         await addDoc(collection(db, "transactions"), {
           type: 'receivable',
-          description: `Atendimento: ${booking.serviceName} - ${booking.customerName}`,
-          amount: booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0,
-          date: booking.dateTime.split(' ')[0],
+          description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}`,
+          amount: totalAmount,
+          date: selectedBookingForPayment.dateTime.split(' ')[0],
           status: 'paid',
-          customerId: booking.customerId,
-          customerName: booking.customerName,
-          bookingId: booking.id,
-          serviceName: booking.serviceName,
-          procedureDate: booking.dateTime,
+          customerId: selectedBookingForPayment.customerId,
+          customerName: selectedBookingForPayment.customerName,
+          bookingId: selectedBookingForPayment.id,
+          serviceName: selectedBookingForPayment.serviceName,
+          procedureDate: selectedBookingForPayment.dateTime,
+          paymentMethod: paymentMethod,
+          paymentType: paymentType,
+          installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
           paidAt: new Date().toISOString(),
           createdAt: new Date().toISOString()
         });
@@ -381,10 +418,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
         // 4. Award Loyalty Points
         if (settings?.loyaltyConfig?.enabled) {
-          const customer = customers.find(c => c.id === booking.customerId);
-          // Award points if program is enabled globally AND customer is enabled (or not explicitly disabled)
+          const customer = customers.find(c => c.id === selectedBookingForPayment.customerId);
           if (customer && customer.isLoyaltyEnabled !== false) {
-            const pointsToAward = Math.floor((booking.originalPrice || 0) * (settings.loyaltyConfig.pointsPerReal || 1));
+            const pointsToAward = Math.floor(totalAmount * (settings.loyaltyConfig.pointsPerReal || 1));
             if (pointsToAward > 0) {
               await updateDoc(doc(db, "customers", customer.id), {
                 loyaltyPoints: increment(pointsToAward)
@@ -393,7 +429,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           }
         }
 
-        alert("Atendimento concluído, lançado no caixa e estoque atualizado!");
+        alert("Atendimento concluído e financeiro lançado!");
       } catch (e) {
         console.error("Erro ao concluir atendimento:", e);
         alert("Erro ao concluir atendimento.");
@@ -401,8 +437,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         setIsProcessing(false);
       }
     }
+    setIsPaymentModalOpen(false);
+    setSelectedBookingForPayment(null);
     setModal({ open: false, hour: '', type: 'free' });
     setUsedProducts([]);
+    // Reset payment states
+    setPaymentMethod('pix');
+    setPaymentType('sight');
+    setInstallmentsCount(1);
   };
 
   const handleReschedule = async (booking: Booking) => {
@@ -1120,6 +1162,111 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
            <span className="text-[9px] font-bold text-tea-950 uppercase tracking-widest">Agendado</span>
         </div>
       </div>
+
+      {/* Modal de Pagamento */}
+      {isPaymentModalOpen && selectedBookingForPayment && (
+        <div className="fixed inset-0 bg-tea-950/60 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-3xl animate-slide-up space-y-8">
+            <div className="text-center">
+              <p className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.2em] mb-1">Finalizar Atendimento</p>
+              <h3 className="text-3xl font-serif text-tea-950 font-bold italic">{selectedBookingForPayment.customerName}</h3>
+              <p className="text-sm text-gray-400 mt-1">{selectedBookingForPayment.serviceName}</p>
+            </div>
+
+            <div className="bg-tea-50 p-6 rounded-3xl border border-tea-100 flex justify-between items-center">
+              <span className="text-xs font-bold text-tea-900 uppercase tracking-widest">Valor Total</span>
+              <span className="text-2xl font-serif font-bold text-tea-950 italic">
+                R$ {(selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="space-y-6">
+              {/* Meio de Pagamento */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Meio de Pagamento</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['pix', 'debit', 'credit'] as const).map((method) => (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      className={`py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border-2 ${
+                        paymentMethod === method 
+                          ? 'bg-tea-900 text-white border-tea-900 shadow-lg' 
+                          : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                      }`}
+                    >
+                      {method === 'pix' ? 'PIX' : method === 'debit' ? 'Débito' : 'Crédito'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tipo de Pagamento */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Forma de Recebimento</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['sight', 'installments'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setPaymentType(type)}
+                      className={`py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border-2 ${
+                        paymentType === type 
+                          ? 'bg-tea-900 text-white border-tea-900 shadow-lg' 
+                          : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                      }`}
+                    >
+                      {type === 'sight' ? 'À Vista' : 'Parcelado'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Parcelamento */}
+              {paymentType === 'installments' && (
+                <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Nº de Parcelas</label>
+                    <select
+                      value={installmentsCount}
+                      onChange={(e) => setInstallmentsCount(Number(e.target.value))}
+                      className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100"
+                    >
+                      {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                        <option key={n} value={n}>{n}x</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Valor da Parcela</label>
+                    <div className="w-full p-4 bg-gray-100 border-none rounded-2xl font-bold text-tea-900 flex items-center">
+                      R$ {installmentValue.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 pt-4">
+              <button
+                onClick={confirmPaymentAndComplete}
+                disabled={isProcessing}
+                className="w-full py-6 bg-tea-950 text-white rounded-3xl font-bold uppercase text-xs tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-50"
+              >
+                {isProcessing ? 'Processando...' : 'Confirmar e Concluir'}
+              </button>
+              <button
+                onClick={() => {
+                  setIsPaymentModalOpen(false);
+                  setSelectedBookingForPayment(null);
+                }}
+                className="w-full py-2 text-gray-400 font-bold uppercase text-[9px] tracking-widest hover:text-gray-600"
+              >
+                Voltar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Liberação em Massa */}
       {isBulkModalOpen && (

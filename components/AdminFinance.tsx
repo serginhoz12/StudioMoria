@@ -75,12 +75,12 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   }, [bookings, dateRange]);
 
   // 1. Custos Fixos Reais (Pagos + Pendentes)
-  const fixedCostCategories = ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'];
+  const fixedCostKeywords = ['água', 'luz', 'internet', 'salário', 'imposto', 'aluguel', 'pró-labore', 'mei', 'rent', 'water', 'electricity', 'tax'];
   const realFixedCosts = useMemo(() => {
     return filteredTransactions
-      .filter(t => t.type === 'payable' && fixedCostCategories.includes(t.category as string))
+      .filter(t => t.type === 'payable' && fixedCostKeywords.some(kw => (t.category || '').toLowerCase().includes(kw)))
       .reduce((acc, t) => acc + t.amount, 0);
-  }, [filteredTransactions]);
+  }, [filteredTransactions, fixedCostKeywords]);
 
   // 2. Receita do Período (Faturado)
   const periodRevenue = useMemo(() => {
@@ -92,7 +92,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   // 3. Custos Variáveis (Insumos/Produtos)
   const variableCosts = useMemo(() => {
     return filteredTransactions
-      .filter(t => t.type === 'payable' && t.category === 'supplies')
+      .filter(t => t.type === 'payable' && (t.category || '').toLowerCase().includes('suprimentos') || (t.category || '').toLowerCase().includes('insumos') || (t.category || '').toLowerCase().includes('supplies'))
       .reduce((acc, t) => acc + t.amount, 0);
   }, [filteredTransactions]);
 
@@ -208,6 +208,9 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
 
   const COLORS = ['#418d50', '#8ec99a', '#2a5b35', '#bbe1c2', '#1e3d28', '#5eaa6e'];
 
+  const defaultTransactionCategories = ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros'];
+  const transactionCategories = settings.transactionCategories || defaultTransactionCategories;
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newTrans, setNewTrans] = useState({
     type: 'receivable' as 'payable' | 'receivable',
@@ -220,7 +223,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     isRecurring: false,
     estimatedAmount: 0,
     realAmount: 0,
-    category: 'other' as any,
+    category: transactionCategories[0] || 'Outros',
     paymentMethod: 'pix' as any,
     installmentsCount: 1,
     installments: [] as { amount: number; dueDate: string }[]
@@ -355,7 +358,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       isRecurring: false,
       estimatedAmount: 0,
       realAmount: 0,
-      category: 'other',
+      category: transactionCategories[0] || 'Outros',
       paymentMethod: 'pix',
       installmentsCount: 1,
       installments: []
@@ -502,14 +505,13 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
         <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
           <h3 className="text-xl font-serif font-bold text-tea-950 italic mb-8">Custos Fixos Reais</h3>
           <div className="space-y-3">
-            {fixedCostCategories.map(cat => {
+            {transactionCategories.filter(cat => fixedCostKeywords.some(kw => cat.toLowerCase().includes(kw))).map(cat => {
               const amount = filteredTransactions
                 .filter(t => t.type === 'payable' && t.category === cat)
                 .reduce((acc, t) => acc + t.amount, 0);
-              const labels: any = { water: 'Água', electricity: 'Luz', internet: 'Internet', salary: 'Pró-labore', tax: 'MEI', rent: 'Aluguel' };
               return (
                 <div key={cat} className="flex justify-between items-center p-3 bg-gray-50/30 rounded-xl">
-                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{labels[cat]}</span>
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">{cat}</span>
                   <span className="text-sm font-bold text-tea-900">R$ {amount.toFixed(2)}</span>
                 </div>
               );
@@ -785,21 +787,16 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                  </div>
                )}
 
-               <div className="space-y-2">
+                <div className="space-y-2">
                   <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Categoria</label>
                   <select 
                     value={newTrans.category} 
-                    onChange={e => setNewTrans({...newTrans, category: e.target.value as any})}
+                    onChange={e => setNewTrans({...newTrans, category: e.target.value})}
                     className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner"
                   >
-                    <option value="other">Outros</option>
-                    <option value="water">Água</option>
-                    <option value="electricity">Luz</option>
-                    <option value="internet">Internet</option>
-                    <option value="salary">Salário Proprietária</option>
-                    <option value="tax">Imposto MEI</option>
-                    <option value="rent">Aluguel</option>
-                    <option value="supplies">Insumos/Produtos</option>
+                    {transactionCategories.map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
                   </select>
                </div>
 
