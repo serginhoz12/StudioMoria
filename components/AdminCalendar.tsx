@@ -262,6 +262,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     const newStart = new Date(`${selectedDate}T${hour}`).getTime();
     const newEnd = newStart + service.duration * 60 * 1000;
 
+    // Remove conflict warning as simultaneous bookings are allowed
+    /*
     const conflict = bookings.find(b => {
       if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
       if (!b.dateTime.startsWith(selectedDate)) return false;
@@ -277,6 +279,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     if (conflict) {
       if (!confirm(`Atenção: Este agendamento sobrepõe o atendimento de ${conflict.customerName} (${conflict.dateTime.split(' ')[1]}). Deseja continuar mesmo assim?`)) return;
     }
+    */
 
     try {
       if (!(db as any)._isMock) {
