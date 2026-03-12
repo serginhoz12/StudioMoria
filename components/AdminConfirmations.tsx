@@ -44,6 +44,97 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingPrices, setEditingPrices] = useState<{ [key: string]: number }>({});
 
+  // Payment Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix'>('pix');
+  const [paymentType, setPaymentType] = useState<'sight' | 'installments'>('sight');
+  const [installmentsCount, setInstallmentsCount] = useState(1);
+  const [installmentValue, setInstallmentValue] = useState(0);
+
+  // Auto-calculate installment value
+  React.useEffect(() => {
+    if (selectedBookingForPayment) {
+      const total = editingPrices[selectedBookingForPayment.id] !== undefined 
+        ? editingPrices[selectedBookingForPayment.id] 
+        : (selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0);
+      
+      if (paymentType === 'sight') {
+        setInstallmentValue(total);
+        setInstallmentsCount(1);
+      } else {
+        setInstallmentValue(Number((total / installmentsCount).toFixed(2)));
+      }
+    }
+  }, [installmentsCount, paymentType, selectedBookingForPayment, services, editingPrices]);
+
+  const handleApproveWithPayment = (booking: Booking) => {
+    setSelectedBookingForPayment(booking);
+    setIsPaymentModalOpen(true);
+  };
+
+  const confirmPaymentAndApprove = async () => {
+    if (!selectedBookingForPayment) return;
+    
+    setIsProcessing(true);
+    try {
+      const totalAmount = editingPrices[selectedBookingForPayment.id] !== undefined 
+        ? editingPrices[selectedBookingForPayment.id] 
+        : (selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0);
+
+      if (!(db as any)._isMock) {
+        // 1. Update booking
+        await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), {
+          status: 'scheduled',
+          depositStatus: 'paid',
+          paymentReceived: totalAmount,
+          paymentDate: new Date().toISOString(),
+          paymentMethod: paymentMethod,
+          paymentType: paymentType,
+          installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
+          originalPrice: totalAmount,
+          updatedAt: new Date().toISOString()
+        });
+
+        // 2. Create transaction
+        await addDoc(collection(db, "transactions"), {
+          type: 'receivable',
+          description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)`,
+          amount: totalAmount,
+          date: selectedBookingForPayment.dateTime.split(' ')[0],
+          status: 'paid',
+          customerId: selectedBookingForPayment.customerId,
+          customerName: selectedBookingForPayment.customerName,
+          bookingId: selectedBookingForPayment.id,
+          serviceName: selectedBookingForPayment.serviceName,
+          procedureDate: selectedBookingForPayment.dateTime,
+          paymentMethod: paymentMethod,
+          paymentType: paymentType,
+          installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
+          paidAt: new Date().toISOString(),
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      if (onUpdateStatus) {
+        onUpdateStatus(selectedBookingForPayment.id, 'scheduled');
+      }
+
+      alert("Pedido aprovado e pagamento antecipado confirmado!");
+    } catch (e) {
+      console.error("Erro ao aprovar com pagamento:", e);
+      alert("Erro ao processar.");
+    } finally {
+      setIsProcessing(false);
+      setIsPaymentModalOpen(false);
+      setSelectedBookingForPayment(null);
+      // Reset payment states
+      setPaymentMethod('pix');
+      setPaymentType('sight');
+      setInstallmentsCount(1);
+    }
+  };
+
   const handleCompleteService = async () => {
     if (!performingService || !performanceData.teamMemberId || !performanceData.serviceId || !performanceData.price) return alert("Preencha todos os campos.");
     
@@ -275,16 +366,22 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    {b.teamMemberName && <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">👤 Profissional: {b.teamMemberName}</p>}
                 </div>
               </div>
-              <div className="flex gap-4 w-full md:w-auto">
+              <div className="flex flex-wrap gap-4 w-full md:w-auto">
                  <button 
                   onClick={() => handleAction(b.id, 'scheduled')}
-                  className="flex-1 md:flex-none px-8 py-4 bg-tea-800 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-950 transition-all shadow-md active:scale-95"
+                  className="flex-1 md:flex-none px-6 py-4 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-200 transition-all shadow-sm active:scale-95"
                  >
                   Aprovar ✓
                  </button>
                  <button 
+                  onClick={() => handleApproveWithPayment(b)}
+                  className="flex-1 md:flex-none px-6 py-4 bg-tea-800 text-white rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-tea-950 transition-all shadow-md active:scale-95"
+                 >
+                  💰 Aprovar com Pagamento
+                 </button>
+                 <button 
                   onClick={() => handleAction(b.id, 'cancelled')}
-                  className="flex-1 md:flex-none px-8 py-4 bg-red-50 text-red-500 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-red-100 transition-all active:scale-95"
+                  className="flex-1 md:flex-none px-6 py-4 bg-red-50 text-red-500 rounded-2xl font-bold uppercase text-[9px] tracking-widest hover:bg-red-100 transition-all active:scale-95"
                  >
                   Recusar ✕
                  </button>
@@ -643,6 +740,110 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
               </div>
             </div>
           )}
+        </div>
+      )}
+      {/* Modal de Pagamento Antecipado */}
+      {isPaymentModalOpen && selectedBookingForPayment && (
+        <div className="fixed inset-0 bg-tea-950/60 backdrop-blur-md flex items-center justify-center z-[200] p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-3xl animate-slide-up space-y-8">
+            <div className="text-center">
+              <p className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.2em] mb-1">Confirmar Pagamento Antecipado</p>
+              <h3 className="text-3xl font-serif text-tea-950 font-bold italic">{selectedBookingForPayment.customerName}</h3>
+              <p className="text-sm text-gray-400 mt-1">{selectedBookingForPayment.serviceName}</p>
+            </div>
+
+            <div className="bg-tea-50 p-6 rounded-3xl border border-tea-100 flex justify-between items-center">
+              <span className="text-xs font-bold text-tea-900 uppercase tracking-widest">Valor a Receber</span>
+              <span className="text-2xl font-serif font-bold text-tea-950 italic">
+                R$ {(editingPrices[selectedBookingForPayment.id] !== undefined ? editingPrices[selectedBookingForPayment.id] : (selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0)).toFixed(2)}
+              </span>
+            </div>
+
+            <div className="space-y-6">
+              {/* Meio de Pagamento */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Meio de Pagamento</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(['pix', 'debit', 'credit'] as const).map((method) => (
+                    <button
+                      key={method}
+                      onClick={() => setPaymentMethod(method)}
+                      className={`py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border-2 ${
+                        paymentMethod === method 
+                          ? 'bg-tea-900 text-white border-tea-900 shadow-lg' 
+                          : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                      }`}
+                    >
+                      {method === 'pix' ? 'PIX' : method === 'debit' ? 'Débito' : 'Crédito'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Tipo de Pagamento */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Forma de Recebimento</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {(['sight', 'installments'] as const).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setPaymentType(type)}
+                      className={`py-4 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all border-2 ${
+                        paymentType === type 
+                          ? 'bg-tea-900 text-white border-tea-900 shadow-lg' 
+                          : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
+                      }`}
+                    >
+                      {type === 'sight' ? 'À Vista' : 'Parcelado'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Parcelamento */}
+              {paymentType === 'installments' && (
+                <div className="grid grid-cols-2 gap-4 animate-fade-in">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Nº de Parcelas</label>
+                    <select
+                      value={installmentsCount}
+                      onChange={(e) => setInstallmentsCount(Number(e.target.value))}
+                      className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100"
+                    >
+                      {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                        <option key={n} value={n}>{n}x</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Valor da Parcela</label>
+                    <div className="w-full p-4 bg-gray-100 border-none rounded-2xl font-bold text-tea-900 flex items-center">
+                      R$ {installmentValue.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 pt-4">
+              <button
+                onClick={confirmPaymentAndApprove}
+                disabled={isProcessing}
+                className="w-full py-6 bg-tea-950 text-white rounded-3xl font-bold uppercase text-xs tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-50"
+              >
+                {isProcessing ? 'Processando...' : 'Confirmar Pagamento e Aprovar'}
+              </button>
+              <button
+                onClick={() => {
+                  setIsPaymentModalOpen(false);
+                  setSelectedBookingForPayment(null);
+                }}
+                className="w-full py-2 text-gray-400 font-bold uppercase text-[9px] tracking-widest hover:text-gray-600"
+              >
+                Voltar
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {/* Modal de Histórico da Cliente */}

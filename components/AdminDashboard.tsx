@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
 import { Booking, Transaction, Customer, SalonSettings, Service, WaitlistEntry } from '../types';
+import { FIXED_COST_KEYWORDS } from '../constants';
 import { db } from '../firebase.ts';
 import { doc, updateDoc, addDoc, collection } from "firebase/firestore";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-  PieChart, Pie, Legend 
+  PieChart, Pie, Legend, AreaChart, Area
 } from 'recharts';
 import CustomerHistoryModal from './CustomerHistoryModal';
 import BusinessInsights from './BusinessInsights';
@@ -82,8 +83,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
     .reduce((acc, t) => acc + t.amount, 0);
 
   const fixedCosts = filteredData.transactions
-    .filter(t => t.type === 'payable' && ['water', 'electricity', 'internet', 'salary', 'tax', 'rent'].includes(t.category as string) && t.status === 'paid')
+    .filter(t => t.type === 'payable' && FIXED_COST_KEYWORDS.some(kw => 
+      (t.category || '').toLowerCase().includes(kw) || 
+      (t.description || '').toLowerCase().includes(kw)
+    ))
     .reduce((acc, t) => acc + t.amount, 0);
+
+  // 11. Tendência de Receita x Despesa (Diário)
+  const dailyTrendData = useMemo(() => {
+    const data: Record<string, { date: string, displayDate: string, revenue: number, expenses: number }> = {};
+    
+    const start = new Date(dateRange.start + 'T00:00:00');
+    const end = new Date(dateRange.end + 'T00:00:00');
+    const current = new Date(start);
+    
+    while (current <= end) {
+      const dateStr = current.toISOString().split('T')[0];
+      data[dateStr] = {
+        date: dateStr,
+        displayDate: current.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        revenue: 0,
+        expenses: 0
+      };
+      current.setDate(current.getDate() + 1);
+    }
+
+    filteredData.transactions.forEach(t => {
+      const dateStr = t.dueDate || t.date;
+      if (data[dateStr]) {
+        if (t.type === 'receivable' && t.status === 'paid') {
+          data[dateStr].revenue += t.amount;
+        } else if (t.type === 'payable' && t.status === 'paid') {
+          data[dateStr].expenses += t.amount;
+        }
+      }
+    });
+
+    return Object.values(data).sort((a, b) => a.date.localeCompare(b.date));
+  }, [filteredData.transactions, dateRange]);
 
   const completedBookings = filteredData.bookings.filter(b => b.status === 'completed');
   
@@ -510,12 +547,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
       </div>
 
-      {/* Gráfico de Barras Financeiro de Vencimentos */}
+      {/* Gráfico de Tendência Financeira */}
       <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100">
         <div className="flex justify-between items-center mb-10">
-          <h3 className="text-xl font-bold text-tea-900 font-serif italic">Tendência de Receita x Despesa</h3>
+          <div>
+            <h3 className="text-xl font-bold text-tea-900 font-serif italic">Tendência de Receita x Despesa</h3>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Acompanhamento diário do fluxo de caixa</p>
+          </div>
           <div className="text-right">
-             <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Saldo Previsto</p>
+             <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Saldo do Período</p>
              <p className={`text-xl font-bold ${(totalReceivable - totalPayable) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 R$ {(totalReceivable - totalPayable).toLocaleString('pt-BR')}
              </p>
@@ -523,21 +563,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
         </div>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={[
-              { name: 'Receitas', value: totalReceivable }, 
-              { name: 'Despesas', value: totalPayable },
-              { name: 'Custo Prod.', value: estimatedProductCost }
-            ]}>
+            <AreaChart data={dailyTrendData}>
+              <defs>
+                <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#418d50" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#418d50" stopOpacity={0}/>
+                </linearGradient>
+                <linearGradient id="colorExp" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
+              <XAxis dataKey="displayDate" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
               <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
-              <Tooltip cursor={{fill: '#f9fafb'}} contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontSize: '12px' }} />
-              <Bar dataKey="value" radius={[15, 15, 15, 15]} barSize={60}>
-                 <Cell fill="#418d50" />
-                 <Cell fill="#ef4444" />
-                 <Cell fill="#f59e0b" />
-              </Bar>
-            </BarChart>
+              <Tooltip 
+                contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.05)', fontSize: '12px' }}
+                formatter={(value: any) => [`R$ ${value.toLocaleString('pt-BR')}`]}
+              />
+              <Legend verticalAlign="top" align="right" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em' }} />
+              <Area name="Receitas" type="monotone" dataKey="revenue" stroke="#418d50" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
+              <Area name="Despesas" type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorExp)" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
       </div>

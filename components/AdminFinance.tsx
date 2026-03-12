@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Transaction, Customer, Booking, Service, SalonSettings, InventoryItem } from '../types';
+import { FIXED_COST_KEYWORDS, SUPPLY_KEYWORDS } from '../constants';
 import { db } from '../firebase.ts';
 import { collection, addDoc, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { 
@@ -60,7 +61,8 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     const start = new Date(dateRange.start + 'T00:00:00').getTime();
     const end = new Date(dateRange.end + 'T23:59:59').getTime();
     return transactions.filter(t => {
-      const d = new Date(t.date + 'T00:00:00').getTime();
+      const dateStr = t.dueDate || t.date;
+      const d = new Date(dateStr + 'T00:00:00').getTime();
       return d >= start && d <= end;
     });
   }, [transactions, dateRange]);
@@ -75,12 +77,14 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   }, [bookings, dateRange]);
 
   // 1. Custos Fixos Reais (Pagos + Pendentes)
-  const fixedCostKeywords = ['água', 'luz', 'internet', 'salário', 'imposto', 'aluguel', 'pró-labore', 'mei', 'rent', 'water', 'electricity', 'tax'];
   const realFixedCosts = useMemo(() => {
     return filteredTransactions
-      .filter(t => t.type === 'payable' && fixedCostKeywords.some(kw => (t.category || '').toLowerCase().includes(kw)))
+      .filter(t => t.type === 'payable' && FIXED_COST_KEYWORDS.some(kw => 
+        (t.category || '').toLowerCase().includes(kw) || 
+        (t.description || '').toLowerCase().includes(kw)
+      ))
       .reduce((acc, t) => acc + t.amount, 0);
-  }, [filteredTransactions, fixedCostKeywords]);
+  }, [filteredTransactions]);
 
   // 2. Receita do Período (Faturado)
   const periodRevenue = useMemo(() => {
@@ -92,7 +96,10 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   // 3. Custos Variáveis (Insumos/Produtos)
   const variableCosts = useMemo(() => {
     return filteredTransactions
-      .filter(t => t.type === 'payable' && (t.category || '').toLowerCase().includes('suprimentos') || (t.category || '').toLowerCase().includes('insumos') || (t.category || '').toLowerCase().includes('supplies'))
+      .filter(t => t.type === 'payable' && SUPPLY_KEYWORDS.some(kw => 
+        (t.category || '').toLowerCase().includes(kw) || 
+        (t.description || '').toLowerCase().includes(kw)
+      ))
       .reduce((acc, t) => acc + t.amount, 0);
   }, [filteredTransactions]);
 
@@ -505,9 +512,12 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
         <div className="bg-white p-10 rounded-[3.5rem] border border-gray-100 shadow-sm">
           <h3 className="text-xl font-serif font-bold text-tea-950 italic mb-8">Custos Fixos Reais</h3>
           <div className="space-y-3">
-            {transactionCategories.filter(cat => fixedCostKeywords.some(kw => cat.toLowerCase().includes(kw))).map(cat => {
+            {transactionCategories.filter(cat => FIXED_COST_KEYWORDS.some(kw => cat.toLowerCase().includes(kw))).map(cat => {
               const amount = filteredTransactions
-                .filter(t => t.type === 'payable' && t.category === cat)
+                .filter(t => t.type === 'payable' && (
+                  t.category === cat || 
+                  (t.category === 'Outros' && (t.description || '').toLowerCase().includes(cat.toLowerCase()))
+                ))
                 .reduce((acc, t) => acc + t.amount, 0);
               return (
                 <div key={cat} className="flex justify-between items-center p-3 bg-gray-50/30 rounded-xl">

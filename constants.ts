@@ -54,6 +54,9 @@ export const INITIAL_SERVICES: Service[] = [
 const defaultAgendaDate = new Date();
 defaultAgendaDate.setDate(defaultAgendaDate.getDate() + 15);
 
+export const FIXED_COST_KEYWORDS = ['água', 'luz', 'internet', 'salário', 'imposto', 'aluguel', 'pró-labore', 'mei', 'rent', 'water', 'electricity', 'tax'];
+export const SUPPLY_KEYWORDS = ['suprimentos', 'insumos', 'supplies'];
+
 export const DEFAULT_SETTINGS: SalonSettings = {
   name: "Studio Moriá Estética",
   primaryColor: "tea", 

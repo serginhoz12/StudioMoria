@@ -42,6 +42,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isPrePayment, setIsPrePayment] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix'>('pix');
   const [paymentType, setPaymentType] = useState<'sight' | 'installments'>('sight');
@@ -360,8 +361,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     }
   };
 
-  const handleCompleteBooking = (booking: Booking) => {
+  const handleCompleteBooking = (booking: Booking, prePayment: boolean = false) => {
     setSelectedBookingForPayment(booking);
+    setIsPrePayment(prePayment);
     setInstallmentValue(booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0);
     setIsPaymentModalOpen(true);
   };
@@ -375,37 +377,49 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         const totalAmount = selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0;
         
         // 1. Update booking status
-        await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), {
-          status: 'completed',
+        const updateData: any = {
           paymentReceived: totalAmount,
           paymentDate: new Date().toISOString(),
           paymentMethod: paymentMethod,
           paymentType: paymentType,
           installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-          usedProducts: usedProducts
-        });
+          depositStatus: 'paid'
+        };
 
-        // 2. Create transaction (always single transaction for total amount)
-        await addDoc(collection(db, "transactions"), {
-          type: 'receivable',
-          description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}`,
-          amount: totalAmount,
-          date: selectedBookingForPayment.dateTime.split(' ')[0],
-          status: 'paid',
-          customerId: selectedBookingForPayment.customerId,
-          customerName: selectedBookingForPayment.customerName,
-          bookingId: selectedBookingForPayment.id,
-          serviceName: selectedBookingForPayment.serviceName,
-          procedureDate: selectedBookingForPayment.dateTime,
-          paymentMethod: paymentMethod,
-          paymentType: paymentType,
-          installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-          paidAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        });
+        if (isPrePayment) {
+          // Only confirm payment, keep current status (usually scheduled)
+          updateData.status = selectedBookingForPayment.status;
+        } else {
+          // Complete service
+          updateData.status = 'completed';
+          updateData.usedProducts = usedProducts;
+        }
 
-        // 3. Update Inventory
-        if (onUpdateInventory) {
+        await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), updateData);
+
+        // 2. Create transaction (only if not already paid)
+        if (selectedBookingForPayment.depositStatus !== 'paid') {
+          await addDoc(collection(db, "transactions"), {
+            type: 'receivable',
+            description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}`,
+            amount: totalAmount,
+            date: selectedBookingForPayment.dateTime.split(' ')[0],
+            status: 'paid',
+            customerId: selectedBookingForPayment.customerId,
+            customerName: selectedBookingForPayment.customerName,
+            bookingId: selectedBookingForPayment.id,
+            serviceName: selectedBookingForPayment.serviceName,
+            procedureDate: selectedBookingForPayment.dateTime,
+            paymentMethod: paymentMethod,
+            paymentType: paymentType,
+            installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
+            paidAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          });
+        }
+
+        // 3. Update Inventory (only if completing)
+        if (!isPrePayment && onUpdateInventory) {
           for (const used of usedProducts) {
             const item = inventory.find(i => i.id === used.productId);
             if (item) {
@@ -416,8 +430,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           }
         }
 
-        // 4. Award Loyalty Points
-        if (settings?.loyaltyConfig?.enabled) {
+        // 4. Award Loyalty Points (only if completing)
+        if (!isPrePayment && settings?.loyaltyConfig?.enabled) {
           const customer = customers.find(c => c.id === selectedBookingForPayment.customerId);
           if (customer && customer.isLoyaltyEnabled !== false) {
             const pointsToAward = Math.floor(totalAmount * (settings.loyaltyConfig.pointsPerReal || 1));
@@ -429,16 +443,17 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           }
         }
 
-        alert("Atendimento concluído e financeiro lançado!");
+        alert(isPrePayment ? "Pagamento antecipado confirmado!" : "Atendimento concluído e financeiro lançado!");
       } catch (e) {
-        console.error("Erro ao concluir atendimento:", e);
-        alert("Erro ao concluir atendimento.");
+        console.error("Erro ao processar pagamento:", e);
+        alert("Erro ao processar pagamento.");
       } finally {
         setIsProcessing(false);
       }
     }
     setIsPaymentModalOpen(false);
     setSelectedBookingForPayment(null);
+    setIsPrePayment(false);
     setModal({ open: false, hour: '', type: 'free' });
     setUsedProducts([]);
     // Reset payment states
@@ -783,6 +798,15 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       <div className="flex justify-end gap-2">
                         {b.status !== 'completed' && (
                           <>
+                            {b.depositStatus !== 'paid' && (
+                              <button 
+                                onClick={() => handleCompleteBooking(b, true)}
+                                className="p-2 bg-yellow-50 text-yellow-600 rounded-lg hover:bg-yellow-100 transition-all text-xs"
+                                title="Confirmar Pagamento Antecipado"
+                              >
+                                💰
+                              </button>
+                            )}
                             <button 
                               onClick={() => handleCompleteBooking(b)}
                               className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all text-xs"
@@ -1032,6 +1056,15 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
+                          {booking.depositStatus !== 'paid' && (
+                            <button 
+                              onClick={() => handleCompleteBooking(booking, true)} 
+                              disabled={isProcessing}
+                              className="col-span-2 py-3 bg-yellow-500/20 hover:bg-yellow-500/40 text-yellow-200 rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                            >
+                              💰 Confirmar Pagamento Antecipado
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleCompleteBooking(booking)} 
                             disabled={isProcessing}
@@ -1168,7 +1201,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         <div className="fixed inset-0 bg-tea-950/60 backdrop-blur-md flex items-center justify-center z-[110] p-4 animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[3rem] p-10 shadow-3xl animate-slide-up space-y-8">
             <div className="text-center">
-              <p className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.2em] mb-1">Finalizar Atendimento</p>
+              <p className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.2em] mb-1">
+                {isPrePayment ? 'Confirmar Pagamento Antecipado' : 'Finalizar Atendimento'}
+              </p>
               <h3 className="text-3xl font-serif text-tea-950 font-bold italic">{selectedBookingForPayment.customerName}</h3>
               <p className="text-sm text-gray-400 mt-1">{selectedBookingForPayment.serviceName}</p>
             </div>
@@ -1252,7 +1287,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                 disabled={isProcessing}
                 className="w-full py-6 bg-tea-950 text-white rounded-3xl font-bold uppercase text-xs tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-50"
               >
-                {isProcessing ? 'Processando...' : 'Confirmar e Concluir'}
+                {isProcessing ? 'Processando...' : (isPrePayment ? 'Confirmar Pagamento' : 'Confirmar e Concluir')}
               </button>
               <button
                 onClick={() => {
