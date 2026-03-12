@@ -98,9 +98,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     const slotStart = currentTime;
     const slotEnd = currentTime + 30 * 60 * 1000;
 
-    // 1. Prioritize actual appointments (scheduled, pending, completed)
-    // Check if any appointment covers this slot (either exact match or duration overlap)
-    const appointment = bookings.find(b => {
+    // Find ALL appointments that cover this slot
+    const appointments = bookings.filter(b => {
       if (b.teamMemberId !== selectedProId || b.status === 'cancelled' || b.status === 'open' || b.status === 'blocked') return false;
       if (!b.dateTime.startsWith(selectedDate)) return false;
       
@@ -112,18 +111,18 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       return bStart < slotEnd && bEnd > slotStart;
     });
 
-    if (appointment) {
-      const isExact = appointment.dateTime === fullDateTime;
+    if (appointments.length > 0) {
+      const isExact = appointments.some(b => b.dateTime === fullDateTime);
       return { 
-        type: isExact ? appointment.status : 'occupied', 
-        booking: appointment,
-        isDurationBlock: !isExact
+        type: 'occupied', 
+        bookings: appointments,
+        isDurationBlock: !isExact && appointments.every(b => b.dateTime !== fullDateTime)
       };
     }
 
     // 2. If no appointment, check for "open" slots (liberated for site)
-    const openSlot = bookings.find(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status === 'open');
-    if (openSlot) return { type: 'open', booking: openSlot };
+    const openSlots = bookings.filter(b => b.dateTime === fullDateTime && b.teamMemberId === selectedProId && b.status === 'open');
+    if (openSlots.length > 0) return { type: 'open', bookings: openSlots };
 
     return { type: 'locked' };
   };
@@ -588,15 +587,16 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             if (data.type === 'open') {
               style = "bg-white border-tea-500 text-tea-900 border-2 cursor-pointer shadow-md shadow-tea-50";
               label = "Aberto p/ Site";
-            } else if (data.type === 'scheduled' || data.type === 'completed' || data.type === 'pending' || (data as any).isDurationBlock) {
+            } else if (data.type === 'occupied') {
+              const appointments = (data as any).bookings as Booking[];
               if ((data as any).isDurationBlock) {
-                style = "bg-tea-800/80 text-white/80 border-tea-800 cursor-not-allowed shadow-inner";
-                const b = data.booking;
-                label = `Duração: ${b?.customerName.split(' ')[0] || "Ocupado"}${b?.serviceName ? ` (${b.serviceName})` : ''}`;
+                style = "bg-tea-800/80 text-white/80 border-tea-800 cursor-pointer shadow-inner";
+                const names = appointments.map(b => b.customerName.split(' ')[0]).join(' & ');
+                label = `Ocupado: ${names}`;
               } else {
                 style = "bg-tea-900 text-white border-tea-900 cursor-pointer shadow-lg";
-                const b = data.booking;
-                label = `${b?.customerName.split(' ')[0] || "Ocupado"}${b?.serviceName ? ` - ${b.serviceName}` : ''}`;
+                const names = appointments.map(b => b.customerName.split(' ')[0]).join(' & ');
+                label = names;
               }
             } else {
               // Bloqueado mas clicável para abrir
@@ -611,12 +611,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                 onClick={() => {
                   const data = getSlotData(hour);
                   setModal({ open: true, hour, type: data.type === 'locked' ? 'free' : (data.type === 'open' ? 'opened' : 'occupied') });
-                  if (data.booking) setEditingPriceValue(data.booking.originalPrice || 0);
+                  if ((data as any).bookings && (data as any).bookings.length > 0) {
+                    setEditingPriceValue((data as any).bookings[0].originalPrice || 0);
+                  }
                 }}
                 className={`p-6 rounded-3xl transition-all flex flex-col items-center justify-center min-h-[100px] ${style} hover:scale-105 active:scale-95`}
               >
                 <span className="text-xl font-serif font-bold italic">{hour}</span>
-                <span className="text-[8px] font-bold uppercase tracking-widest mt-1 text-center">{label}</span>
+                <span className="text-[8px] font-bold uppercase tracking-widest mt-1 text-center line-clamp-2">{label}</span>
               </button>
             );
           })}
@@ -805,134 +807,170 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             )}
 
             {modal.type === 'opened' && (
-              <div className="space-y-4">
-                 <div className="p-6 bg-tea-50 rounded-3xl text-center border border-tea-100">
-                    <p className="text-tea-900 font-bold text-sm">Este horário está aberto no site.</p>
-                    <p className="text-[10px] text-tea-600 italic">As clientes podem ver e agendar este slot agora mesmo.</p>
+              <div className="space-y-6">
+                 <div className="p-8 bg-tea-50 rounded-[2.5rem] text-center border border-tea-100 space-y-2">
+                    <p className="text-tea-900 font-bold text-lg">Horário Aberto no Site</p>
+                    <p className="text-[10px] text-tea-600 italic font-medium uppercase tracking-widest">
+                      {getSlotData(modal.hour).bookings?.length} vaga(s) disponível(is)
+                    </p>
                  </div>
-                 <button 
-                  onClick={() => handleCloseSlot(getSlotData(modal.hour).booking!.id)} 
-                  className="w-full py-5 bg-red-50 text-red-600 rounded-2xl font-bold uppercase text-[10px] tracking-widest border border-red-100 hover:bg-red-100 transition-all"
-                 >
-                  🔒 Bloquear Horário
-                 </button>
+                 
+                 <div className="space-y-3">
+                   <button 
+                    onClick={() => handleOpenSlot(modal.hour)} 
+                    className="w-full py-5 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:bg-black transition-all"
+                   >
+                    ➕ Adicionar Mais uma Vaga
+                   </button>
+
+                   <div className="pt-4 border-t border-gray-100 space-y-2">
+                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center mb-2">Gerenciar Vagas Abertas</p>
+                     {getSlotData(modal.hour).bookings?.map((b: Booking, idx: number) => (
+                       <div key={b.id} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl">
+                         <span className="text-[10px] font-bold text-tea-900 uppercase">Vaga #{idx + 1}</span>
+                         <button 
+                          onClick={() => handleCloseSlot(b.id)} 
+                          className="text-red-400 hover:text-red-600 text-[10px] font-bold uppercase tracking-widest"
+                         >
+                          Bloquear
+                         </button>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+
+                 <div className="p-8 bg-gray-50 rounded-[2.5rem] space-y-5 border border-gray-100">
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center border-b border-gray-200 pb-3">Agendamento Direto (Manual)</p>
+                    
+                    <div className="space-y-2">
+                      <input 
+                        type="text" 
+                        placeholder="Buscar cliente..." 
+                        value={customerSearch} 
+                        onChange={e => setCustomerSearch(e.target.value)} 
+                        className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold" 
+                      />
+                      <div className="max-h-28 overflow-y-auto space-y-1 custom-scroll pr-2">
+                        {customers.filter(c => {
+                          const isMatch = c.name.toLowerCase().includes(customerSearch.toLowerCase());
+                          const isTestUser = c.cpf.replace(/\D/g, '') === '33426618877';
+                          return isMatch && !isTestUser;
+                        }).slice(0, 5).map(c => (
+                          <button key={c.id} onClick={() => { setSelectedCustomerId(c.id); setCustomerSearch(c.name); }} className={`w-full p-3 text-left text-[10px] rounded-xl font-bold transition-all ${selectedCustomerId === c.id ? 'bg-tea-900 text-white' : 'bg-white hover:bg-tea-50 text-gray-600'}`}>
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <select 
+                      value={selectedServiceId} 
+                      onChange={e => {
+                        const sid = e.target.value;
+                        setSelectedServiceId(sid);
+                        const s = services.find(item => item.id === sid);
+                        if (s) setManualPrice(s.price);
+                      }} 
+                      className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
+                    >
+                      <option value="">Selecione o serviço...</option>
+                      {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+
+                    <button 
+                      onClick={() => handleManualBooking()} 
+                      className="w-full py-5 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
+                    >
+                      Confirmar Agendamento
+                    </button>
+                  </div>
               </div>
             )}
 
             {modal.type === 'occupied' && (
                <div className="space-y-6">
-                  <div className="p-8 bg-tea-900 text-white rounded-[2.5rem] text-center shadow-xl">
-                     <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-2">Cliente Agendada</p>
-                     <button 
-                      onClick={() => {
-                        const booking = getSlotData(modal.hour).booking;
-                        if (booking?.customerId && booking?.customerId !== 'none') {
-                          setHistoryCustomerId(booking.customerId);
-                        }
-                      }}
-                      className="font-serif text-2xl font-bold italic hover:text-tea-100 transition-colors"
-                     >
-                      {getSlotData(modal.hour).booking?.customerName}
-                     </button>
-                     <p className="text-xs text-tea-100 mt-2 font-medium">
-                      {getSlotData(modal.hour).booking?.serviceName || 'Serviço'}
-                      {getSlotData(modal.hour).booking?.originalPrice && (
-                        <span className="block text-[10px] opacity-80 mt-1">Valor Acordado: R$ {getSlotData(modal.hour).booking?.originalPrice.toFixed(2)}</span>
-                      )}
-                    </p>
+                  <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2 custom-scroll">
+                    {getSlotData(modal.hour).bookings?.map((booking: Booking) => (
+                      <div key={booking.id} className="p-6 bg-tea-900 text-white rounded-[2.5rem] shadow-xl space-y-4">
+                        <div className="text-center">
+                          <p className="text-[10px] font-bold text-tea-300 uppercase tracking-widest mb-1">Cliente Agendada</p>
+                          <button 
+                            onClick={() => {
+                              if (booking.customerId && booking.customerId !== 'none') {
+                                setHistoryCustomerId(booking.customerId);
+                              }
+                            }}
+                            className="font-serif text-xl font-bold italic hover:text-tea-100 transition-colors"
+                          >
+                            {booking.customerName}
+                          </button>
+                          <p className="text-[10px] text-tea-100 mt-1 font-medium">
+                            {booking.serviceName} - R$ {booking.originalPrice?.toFixed(2)}
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <button 
+                            onClick={() => handleCompleteBooking(booking)} 
+                            disabled={isProcessing}
+                            className="py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                          >
+                            Concluir
+                          </button>
+                          <button 
+                            onClick={() => handleCloseSlot(booking.id)} 
+                            className="py-3 bg-red-500/20 hover:bg-red-500/40 text-red-200 rounded-xl font-bold uppercase text-[8px] tracking-widest transition-all"
+                          >
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  
-                  <div className="grid grid-cols-1 gap-3">
-                    <div className="p-6 bg-orange-50 rounded-[2rem] border border-orange-100 space-y-3">
-                      <p className="text-[9px] font-bold text-orange-800 uppercase tracking-widest text-center">Ajustar Valor do Procedimento</p>
-                      <div className="flex gap-2">
-                        <input 
-                          type="number" 
-                          value={editingPriceValue || 0}
-                          onChange={e => setEditingPriceValue(Number(e.target.value))}
-                          className="flex-1 p-3 bg-white border border-orange-100 rounded-xl text-xs outline-none font-bold text-tea-900" 
-                        />
-                        <button 
-                          onClick={() => handleUpdatePrice(getSlotData(modal.hour).booking!.id, editingPriceValue || 0)}
-                          disabled={isProcessing}
-                          className="px-4 bg-tea-900 text-white rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
-                        >
-                          Salvar
-                        </button>
+
+                  <div className="p-8 bg-gray-50 rounded-[2.5rem] space-y-5 border border-gray-100">
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center border-b border-gray-200 pb-3">Novo Agendamento neste Horário</p>
+                    
+                    <div className="space-y-2">
+                      <input 
+                        type="text" 
+                        placeholder="Buscar cliente..." 
+                        value={customerSearch} 
+                        onChange={e => setCustomerSearch(e.target.value)} 
+                        className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold" 
+                      />
+                      <div className="max-h-28 overflow-y-auto space-y-1 custom-scroll pr-2">
+                        {customers.filter(c => {
+                          const isMatch = c.name.toLowerCase().includes(customerSearch.toLowerCase());
+                          const isTestUser = c.cpf.replace(/\D/g, '') === '33426618877';
+                          return isMatch && !isTestUser;
+                        }).slice(0, 5).map(c => (
+                          <button key={c.id} onClick={() => { setSelectedCustomerId(c.id); setCustomerSearch(c.name); }} className={`w-full p-3 text-left text-[10px] rounded-xl font-bold transition-all ${selectedCustomerId === c.id ? 'bg-tea-900 text-white' : 'bg-white hover:bg-tea-50 text-gray-600'}`}>
+                            {c.name}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="p-6 bg-gray-50 rounded-[2rem] border border-gray-100 space-y-4">
-                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest text-center">Produtos Utilizados</p>
-                      
-                      <div className="space-y-2">
-                        <input 
-                          type="text" 
-                          placeholder="Buscar produto no estoque..." 
-                          value={productSearch} 
-                          onChange={e => setProductSearch(e.target.value)} 
-                          className="w-full p-3 bg-white border border-gray-100 rounded-xl text-xs outline-none font-bold" 
-                        />
-                        <div className="max-h-24 overflow-y-auto space-y-1 custom-scroll">
-                          {inventory.filter(i => i.name.toLowerCase().includes(productSearch.toLowerCase()) && i.quantity > 0).slice(0, 5).map(i => (
-                            <button 
-                              key={i.id} 
-                              onClick={() => {
-                                if (!usedProducts.find(p => p.productId === i.id)) {
-                                  setUsedProducts([...usedProducts, { productId: i.id, quantity: 1 }]);
-                                }
-                                setProductSearch('');
-                              }} 
-                              className="w-full p-2 text-left text-[10px] rounded-lg font-bold bg-white hover:bg-tea-50 text-gray-600 border border-gray-50"
-                            >
-                              {i.name} ({i.quantity} {i.unit})
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {usedProducts.length > 0 && (
-                        <div className="space-y-2 pt-2">
-                          {usedProducts.map(p => {
-                            const item = inventory.find(i => i.id === p.productId);
-                            return (
-                              <div key={p.productId} className="flex items-center justify-between bg-white p-2 rounded-xl border border-tea-50">
-                                <span className="text-[10px] font-bold text-tea-900 truncate flex-1">{item?.name}</span>
-                                <div className="flex items-center gap-2">
-                                  <input 
-                                    type="number" 
-                                    value={p.quantity} 
-                                    onChange={e => setUsedProducts(usedProducts.map(up => up.productId === p.productId ? { ...up, quantity: Number(e.target.value) } : up))}
-                                    className="w-12 p-1 bg-gray-50 rounded-lg text-center text-[10px] font-bold outline-none"
-                                  />
-                                  <span className="text-[9px] text-gray-400">{item?.unit}</span>
-                                  <button onClick={() => setUsedProducts(usedProducts.filter(up => up.productId !== p.productId))} className="text-red-300 hover:text-red-500">✕</button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+                    <select 
+                      value={selectedServiceId} 
+                      onChange={e => {
+                        const sid = e.target.value;
+                        setSelectedServiceId(sid);
+                        const s = services.find(item => item.id === sid);
+                        if (s) setManualPrice(s.price);
+                      }} 
+                      className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
+                    >
+                      <option value="">Selecione o serviço...</option>
+                      {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
 
                     <button 
-                      onClick={() => handleCompleteBooking(getSlotData(modal.hour).booking!)} 
-                      disabled={isProcessing}
-                      className="w-full py-5 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest hover:bg-tea-200 transition-all shadow-md disabled:opacity-50"
+                      onClick={() => handleManualBooking()} 
+                      className="w-full py-5 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
                     >
-                      {isProcessing ? 'Processando...' : '✅ Concluir Atendimento'}
-                    </button>
-                    <button 
-                      onClick={() => handleCloseSlot(getSlotData(modal.hour).booking!.id)} 
-                      className="w-full py-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-100 transition-all"
-                    >
-                      Cancelar Agendamento
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteBooking(getSlotData(modal.hour).booking!.id)} 
-                      className="w-full py-3 text-red-400 text-[9px] font-bold uppercase tracking-widest hover:text-red-600 transition-all"
-                    >
-                      🗑️ Excluir Permanentemente
+                      Confirmar Novo Agendamento
                     </button>
                   </div>
                </div>

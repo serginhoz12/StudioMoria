@@ -68,35 +68,19 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       b.dateTime >= today
     );
 
-    // 2. Identify slots that are NOT covered by any active booking's duration
-    const nonOverlappingOpenSlots = bookings.filter(slot => {
+    // 2. Identify slots that are open
+    const openSlots = bookings.filter(slot => {
       if (slot.status !== 'open' || slot.dateTime < today) return false;
-      const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
-      return !activeBookings.some(b => {
-        if (slot.teamMemberId && b.teamMemberId && slot.teamMemberId !== b.teamMemberId) return false;
-        const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
-        const bDuration = b.duration || 30;
-        const bEnd = bStart + bDuration * 60 * 1000;
-        return slotStart >= bStart && slotStart < bEnd;
-      });
+      return true;
     });
 
-    // 3. If a service is selected, ensure the entire duration fits without hitting another booking or closing time
+    // 3. If a service is selected, ensure the entire duration fits without hitting closing time
     if (selectedService) {
       const serviceDurationMs = selectedService.duration * 60 * 1000;
       
-      return nonOverlappingOpenSlots.filter(slot => {
+      return openSlots.filter(slot => {
         const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
         const slotEnd = slotStart + serviceDurationMs;
-
-        // Check for conflicts with other bookings that start after this slot
-        const hasConflict = activeBookings.some(b => {
-          if (slot.teamMemberId && b.teamMemberId && slot.teamMemberId !== b.teamMemberId) return false;
-          const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
-          return bStart > slotStart && bStart < slotEnd;
-        });
-
-        if (hasConflict) return false;
 
         // Check if the service exceeds business hours (Allow up to 2 hours overtime per CLT)
         const [date] = slot.dateTime.split(' ');
@@ -115,7 +99,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
     }
 
-    return nonOverlappingOpenSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    return openSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
   }, [bookings, selectedService, settings.businessHours.end, settings.teamMembers]);
 
   const groupedSlots = useMemo(() => {
