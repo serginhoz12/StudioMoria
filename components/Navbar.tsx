@@ -70,7 +70,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
               <span className="text-[6px] font-bold text-tea-600 uppercase tracking-widest mt-0.5">
-                v{APP_VERSION} • Atualizado em {lastUpdated ? new Date(lastUpdated).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : LAST_UPDATE_DATE}
+                v{APP_VERSION} • Publicado em {LAST_UPDATE_DATE}
               </span>
             </div>
           </div>
