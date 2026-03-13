@@ -47,10 +47,11 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix'>('pix');
+  const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix' | 'store_installments'>('pix');
   const [paymentType, setPaymentType] = useState<'sight' | 'installments'>('sight');
   const [installmentsCount, setInstallmentsCount] = useState(1);
   const [installmentValue, setInstallmentValue] = useState(0);
+  const [dueDate, setDueDate] = useState(new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
   // Auto-calculate installment value
   React.useEffect(() => {
@@ -86,23 +87,25 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
         // 1. Update booking
         await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), {
           status: 'scheduled',
-          depositStatus: 'paid',
+          depositStatus: paymentMethod === 'store_installments' ? 'pending' : 'paid',
           paymentReceived: totalAmount,
           paymentDate: new Date().toISOString(),
           paymentMethod: paymentMethod,
           paymentType: paymentType,
           installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
           originalPrice: totalAmount,
+          dueDate: paymentMethod === 'store_installments' ? dueDate : null,
           updatedAt: new Date().toISOString()
         });
 
         // 2. Create transaction
         await addDoc(collection(db, "transactions"), {
           type: 'receivable',
-          description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)`,
+          description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
           amount: totalAmount,
           date: new Date().toISOString().split('T')[0],
-          status: 'paid',
+          dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
+          status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
           customerId: selectedBookingForPayment.customerId,
           customerName: selectedBookingForPayment.customerName,
           bookingId: selectedBookingForPayment.id,
@@ -111,7 +114,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           paymentMethod: paymentMethod,
           paymentType: paymentType,
           installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-          paidAt: new Date().toISOString(),
+          paidAt: paymentMethod === 'store_installments' ? null : new Date().toISOString(),
           createdAt: new Date().toISOString()
         });
       }
@@ -357,10 +360,19 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                      <input 
                        type="number" 
                        value={editingPrices[b.id] !== undefined ? editingPrices[b.id] : (b.originalPrice || 0)}
-                       onChange={e => setEditingPrices({ ...editingPrices, [b.id]: Number(e.target.value) })}
+                       id={`price-input-${b.id}`}
+                        onChange={e => setEditingPrices({ ...editingPrices, [b.id]: Number(e.target.value) })}
                        className="w-20 p-1 bg-gray-50 border border-gray-100 rounded-lg text-[10px] font-bold text-tea-900 outline-none focus:ring-1 focus:ring-tea-200"
                      />
-                     <span className="text-[8px] text-orange-500 font-bold uppercase tracking-tighter bg-orange-50 px-2 py-0.5 rounded-full">Ajustar Valor</span>
+                     <button 
+                        onClick={() => {
+                          const input = document.getElementById(`price-input-${b.id}`) as HTMLInputElement;
+                          if (input) input.focus();
+                        }}
+                        className="text-[8px] text-orange-500 font-bold uppercase tracking-tighter bg-orange-50 px-2 py-0.5 rounded-full hover:bg-orange-100 transition-colors"
+                      >
+                        Ajustar Valor
+                      </button>
                    </div>
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">🗓️ {b.dateTime}</p>
                    {b.teamMemberName && <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">👤 Profissional: {b.teamMemberName}</p>}
@@ -763,8 +775,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
               {/* Meio de Pagamento */}
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Meio de Pagamento</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['pix', 'debit', 'credit'] as const).map((method) => (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {(['pix', 'debit', 'credit', 'store_installments'] as const).map((method) => (
                     <button
                       key={method}
                       onClick={() => setPaymentMethod(method)}
@@ -774,11 +786,24 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                           : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
                       }`}
                     >
-                      {method === 'pix' ? 'PIX' : method === 'debit' ? 'Débito' : 'Crédito'}
+                      {method === 'pix' ? 'PIX' : method === 'debit' ? 'Débito' : method === 'credit' ? 'Crédito' : 'A Prazo'}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Data de Promessa (Apenas para A Prazo) */}
+              {paymentMethod === 'store_installments' && (
+                <div className="space-y-3 animate-fade-in">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data da Promessa de Pagamento</label>
+                  <input 
+                    type="date" 
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100"
+                  />
+                </div>
+              )}
 
               {/* Tipo de Pagamento */}
               <div className="space-y-3">

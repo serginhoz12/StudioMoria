@@ -44,10 +44,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isPrePayment, setIsPrePayment] = useState(false);
   const [selectedBookingForPayment, setSelectedBookingForPayment] = useState<Booking | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix'>('pix');
+  const [paymentMethod, setPaymentMethod] = useState<'credit' | 'debit' | 'pix' | 'store_installments'>('pix');
   const [paymentType, setPaymentType] = useState<'sight' | 'installments'>('sight');
   const [installmentsCount, setInstallmentsCount] = useState(1);
   const [installmentValue, setInstallmentValue] = useState(0);
+  const [dueDate, setDueDate] = useState(new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
   // Auto-calculate installment value
   React.useEffect(() => {
@@ -383,8 +384,12 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           paymentMethod: paymentMethod,
           paymentType: paymentType,
           installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-          depositStatus: 'paid'
+          depositStatus: paymentMethod === 'store_installments' ? 'pending' : 'paid'
         };
+
+        if (paymentMethod === 'store_installments') {
+          updateData.dueDate = dueDate;
+        }
 
         if (isPrePayment) {
           // Only confirm payment, keep current status (usually scheduled)
@@ -404,10 +409,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         if (shouldCreateTransaction) {
           await addDoc(collection(db, "transactions"), {
             type: 'receivable',
-            description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}`,
+            description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
             amount: totalAmount,
             date: new Date().toISOString().split('T')[0],
-            status: 'paid',
+            dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
+            status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
             customerId: selectedBookingForPayment.customerId,
             customerName: selectedBookingForPayment.customerName,
             bookingId: selectedBookingForPayment.id,
@@ -416,7 +422,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             paymentMethod: paymentMethod,
             paymentType: paymentType,
             installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-            paidAt: new Date().toISOString(),
+            paidAt: paymentMethod === 'store_installments' ? null : new Date().toISOString(),
             createdAt: new Date().toISOString()
           });
         }
@@ -447,6 +453,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         }
 
         alert(isPrePayment ? "Pagamento antecipado confirmado!" : "Atendimento concluído e financeiro lançado!");
+        setModal({ open: false, hour: '', type: 'free' });
       } catch (e) {
         console.error("Erro ao processar pagamento:", e);
         alert("Erro ao processar pagamento.");
@@ -825,6 +832,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                               🗓️
                             </button>
                           </>
+                        )}
+                        {b.status === 'completed' && (
+                          <button 
+                            onClick={() => {
+                              if (confirm("Este atendimento já consta como pago. Deseja gerar um NOVO lançamento no caixa mesmo assim?")) {
+                                handleCompleteBooking(b);
+                              }
+                            }}
+                            className="p-2 bg-purple-50 text-purple-600 rounded-lg hover:bg-purple-100 transition-all text-xs"
+                            title="Re-lançar no Caixa"
+                          >
+                            🔄
+                          </button>
                         )}
                         <button 
                           onClick={() => handleCloseSlot(b.id)}
@@ -1252,8 +1272,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               {/* Meio de Pagamento */}
               <div className="space-y-3">
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Meio de Pagamento</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['pix', 'debit', 'credit'] as const).map((method) => (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {(['pix', 'debit', 'credit', 'store_installments'] as const).map((method) => (
                     <button
                       key={method}
                       onClick={() => setPaymentMethod(method)}
@@ -1263,11 +1283,24 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                           : 'bg-gray-50 text-gray-400 border-transparent hover:bg-gray-100'
                       }`}
                     >
-                      {method === 'pix' ? 'PIX' : method === 'debit' ? 'Débito' : 'Crédito'}
+                      {method === 'pix' ? 'PIX' : method === 'debit' ? 'Débito' : method === 'credit' ? 'Crédito' : 'A Prazo'}
                     </button>
                   ))}
                 </div>
               </div>
+
+              {/* Data de Promessa (Apenas para A Prazo) */}
+              {paymentMethod === 'store_installments' && (
+                <div className="space-y-3 animate-fade-in">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Data da Promessa de Pagamento</label>
+                  <input 
+                    type="date" 
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100"
+                  />
+                </div>
+              )}
 
               {/* Tipo de Pagamento */}
               <div className="space-y-3">
