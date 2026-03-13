@@ -44,15 +44,18 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
   const cardRef = useRef<HTMLDivElement>(null);
 
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
   // Filtro de clientes para seleção
   const filteredCustomers = useMemo(() => {
+    if (!searchTerm && !isSearchFocused) return [];
     const search = searchTerm.toLowerCase();
     return customers.filter(c => 
       !searchTerm || 
       c.name.toLowerCase().includes(search) || 
       c.whatsapp.includes(searchTerm)
     ).slice(0, 5);
-  }, [customers, searchTerm]);
+  }, [customers, searchTerm, isSearchFocused]);
 
   const selectedCustomer = useMemo(() => 
     customers.find(c => c.id === selectedCustomerId), 
@@ -63,21 +66,80 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const [startDateFilter, setStartDateFilter] = useState(new Date().toISOString().split('T')[0]);
   const [endDateFilter, setEndDateFilter] = useState(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
 
-  // --- LÓGICA DE COBRANÇA ---
+  // --- LÓGICA GLOBAL (TOP 10 GERAL) ---
+  const globalPendingTransactions = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return transactions
+      .filter(t => t.type === 'receivable' && t.status === 'pending' && t.dueDate)
+      .map(t => {
+        const dueDate = new Date(t.dueDate!);
+        const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        return { ...t, diffDays };
+      })
+      .sort((a, b) => a.diffDays - b.diffDays)
+      .slice(0, 10);
+  }, [transactions]);
+
+  const globalRenewalCandidates = useMemo(() => {
+    const allCandidates: any[] = [];
+    
+    customers.forEach(customer => {
+      const lastBookings: Record<string, Booking> = {};
+      bookings
+        .filter(b => b.customerId === customer.id && b.status === 'completed' && b.dateTime)
+        .forEach(b => {
+          const bDate = new Date(b.dateTime);
+          if (isNaN(bDate.getTime())) return;
+
+          if (!lastBookings[b.serviceId] || bDate > new Date(lastBookings[b.serviceId].dateTime)) {
+            lastBookings[b.serviceId] = b;
+          }
+        });
+
+      Object.values(lastBookings).forEach(b => {
+        const service = services.find(s => s.id === b.serviceId);
+        if (service && service.returnPeriodDays) {
+          const lastDate = new Date(b.dateTime);
+          const nextDate = new Date(lastDate);
+          nextDate.setDate(lastDate.getDate() + service.returnPeriodDays);
+          
+          if (isNaN(nextDate.getTime())) return;
+
+          const today = new Date();
+          const diffDays = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+          allCandidates.push({ booking: b, service, nextDate, diffDays, customerName: customer.name, customerId: customer.id });
+        }
+      });
+    });
+
+    return allCandidates
+      .sort((a, b) => a.nextDate.getTime() - b.nextDate.getTime())
+      .slice(0, 10);
+  }, [bookings, customers, services]);
+
+  // --- LÓGICA POR CLIENTE SELECIONADO ---
   const pendingTransactions = useMemo(() => {
     if (!selectedCustomerId) return [];
-    const start = new Date(startDateFilter);
-    const end = new Date(endDateFilter);
-    end.setHours(23, 59, 59, 999);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    return transactions.filter(t => 
-      t.customerId === selectedCustomerId && 
-      t.type === 'receivable' && 
-      t.status === 'pending' &&
-      new Date(t.dueDate) >= start &&
-      new Date(t.dueDate) <= end
-    );
-  }, [transactions, selectedCustomerId, startDateFilter, endDateFilter]);
+    return transactions
+      .filter(t => 
+        t.customerId === selectedCustomerId && 
+        t.type === 'receivable' && 
+        t.status === 'pending' &&
+        t.dueDate
+      )
+      .map(t => {
+        const dueDate = new Date(t.dueDate!);
+        const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        return { ...t, diffDays };
+      })
+      .sort((a, b) => a.diffDays - b.diffDays)
+      .slice(0, 10);
+  }, [transactions, selectedCustomerId]);
 
   // --- LÓGICA DE PROMOÇÕES (PARA LEMBRETES) ---
   const activePromotions = useMemo(() => 
@@ -88,15 +150,15 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   // --- LÓGICA DE RENOVAÇÃO ---
   const renewalCandidates = useMemo(() => {
     if (!selectedCustomerId) return [];
-    const start = new Date(startDateFilter);
-    const end = new Date(endDateFilter);
-    end.setHours(23, 59, 59, 999);
 
     const lastBookings: Record<string, Booking> = {};
     bookings
-      .filter(b => b.customerId === selectedCustomerId && b.status === 'completed')
+      .filter(b => b.customerId === selectedCustomerId && b.status === 'completed' && b.dateTime)
       .forEach(b => {
-        if (!lastBookings[b.serviceId] || new Date(b.dateTime) > new Date(lastBookings[b.serviceId].dateTime)) {
+        const bDate = new Date(b.dateTime);
+        if (isNaN(bDate.getTime())) return;
+
+        if (!lastBookings[b.serviceId] || bDate > new Date(lastBookings[b.serviceId].dateTime)) {
           lastBookings[b.serviceId] = b;
         }
       });
@@ -108,16 +170,17 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       const nextDate = new Date(lastDate);
       nextDate.setDate(lastDate.getDate() + service.returnPeriodDays);
       
+      if (isNaN(nextDate.getTime())) return null;
+
       const today = new Date();
       const diffDays = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       return { booking: b, service, nextDate, diffDays };
-    }).filter(item => {
-      if (!item) return false;
-      return item.nextDate >= start && item.nextDate <= end;
-    });
-  }, [bookings, selectedCustomerId, services, startDateFilter, endDateFilter]);
-
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((a, b) => a.nextDate.getTime() - b.nextDate.getTime())
+    .slice(0, 10);
+  }, [bookings, selectedCustomerId, services]);
   const generateImage = async (message: string) => {
     setIsGenerating(true);
     setGeneratedMessage(message);
@@ -145,8 +208,11 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     }, 100);
   };
 
-  const handleSelectBilling = (transaction: Transaction) => {
-    const msg = `Lembrete de acerto: ${transaction.description}. Valor: R$ ${transaction.amount.toFixed(2)}.`;
+  const handleSelectBilling = (transaction: any) => {
+    const description = transaction.serviceName 
+      ? `${transaction.serviceName}${transaction.installmentNumber ? ` (${transaction.installmentNumber}/${transaction.installmentsCount})` : ''}`
+      : transaction.description;
+    const msg = `Olá! ✨ Passando para lembrar gentilmente sobre o acerto pendente de ${description} no valor de R$ ${transaction.amount.toFixed(2)}. Qualquer dúvida, estamos à disposição! 🌸`;
     setSelectedTransactionId(transaction.id);
     generateImage(msg);
   };
@@ -158,7 +224,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   };
 
   const handleSelectRenewal = (item: any) => {
-    const msg = `Hora de renovar seu procedimento de ${item.service.name}! Vamos agendar sua próxima sessão?`;
+    const msg = `Olá! ✨ Notamos que está na hora de renovar seu procedimento de ${item.service.name} para manter seus resultados impecáveis. Vamos agendar sua próxima sessão? 🌸`;
     setSelectedBookingId(item.booking.id);
     generateImage(msg);
   };
@@ -353,35 +419,101 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       {activeTab === 'reminders' && (
         <div className="space-y-8">
           {!selectedCustomerId ? (
-            <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100 max-w-2xl mx-auto">
-              <h3 className="text-xl font-serif text-tea-950 font-bold italic mb-6 text-center">Selecione uma Cliente para Lembretes</h3>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Buscar por nome ou WhatsApp..." 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full p-5 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all"
-                />
-                {filteredCustomers.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
-                    {filteredCustomers.map(c => (
-                      <button 
-                        key={c.id}
-                        onClick={() => setSelectedCustomerId(c.id)}
-                        className="w-full p-4 text-left hover:bg-tea-50 flex items-center gap-4 transition-colors"
-                      >
-                        <div className="w-10 h-10 bg-tea-100 rounded-xl flex items-center justify-center font-bold text-tea-900">
-                          {c.name.charAt(0)}
+            <div className="space-y-8 max-w-5xl mx-auto">
+              <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100 max-w-2xl mx-auto">
+                <h3 className="text-xl font-serif text-tea-950 font-bold italic mb-6 text-center">Selecione uma Cliente para Lembretes</h3>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por nome ou WhatsApp..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                    className="w-full p-5 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all"
+                  />
+                  {isSearchFocused && filteredCustomers.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                      {filteredCustomers.map(c => (
+                        <button 
+                          key={c.id}
+                          onClick={() => setSelectedCustomerId(c.id)}
+                          className="w-full p-4 text-left hover:bg-tea-50 flex items-center gap-4 transition-colors"
+                        >
+                          <div className="w-10 h-10 bg-tea-100 rounded-xl flex items-center justify-center font-bold text-tea-900">
+                            {c.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-tea-950 text-sm">{c.name}</p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-widest">{c.whatsapp}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* TOP 10 COBRANÇAS GERAL */}
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
+                  <h4 className="font-serif italic font-bold text-tea-950 text-lg">Próximas 10 Cobranças (Geral)</h4>
+                  <div className="space-y-3">
+                    {globalPendingTransactions.length > 0 ? globalPendingTransactions.map(t => {
+                      const customer = customers.find(c => c.id === t.customerId);
+                      return (
+                        <div 
+                          key={t.id} 
+                          onClick={() => {
+                            setSelectedCustomerId(t.customerId!);
+                            setReminderType('billing');
+                            handleSelectBilling(t);
+                          }}
+                          className="p-4 rounded-2xl border-2 border-gray-50 hover:border-tea-100 transition-all cursor-pointer flex justify-between items-center"
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-tea-950">{customer?.name || 'Cliente'}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {t.serviceName ? `${t.serviceName}${t.installmentNumber ? ` (${t.installmentNumber}/${t.installmentsCount})` : ''}` : t.description}
+                            </p>
+                            <p className="text-[8px] text-gray-400 uppercase tracking-widest">
+                              Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}
+                            </p>
+                            <p className={`text-[8px] font-bold uppercase tracking-widest ${t.diffDays < 0 ? 'text-red-500' : 'text-tea-600'}`}>
+                              {t.diffDays < 0 ? `Vencido há ${Math.abs(t.diffDays)} dias` : t.diffDays === 0 ? 'Vence hoje' : `Vence em ${t.diffDays} dias`}
+                            </p>
+                          </div>
+                          <span className="text-xs font-serif font-bold">R$ {t.amount.toFixed(2)}</span>
                         </div>
-                        <div>
-                          <p className="font-bold text-tea-950 text-sm">{c.name}</p>
-                          <p className="text-[10px] text-gray-400 uppercase tracking-widest">{c.whatsapp}</p>
-                        </div>
-                      </button>
-                    ))}
+                      );
+                    }) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma cobrança pendente encontrada.</p>}
                   </div>
-                )}
+                </div>
+
+                {/* TOP 10 RENOVAÇÕES GERAL */}
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
+                  <h4 className="font-serif italic font-bold text-tea-950 text-lg">Próximas 10 Renovações (Geral)</h4>
+                  <div className="space-y-3">
+                    {globalRenewalCandidates.length > 0 ? globalRenewalCandidates.map((item: any) => (
+                      <div 
+                        key={item.booking.id} 
+                        onClick={() => {
+                          setSelectedCustomerId(item.customerId);
+                          setReminderType('renewal');
+                          handleSelectRenewal(item);
+                        }}
+                        className="p-4 rounded-2xl border-2 border-gray-50 hover:border-tea-100 transition-all cursor-pointer flex justify-between items-center"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-tea-950">{item.customerName}</p>
+                          <p className="text-[10px] text-gray-500">{item.service.name}</p>
+                          <p className="text-[8px] text-gray-400 uppercase tracking-widest">Retorno Ideal: {item.nextDate ? item.nextDate.toLocaleDateString() : 'N/A'}</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-tea-600 uppercase tracking-widest">{item.diffDays <= 0 ? 'Vencido' : `Em ${item.diffDays} dias`}</span>
+                      </div>
+                    )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma renovação pendente encontrada.</p>}
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -415,7 +547,12 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
                       {/* Logotipo */}
                       {settings.logo ? (
-                        <img src={settings.logo} alt="Logo" className="h-12 object-contain mb-4" referrerPolicy="no-referrer" />
+                        <img 
+                          src={settings.logo} 
+                          alt="Logo" 
+                          className="w-48 object-contain mb-6 drop-shadow-xl" 
+                          referrerPolicy="no-referrer" 
+                        />
                       ) : (
                         <h1 className="text-2xl font-serif italic font-bold text-tea-950 mb-4">{settings.name}</h1>
                       )}
@@ -481,38 +618,23 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   {reminderType === 'billing' && (
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
-                        <h4 className="font-serif italic font-bold text-tea-950">Débitos Pendentes</h4>
-                        <div className="flex gap-2 items-center">
-                          <div className="flex flex-col">
-                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Início</label>
-                            <input 
-                              type="date" 
-                              value={startDateFilter} 
-                              onChange={(e) => setStartDateFilter(e.target.value)} 
-                              className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold outline-none"
-                            />
-                          </div>
-                          <div className="flex flex-col">
-                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Fim</label>
-                            <input 
-                              type="date" 
-                              value={endDateFilter} 
-                              onChange={(e) => setEndDateFilter(e.target.value)} 
-                              className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold outline-none"
-                            />
-                          </div>
-                        </div>
+                        <h4 className="font-serif italic font-bold text-tea-950">Próximas 10 Cobranças</h4>
                       </div>
                       <div className="space-y-3">
                         {pendingTransactions.length > 0 ? pendingTransactions.map(t => (
                           <div key={t.id} onClick={() => handleSelectBilling(t)} className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedTransactionId === t.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 hover:border-tea-100'}`}>
                             <div>
-                              <p className="text-xs font-bold text-tea-950">{t.description}</p>
-                              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Vencimento: {new Date(t.dueDate).toLocaleDateString()}</p>
+                              <p className="text-xs font-bold text-tea-950">
+                                {t.serviceName ? `${t.serviceName}${t.installmentNumber ? ` (${t.installmentNumber}/${t.installmentsCount})` : ''}` : t.description}
+                              </p>
+                              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</p>
+                              <p className={`text-[8px] font-bold uppercase tracking-widest ${t.diffDays < 0 ? 'text-red-500' : 'text-tea-600'}`}>
+                                {t.diffDays < 0 ? `Vencido há ${Math.abs(t.diffDays)} dias` : t.diffDays === 0 ? 'Vence hoje' : `Vence em ${t.diffDays} dias`}
+                              </p>
                             </div>
                             <span className="text-xs font-serif font-bold">R$ {t.amount.toFixed(2)}</span>
                           </div>
-                        )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhum débito pendente neste período.</p>}
+                        )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma cobrança pendente encontrada.</p>}
                       </div>
                     </div>
                   )}
@@ -534,38 +656,18 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   {reminderType === 'renewal' && (
                     <div className="space-y-6">
                       <div className="flex justify-between items-center">
-                        <h4 className="font-serif italic font-bold text-tea-950">Procedimentos para Renovar</h4>
-                        <div className="flex gap-2 items-center">
-                          <div className="flex flex-col">
-                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Início</label>
-                            <input 
-                              type="date" 
-                              value={startDateFilter} 
-                              onChange={(e) => setStartDateFilter(e.target.value)} 
-                              className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold outline-none"
-                            />
-                          </div>
-                          <div className="flex flex-col">
-                            <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Fim</label>
-                            <input 
-                              type="date" 
-                              value={endDateFilter} 
-                              onChange={(e) => setEndDateFilter(e.target.value)} 
-                              className="p-2 bg-gray-50 rounded-xl text-[10px] font-bold outline-none"
-                            />
-                          </div>
-                        </div>
+                        <h4 className="font-serif italic font-bold text-tea-950">Próximas 10 Renovações</h4>
                       </div>
                       <div className="space-y-3">
                         {renewalCandidates.length > 0 ? renewalCandidates.map((item: any) => (
                           <div key={item.booking.id} onClick={() => handleSelectRenewal(item)} className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedBookingId === item.booking.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 hover:border-tea-100'}`}>
                             <div>
                               <p className="text-xs font-bold text-tea-950">{item.service.name}</p>
-                              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Ideal: {item.nextDate.toLocaleDateString()}</p>
+                              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Retorno Ideal: {item.nextDate ? item.nextDate.toLocaleDateString() : 'N/A'}</p>
                             </div>
                             <span className="text-[10px] font-bold text-tea-600 uppercase tracking-widest">{item.diffDays <= 0 ? 'Vencido' : `Em ${item.diffDays} dias`}</span>
                           </div>
-                        )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma renovação pendente neste período.</p>}
+                        )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma renovação pendente encontrada.</p>}
                       </div>
                     </div>
                   )}
