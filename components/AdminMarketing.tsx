@@ -558,47 +558,47 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   <div className="flex justify-center">
                     <div 
                       ref={cardRef}
-                      className="w-[500px] h-[500px] bg-tea-900 rounded-[4rem] shadow-2xl overflow-hidden flex flex-col items-center justify-between p-12 text-center relative border-[12px] border-tea-800"
+                      className="w-[500px] h-[500px] bg-tea-900 rounded-[4rem] shadow-2xl overflow-hidden flex flex-col items-center justify-start p-8 text-center relative border-[12px] border-tea-800"
                       style={{ backgroundColor: '#1e3d28' }}
                     >
-                      {/* Decoração Simples - Agora mais sutis e fixas */}
+                      {/* Decoração Simples */}
                       <div className="absolute top-0 left-0 w-full h-3 bg-tea-800" />
                       <div className="absolute bottom-0 left-0 w-full h-3 bg-tea-800" />
                       
-                      {/* Conteúdo Central */}
-                      <div className="flex-1 flex flex-col items-center justify-center w-full space-y-6">
-                        {/* Logotipo */}
+                      {/* Conteúdo - Alinhado ao topo com margem controlada */}
+                      <div className="w-full flex flex-col items-center mt-6 space-y-4">
+                        {/* Logotipo - Reduzido para dar mais espaço ao texto */}
                         {settings.logo ? (
                           <img 
                             src={settings.logo} 
                             alt="Logo" 
-                            className="w-72 object-contain drop-shadow-xl" 
+                            className="w-56 object-contain drop-shadow-xl" 
                             referrerPolicy="no-referrer" 
                           />
                         ) : (
-                          <h1 className="text-4xl font-serif italic font-bold text-white">{settings.name}</h1>
+                          <h1 className="text-3xl font-serif italic font-bold text-white">{settings.name}</h1>
                         )}
 
-                        <div className="w-20 h-1 bg-tea-700" />
+                        <div className="w-16 h-1 bg-tea-700" />
 
-                        <div className="space-y-3 max-w-[420px]">
-                          <h2 className="text-2xl font-serif italic text-white font-bold">Olá, {selectedCustomer?.name?.split(' ')[0] || 'Cliente'}!</h2>
-                          <p className="text-lg text-tea-50 leading-relaxed italic">
+                        <div className="space-y-2 max-w-[440px]">
+                          <h2 className="text-xl font-serif italic text-white font-bold">Olá, {selectedCustomer?.name?.split(' ')[0] || 'Cliente'}!</h2>
+                          <p className="text-base text-tea-50 leading-snug italic">
                             {generatedMessage || "Selecione uma ação para gerar seu lembrete personalizado."}
                           </p>
                         </div>
                       </div>
 
-                      {/* Rodapé - Agora parte do fluxo flex para evitar sobreposição */}
-                      <div className="pt-4 w-full">
-                        <div className="text-[10px] text-tea-300 uppercase tracking-[0.3em] font-bold opacity-60">
+                      {/* Rodapé - Posicionado de forma absoluta para não empurrar o texto */}
+                      <div className="absolute bottom-10 left-0 right-0 px-8">
+                        <div className="text-[9px] text-tea-300 uppercase tracking-[0.3em] font-bold opacity-40">
                           {settings.name} • Estética & Bem-estar
                         </div>
                       </div>
 
-                      {/* Ícones decorativos em posições que não atrapalham */}
-                      <div className="absolute top-10 right-10 opacity-5 text-5xl">✨</div>
-                      <div className="absolute bottom-10 left-10 opacity-5 text-5xl">🌸</div>
+                      {/* Ícones decorativos mais discretos */}
+                      <div className="absolute top-10 right-10 opacity-5 text-4xl">✨</div>
+                      <div className="absolute bottom-12 left-10 opacity-5 text-4xl">🌸</div>
                     </div>
                   </div>
 
