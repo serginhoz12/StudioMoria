@@ -445,6 +445,7 @@ const App: React.FC = () => {
           promotions={promotions} 
           services={services} 
           bookings={bookings} 
+          transactions={transactions}
           settings={settings}
           onUpdateSettings={(data) => !isMockMode && updateDoc(doc(db, "settings", "main"), data)}
           onUpdateCustomer={(id, data) => !isMockMode && updateDoc(doc(db, "customers", id), data)}
