@@ -388,6 +388,40 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+           <span className="text-3xl">🛍️</span> Configurações da Loja Online
+        </h3>
+        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-8">
+          <div className="max-w-md space-y-2">
+            <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Acréscimo para Visitantes (%)</label>
+            <div className="flex items-center gap-4">
+              <input 
+                type="number"
+                className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
+                value={settings.visitorMarkupPercent || 0}
+                onChange={(e) => updateGlobalSettings({ ...settings, visitorMarkupPercent: parseFloat(e.target.value) || 0 })}
+              />
+              <span className="text-tea-900 font-bold">%</span>
+            </div>
+            <p className="text-[9px] text-gray-400 ml-1 italic">* Este percentual será aplicado automaticamente ao preço de custo para calcular o preço de venda para visitantes, caso o preço de visitante não seja definido manualmente no produto.</p>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-tea-100">
+            <div>
+              <p className="text-xs font-bold text-tea-900">Habilitar Loja para Visitantes</p>
+              <p className="text-[10px] text-gray-400">Se desativado, a loja só será visível para clientes logados.</p>
+            </div>
+            <button 
+              onClick={() => updateGlobalSettings({...settings, isStorePublic: !settings.isStorePublic})}
+              className={`w-14 h-8 rounded-full transition-all relative ${settings.isStorePublic !== false ? 'bg-tea-600' : 'bg-gray-200'}`}
+            >
+              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${settings.isStorePublic !== false ? 'right-1' : 'left-1 shadow-sm'}`}></div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
            <span className="text-3xl">🔗</span> Redes Sociais & Contato
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

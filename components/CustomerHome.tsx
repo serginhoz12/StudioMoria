@@ -1,21 +1,37 @@
 
 import React, { useState, useMemo } from 'react';
-import { SalonSettings, Service, Customer, Booking, Promotion } from '../types.ts';
+import { SalonSettings, Service, Customer, Booking, Promotion, InventoryItem, ProductInterest, ProductOrder } from '../types.ts';
 
 interface CustomerHomeProps {
   settings: SalonSettings;
   services: Service[];
   bookings: Booking[];
   promotions: Promotion[];
+  inventory: InventoryItem[];
   onBook: (serviceId: string, dateTime: string, teamMemberId?: string) => void;
   onAuthClick: () => void;
   onLoginSuccess: () => void;
   onQuickRegister: (name: string, whatsapp: string, bookingId?: string, serviceId?: string, isWaitlist?: boolean) => Promise<{ password: string | null; isNew: boolean }>;
   onAddToWaitlist: (serviceId: string) => void;
+  onPlaceOrder: (order: Omit<ProductOrder, 'id'>) => Promise<void>;
+  onAddInterest: (interest: Omit<ProductInterest, 'id'>) => Promise<void>;
   currentUser: Customer | null;
 }
 
-const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, bookings, promotions, onAuthClick, onLoginSuccess, onQuickRegister, onAddToWaitlist, currentUser }) => {
+const CustomerHome: React.FC<CustomerHomeProps> = ({ 
+  settings, 
+  services, 
+  bookings, 
+  promotions, 
+  inventory,
+  onAuthClick, 
+  onLoginSuccess, 
+  onQuickRegister, 
+  onAddToWaitlist, 
+  onPlaceOrder,
+  onAddInterest,
+  currentUser 
+}) => {
   const [formData, setFormData] = useState({ name: '', whatsapp: '', message: '' });
   const [selectedServiceDetail, setSelectedServiceDetail] = useState<Service | null>(null);
   const [showQuickAuth, setShowQuickAuth] = useState(false);
@@ -25,6 +41,16 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<Booking | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'services' | 'store'>('services');
+  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const [showInterestModal, setShowInterestModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [interestData, setInterestData] = useState({ name: '', whatsapp: '' });
+  const [checkoutData, setCheckoutData] = useState({ 
+    paymentMethod: 'pix' as any, 
+    deliveryOption: 'pickup' as any,
+    address: ''
+  });
 
   const availableSlots = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
@@ -85,6 +111,23 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
 
   const regularServices = useMemo(() => services.filter(s => s.isVisible), [services]);
 
+  const storeProducts = useMemo(() => {
+    return inventory.filter(item => {
+      if (!item.showOnSite) return false;
+      if (item.exclusiveForCustomers && !currentUser) return false;
+      return true;
+    });
+  }, [inventory, currentUser]);
+
+  const getProductPrice = (item: InventoryItem) => {
+    if (currentUser && item.customerPrice) return item.customerPrice;
+    if (item.visitorPrice) return item.visitorPrice;
+    if (item.purchasePrice && settings.visitorMarkupPercent) {
+      return item.purchasePrice * (1 + settings.visitorMarkupPercent / 100);
+    }
+    return item.purchasePrice || 0;
+  };
+
   const handleContactSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const message = `Olá Moriá! Me chamo ${formData.name || 'uma cliente'} e gostaria de saber mais sobre o Studio.`;
@@ -134,9 +177,34 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
           
           <div className="w-full max-w-md mx-auto space-y-6 px-6">
             <div className="flex flex-col gap-3">
-              {/* Botão solicitado: Ver Serviços */}
-              <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
-              <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
+              <div className="flex gap-2 mb-4">
+                <button 
+                  onClick={() => setActiveTab('services')}
+                  className={`flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all ${activeTab === 'services' ? 'bg-white text-tea-900 shadow-xl' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                >
+                  Procedimentos
+                </button>
+                {(settings.isStorePublic !== false || currentUser) && (
+                  <button 
+                    onClick={() => setActiveTab('store')}
+                    className={`flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all ${activeTab === 'store' ? 'bg-white text-tea-900 shadow-xl' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
+                  >
+                    Loja Moriá
+                  </button>
+                )}
+              </div>
+              
+              {activeTab === 'services' ? (
+                <>
+                  <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
+                  <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => scrollToId('loja')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Produtos</button>
+                  <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Dúvidas sobre Produtos</button>
+                </>
+              )}
               <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Acessar Minha Conta</button>
             </div>
             
@@ -152,34 +220,110 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
         </div>
       </section>
 
-      {/* Catálogo Geral */}
-      <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
-        <div className="text-center mb-16">
-          <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Estética Studio Moriá</p>
-          <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">{settings.servicesSectionTitle}</h2>
-        </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-          {regularServices.map(service => (
-            <div 
-              key={service.id} 
-              onClick={() => setSelectedServiceDetail(service)}
-              className="group bg-white p-10 rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] flex flex-col h-full relative cursor-pointer"
-            >
-              <div className="mb-8">
-                <h3 className="text-2xl font-serif font-bold text-tea-950 mb-3 group-hover:text-tea-800 transition-colors">{service.name}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed line-clamp-3 italic">
-                  {service.description}
-                </p>
-                <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-4 block">Toque para ver detalhes</span>
+      {/* Catálogo Geral ou Loja */}
+      {activeTab === 'services' ? (
+        <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
+          <div className="text-center mb-16">
+            <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Estética Studio Moriá</p>
+            <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">{settings.servicesSectionTitle}</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+            {regularServices.map(service => (
+              <div 
+                key={service.id} 
+                onClick={() => setSelectedServiceDetail(service)}
+                className="group bg-white p-10 rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] flex flex-col h-full relative cursor-pointer"
+              >
+                <div className="mb-8">
+                  <h3 className="text-2xl font-serif font-bold text-tea-950 mb-3 group-hover:text-tea-800 transition-colors">{service.name}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed line-clamp-3 italic">
+                    {service.description}
+                  </p>
+                  <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-4 block">Toque para ver detalhes</span>
+                </div>
+                <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
+                  <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
+                </div>
               </div>
-              <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
-                <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      ) : (settings.isStorePublic !== false || currentUser) ? (
+        <section id="loja" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
+          <div className="text-center mb-16">
+            <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Mini Loja Studio Moriá</p>
+            <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">Nossos Produtos</h2>
+            <p className="text-gray-400 mt-4 italic text-sm">Cuidados profissionais para você levar para casa.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+            {storeProducts.map(product => {
+              const price = getProductPrice(product);
+              const canBuy = product.quantity >= 2;
+              
+              return (
+                <div 
+                  key={product.id} 
+                  className="group bg-white rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] flex flex-col h-full relative overflow-hidden"
+                >
+                  <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                    {product.imageUrl ? (
+                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-tea-200 text-6xl">🛍️</div>
+                    )}
+                    {product.exclusiveForCustomers && (
+                      <div className="absolute top-6 left-6 bg-tea-900 text-white px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg">Exclusivo Cliente</div>
+                    )}
+                    {!canBuy && (
+                      <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center p-6 text-center">
+                        <p className="text-tea-900 font-bold text-xs uppercase tracking-widest">Estoque Limitado</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-10 flex flex-col flex-grow">
+                    <div className="mb-6">
+                      <h3 className="text-2xl font-serif font-bold text-tea-950 mb-2">{product.name}</h3>
+                      <p className="text-gray-400 text-sm leading-relaxed line-clamp-2 italic mb-4">
+                        {product.description || 'Sem descrição disponível.'}
+                      </p>
+                      <div className="text-2xl font-serif font-bold text-tea-800 italic">
+                        R$ {price.toFixed(2)}
+                      </div>
+                    </div>
+                    
+                    <div className="mt-auto pt-6 border-t border-gray-50">
+                      {canBuy ? (
+                        <button 
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setShowCheckoutModal(true);
+                          }}
+                          className="w-full bg-tea-900 text-white py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-black transition-all shadow-lg"
+                        >
+                          Comprar Agora
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => {
+                            setSelectedProduct(product);
+                            setShowInterestModal(true);
+                          }}
+                          className="w-full bg-white text-tea-900 border-2 border-tea-900 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-tea-50 transition-all"
+                        >
+                          Tenho Interesse
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
 
       {/* Dicas e Avisos */}
       {promotions.filter(p => p.type === 'tip' && p.isActive).length > 0 && (
@@ -567,6 +711,159 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({ settings, services, booking
               className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all"
             >
               Entendi, Acessar Minha Área
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tenho Interesse */}
+      {showInterestModal && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-xl animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[4rem] p-10 md:p-14 shadow-3xl animate-slide-up space-y-8 relative">
+            <button onClick={() => setShowInterestModal(false)} className="absolute top-8 right-8 text-gray-300 hover:text-tea-900 transition-colors">✕</button>
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 bg-tea-50 text-tea-900 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-4">🔔</div>
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Tenho Interesse</h3>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest leading-relaxed">Avise-me quando o produto "{selectedProduct.name}" estiver disponível!</p>
+            </div>
+            <div className="space-y-4">
+              <input 
+                placeholder="Seu Nome" 
+                className="w-full p-6 bg-gray-50 rounded-3xl border-none outline-none font-bold shadow-inner"
+                value={interestData.name}
+                onChange={e => setInterestData({...interestData, name: e.target.value})}
+              />
+              <input 
+                placeholder="Seu WhatsApp" 
+                className="w-full p-6 bg-gray-50 rounded-3xl border-none outline-none font-bold shadow-inner"
+                value={interestData.whatsapp}
+                onChange={e => setInterestData({...interestData, whatsapp: e.target.value})}
+              />
+            </div>
+            <button 
+              onClick={async () => {
+                if (!interestData.name || !interestData.whatsapp) return;
+                setIsProcessing(true);
+                await onAddInterest({
+                  productId: selectedProduct.id,
+                  productName: selectedProduct.name,
+                  customerName: interestData.name,
+                  customerWhatsapp: interestData.whatsapp,
+                  createdAt: new Date().toISOString(),
+                  status: 'pending'
+                });
+                setIsProcessing(false);
+                setShowInterestModal(false);
+                alert("Registramos seu interesse! Avisaremos você em breve.");
+              }}
+              className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all"
+            >
+              {isProcessing ? 'Enviando...' : 'Me Avisar'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Checkout */}
+      {showCheckoutModal && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/90 backdrop-blur-xl animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[4rem] p-10 md:p-14 shadow-3xl animate-slide-up space-y-8 relative max-h-[90vh] overflow-y-auto custom-scroll">
+            <button onClick={() => setShowCheckoutModal(false)} className="absolute top-8 right-8 text-gray-300 hover:text-tea-900 transition-colors">✕</button>
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Finalizar Compra</h3>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">{selectedProduct.name}</p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-2">Forma de Pagamento</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'pix', label: 'Pix' },
+                    { id: 'cash', label: 'Dinheiro' },
+                    { id: 'debit', label: 'Débito' },
+                    { id: 'credit', label: 'Crédito' }
+                  ].map(method => (
+                    <button 
+                      key={method.id}
+                      onClick={() => setCheckoutData({...checkoutData, paymentMethod: method.id as any})}
+                      className={`p-4 rounded-2xl border-2 font-bold text-[10px] uppercase tracking-widest transition-all ${checkoutData.paymentMethod === method.id ? 'bg-tea-900 border-tea-900 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-tea-100'}`}
+                    >
+                      {method.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-2">Opção de Entrega</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setCheckoutData({...checkoutData, deliveryOption: 'pickup'})}
+                    className={`p-4 rounded-2xl border-2 font-bold text-[10px] uppercase tracking-widest transition-all ${checkoutData.deliveryOption === 'pickup' ? 'bg-tea-900 border-tea-900 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-tea-100'}`}
+                  >
+                    Retirada no Local
+                  </button>
+                  <button 
+                    onClick={() => setCheckoutData({...checkoutData, deliveryOption: 'delivery'})}
+                    className={`p-4 rounded-2xl border-2 font-bold text-[10px] uppercase tracking-widest transition-all ${checkoutData.deliveryOption === 'delivery' ? 'bg-tea-900 border-tea-900 text-white shadow-lg' : 'bg-white border-gray-100 text-gray-400 hover:border-tea-100'}`}
+                  >
+                    Entrega na Região
+                  </button>
+                </div>
+              </div>
+
+              {checkoutData.deliveryOption === 'delivery' && (
+                <div className="space-y-2 animate-fade-in">
+                  <label className="text-[10px] font-bold text-tea-900 uppercase tracking-widest ml-2">Endereço de Entrega</label>
+                  <textarea 
+                    placeholder="Rua, número, bairro..."
+                    className="w-full p-6 bg-gray-50 rounded-3xl border-none outline-none font-bold shadow-inner h-24 resize-none"
+                    value={checkoutData.address}
+                    onChange={e => setCheckoutData({...checkoutData, address: e.target.value})}
+                  />
+                  <p className="text-[9px] text-gray-400 italic">Combinaremos a taxa de entrega via WhatsApp.</p>
+                </div>
+              )}
+
+              <div className="bg-tea-50 p-6 rounded-3xl border border-tea-100">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-bold text-tea-900 uppercase tracking-widest">Total</span>
+                  <span className="text-xl font-serif font-bold text-tea-900 italic">R$ {getProductPrice(selectedProduct).toFixed(2)}</span>
+                </div>
+              </div>
+            </div>
+
+            <button 
+              disabled={isProcessing || (checkoutData.deliveryOption === 'delivery' && !checkoutData.address)}
+              onClick={async () => {
+                if (!currentUser) {
+                  setShowCheckoutModal(false);
+                  onAuthClick();
+                  return;
+                }
+                setIsProcessing(true);
+                await onPlaceOrder({
+                  customerId: currentUser.id,
+                  customerName: currentUser.name,
+                  customerWhatsapp: currentUser.whatsapp,
+                  productId: selectedProduct.id,
+                  productName: selectedProduct.name,
+                  quantity: 1,
+                  totalPrice: getProductPrice(selectedProduct),
+                  paymentMethod: checkoutData.paymentMethod,
+                  deliveryOption: checkoutData.deliveryOption,
+                  deliveryAddress: checkoutData.address,
+                  status: 'pending',
+                  createdAt: new Date().toISOString()
+                });
+                setIsProcessing(false);
+                setShowCheckoutModal(false);
+                alert("Pedido realizado com sucesso! Entraremos em contato via WhatsApp.");
+              }}
+              className="w-full py-6 bg-tea-900 text-white rounded-[2rem] font-bold uppercase text-[11px] tracking-[0.2em] shadow-2xl hover:bg-black transition-all disabled:opacity-50"
+            >
+              {isProcessing ? 'Processando...' : 'Confirmar Pedido'}
             </button>
           </div>
         </div>

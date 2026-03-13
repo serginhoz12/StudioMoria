@@ -1,17 +1,18 @@
 
 import React, { useState } from 'react';
-import { InventoryItem, Customer, ProductSale } from '../types';
+import { InventoryItem, Customer, ProductSale, Service } from '../types';
 
 interface AdminInventoryProps {
   inventory: InventoryItem[];
   customers: Customer[];
+  services: Service[];
   onUpdate: (id: string, data: Partial<InventoryItem>) => void;
   onDelete: (id: string) => void;
   onAdd: (data: Omit<InventoryItem, 'id'>) => void;
   onSellProduct: (sale: Omit<ProductSale, 'id'>) => void;
 }
 
-const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, onUpdate, onDelete, onAdd, onSellProduct }) => {
+const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, services, onUpdate, onDelete, onAdd, onSellProduct }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sellingItem, setSellingItem] = useState<InventoryItem | null>(null);
@@ -36,7 +37,14 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, o
     expiryDate: '',
     usageStartDate: '',
     paymentMethod: 'pix' as any,
-    installmentsCount: 1
+    installmentsCount: 1,
+    imageUrl: '',
+    description: '',
+    customerPrice: 0,
+    visitorPrice: 0,
+    showOnSite: false,
+    exclusiveForCustomers: false,
+    associatedServiceIds: []
   };
 
   const [formItem, setFormItem] = useState<Omit<InventoryItem, 'id'>>(initialItem);
@@ -271,6 +279,102 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, o
                 />
               </div>
             )}
+            <div className="md:col-span-2 border-t border-tea-50 pt-4 mt-2">
+              <h4 className="text-sm font-bold text-tea-800 mb-4 flex items-center gap-2">
+                <span>🛒</span> Configurações da Loja Online
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">URL da Foto do Produto</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={formItem.imageUrl || ''}
+                      onChange={e => setFormItem({...formItem, imageUrl: e.target.value})}
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+                      placeholder="https://exemplo.com/foto.jpg"
+                    />
+                    {formItem.imageUrl && (
+                      <div className="w-10 h-10 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
+                        <img src={formItem.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição do Produto</label>
+                  <textarea 
+                    value={formItem.description || ''}
+                    onChange={e => setFormItem({...formItem, description: e.target.value})}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none h-10"
+                    placeholder="Detalhes para o cliente..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Preço para Cliente (R$)</label>
+                  <input 
+                    type="number" 
+                    value={formItem.customerPrice || ''}
+                    onChange={e => setFormItem({...formItem, customerPrice: Number(e.target.value)})}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Preço para Visitante (R$)</label>
+                  <input 
+                    type="number" 
+                    value={formItem.visitorPrice || ''}
+                    onChange={e => setFormItem({...formItem, visitorPrice: Number(e.target.value)})}
+                    className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="flex flex-col gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={formItem.showOnSite || false}
+                      onChange={e => setFormItem({...formItem, showOnSite: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-tea-600 focus:ring-tea-500"
+                    />
+                    <span className="text-xs font-bold text-gray-600 group-hover:text-tea-700 transition-colors">Exibir produto no site</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input 
+                      type="checkbox" 
+                      checked={formItem.exclusiveForCustomers || false}
+                      onChange={e => setFormItem({...formItem, exclusiveForCustomers: e.target.checked})}
+                      className="w-4 h-4 rounded border-gray-300 text-tea-600 focus:ring-tea-500"
+                    />
+                    <span className="text-xs font-bold text-gray-600 group-hover:text-tea-700 transition-colors">Produto exclusivo para clientes</span>
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Associar a Procedimentos</label>
+                  <div className="max-h-32 overflow-y-auto border border-gray-200 rounded-xl p-2 space-y-1">
+                    {services.map(service => (
+                      <label key={service.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                        <input 
+                          type="checkbox"
+                          checked={formItem.associatedServiceIds?.includes(service.id) || false}
+                          onChange={e => {
+                            const ids = formItem.associatedServiceIds || [];
+                            if (e.target.checked) {
+                              setFormItem({...formItem, associatedServiceIds: [...ids, service.id]});
+                            } else {
+                              setFormItem({...formItem, associatedServiceIds: ids.filter(id => id !== service.id)});
+                            }
+                          }}
+                          className="w-3 h-3 rounded border-gray-300 text-tea-600 focus:ring-tea-500"
+                        />
+                        <span className="text-[10px] text-gray-600">{service.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div className="flex justify-end gap-3 mt-6">
             <button 

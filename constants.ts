@@ -108,7 +108,8 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   },
   monthlyGoal: 5000,
   desiredProfit: 2000,
-  transactionCategories: ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros']
+  transactionCategories: ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros'],
+  isStorePublic: true
 };
 
 export const INITIAL_INVENTORY: InventoryItem[] = [

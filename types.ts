@@ -13,7 +13,8 @@ export enum View {
   ADMIN_CONFIRMATIONS = 'ADMIN_CONFIRMATIONS',
   ADMIN_SETTINGS = 'ADMIN_SETTINGS',
   ADMIN_MARKETING = 'ADMIN_MARKETING',
-  ADMIN_INVENTORY = 'ADMIN_INVENTORY'
+  ADMIN_INVENTORY = 'ADMIN_INVENTORY',
+  ADMIN_STORE = 'ADMIN_STORE'
 }
 
 export interface Customer {
@@ -91,7 +92,7 @@ export interface Booking {
   installmentsCount?: number;
 }
 
-export type PaymentMethod = 'pix' | 'debit' | 'credit' | 'store_installments';
+export type PaymentMethod = 'pix' | 'debit' | 'credit' | 'store_installments' | 'cash';
 
 export interface Transaction {
   id: string;
@@ -176,6 +177,8 @@ export interface SalonSettings {
   monthlyGoal?: number;
   desiredProfit?: number;
   transactionCategories?: string[];
+  visitorMarkupPercent?: number;
+  isStorePublic?: boolean;
 }
 
 export interface InventoryItem {
@@ -195,6 +198,40 @@ export interface InventoryItem {
   usageStartDate?: string;
   paymentMethod?: PaymentMethod;
   installmentsCount?: number;
+  // New fields for the store
+  imageUrl?: string;
+  description?: string;
+  customerPrice?: number;
+  visitorPrice?: number;
+  showOnSite?: boolean;
+  exclusiveForCustomers?: boolean;
+  associatedServiceIds?: string[];
+}
+
+export interface ProductInterest {
+  id: string;
+  productId: string;
+  productName: string;
+  customerName: string;
+  customerWhatsapp: string;
+  createdAt: string;
+  status: 'pending' | 'contacted' | 'resolved';
+}
+
+export interface ProductOrder {
+  id: string;
+  customerId?: string;
+  customerName: string;
+  customerWhatsapp: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  totalPrice: number;
+  paymentMethod: 'pix' | 'cash' | 'debit' | 'credit';
+  deliveryOption: 'pickup' | 'delivery';
+  deliveryAddress?: string;
+  status: 'pending' | 'paid' | 'delivered' | 'cancelled';
+  createdAt: string;
 }
 
 export interface LoyaltyConfig {

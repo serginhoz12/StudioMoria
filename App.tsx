@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, InventoryItem } from './types.ts';
+import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, InventoryItem, ProductInterest, ProductOrder } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS, INITIAL_INVENTORY } from './constants.ts';
 import { db, auth } from './firebase.ts';
 import { signInAnonymously } from "firebase/auth";
@@ -34,6 +34,20 @@ import AdminSettingsView from './components/AdminSettingsView.tsx';
 import AdminLogin from './components/AdminLogin.tsx';
 import AdminMarketing from './components/AdminMarketing.tsx';
 import AdminInventory from './components/AdminInventory.tsx';
+import AdminStoreManagement from './components/AdminStoreManagement.tsx';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+const handleFirestoreError = (error: any, operation: OperationType, collection: string) => {
+  console.error(`Firestore Error [${operation}] on ${collection}:`, error);
+};
 
 const App: React.FC = () => {
   // Load initial state from localStorage if available
@@ -58,6 +72,8 @@ const App: React.FC = () => {
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [productInterests, setProductInterests] = useState<ProductInterest[]>([]);
+  const [productOrders, setProductOrders] = useState<ProductOrder[]>([]);
   const [customerInitialTab, setCustomerInitialTab] = useState<'home' | 'agendar' | 'agenda'>('home');
 
   const setView = (v: View) => {
@@ -225,10 +241,22 @@ const App: React.FC = () => {
       handlePermissionError(error, "inventory");
     });
 
+    const unsubInterests = onSnapshot(collection(db, "productInterests"), (snapshot) => {
+      setProductInterests(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ProductInterest)));
+    }, (error) => {
+      handlePermissionError(error, "productInterests");
+    });
+
+    const unsubOrders = onSnapshot(collection(db, "productOrders"), (snapshot) => {
+      setProductOrders(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ProductOrder)));
+    }, (error) => {
+      handlePermissionError(error, "productOrders");
+    });
+
     return () => {
       unsubSettings(); unsubServices(); unsubCustomers();
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
-      unsubInventory();
+      unsubInventory(); unsubInterests(); unsubOrders();
     };
   }, [isMockMode]);
 
@@ -331,6 +359,78 @@ const App: React.FC = () => {
       createdAt: new Date().toISOString()
     });
     alert("Você foi adicionada à lista de espera!");
+  };
+
+  const handleAddInterest = async (interest: Omit<ProductInterest, 'id'>) => {
+    if (isMockMode) {
+      setProductInterests(prev => [...prev, { ...interest, id: Math.random().toString() }]);
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'productInterests'), interest);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'productInterests');
+    }
+  };
+
+  const handlePlaceOrder = async (order: Omit<ProductOrder, 'id'>) => {
+    if (isMockMode) {
+      setProductOrders(prev => [...prev, { ...order, id: Math.random().toString() }]);
+      return;
+    }
+    try {
+      await addDoc(collection(db, 'productOrders'), order);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'productOrders');
+    }
+  };
+
+  const handleUpdateInterest = async (id: string, data: Partial<ProductInterest>) => {
+    if (isMockMode) {
+      setProductInterests(prev => prev.map(i => i.id === id ? { ...i, ...data } : i));
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'productInterests', id), data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'productInterests');
+    }
+  };
+
+  const handleUpdateOrder = async (id: string, data: Partial<ProductOrder>) => {
+    if (isMockMode) {
+      setProductOrders(prev => prev.map(o => o.id === id ? { ...o, ...data } : o));
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'productOrders', id), data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'productOrders');
+    }
+  };
+
+  const handleDeleteInterest = async (id: string) => {
+    if (isMockMode) {
+      setProductInterests(prev => prev.filter(i => i.id !== id));
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'productInterests', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'productInterests');
+    }
+  };
+
+  const handleDeleteOrder = async (id: string) => {
+    if (isMockMode) {
+      setProductOrders(prev => prev.filter(o => o.id !== id));
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, 'productOrders', id));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'productOrders');
+    }
   };
 
   const renderView = () => {
@@ -453,6 +553,7 @@ const App: React.FC = () => {
         case View.ADMIN_INVENTORY: return <AdminInventory 
           inventory={inventory} 
           customers={customers}
+          services={services}
           onUpdate={async (id, data) => {
             if (isMockMode) {
               setInventory(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));
@@ -645,7 +746,17 @@ const App: React.FC = () => {
             }
           }}
         />;
-        default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
+      case View.ADMIN_STORE:
+        return <AdminStoreManagement 
+          interests={productInterests}
+          orders={productOrders}
+          inventory={inventory}
+          onUpdateInterest={handleUpdateInterest}
+          onUpdateOrder={handleUpdateOrder}
+          onDeleteInterest={handleDeleteInterest}
+          onDeleteOrder={handleDeleteOrder}
+        />;
+      default: return <AdminDashboard bookings={bookings} transactions={transactions} customers={customers} services={services} settings={settings} waitlist={waitlist} inventory={inventory} onLogout={() => { setIsAdminAuthenticated(false); setIsAdmin(false); setCurrentView(View.CUSTOMER_HOME); localStorage.removeItem('moria_isAdminAuth'); }} />;
       }
     }
 
@@ -799,12 +910,18 @@ const App: React.FC = () => {
       );
       default: return (
         <CustomerHome 
-          settings={settings} services={services} bookings={bookings} promotions={promotions}
+          settings={settings} 
+          services={services} 
+          bookings={bookings} 
+          promotions={promotions}
+          inventory={inventory}
           currentUser={currentUser}
           onBook={handleBook} 
           onAuthClick={() => setView(View.CUSTOMER_LOGIN)} 
           onLoginSuccess={() => setView(View.CUSTOMER_DASHBOARD)}
           onAddToWaitlist={handleAddToWaitlist}
+          onPlaceOrder={handlePlaceOrder}
+          onAddInterest={handleAddInterest}
           onQuickRegister={async (name, whatsapp, bookingId, serviceId, isWaitlist) => {
             const cleanWhatsapp = whatsapp.replace(/\D/g, '');
             if (isMockMode) {
