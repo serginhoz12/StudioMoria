@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, WaitlistEntry, Promotion, Transaction } from '../types';
+import { Customer, Booking, Service, SalonSettings, WaitlistEntry, Promotion, Transaction, InventoryItem } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 
@@ -10,6 +10,7 @@ interface CustomerDashboardProps {
   services: Service[];
   transactions: Transaction[];
   settings: SalonSettings;
+  inventory: InventoryItem[];
   onLogout: () => void;
   onUpdateProfile: (upd: any) => void;
   onCancelBooking: (id: string) => void;
@@ -17,7 +18,9 @@ interface CustomerDashboardProps {
   waitlist: WaitlistEntry[];
   onRemoveWaitlist: (id: string) => void;
   promotions: Promotion[];
-  initialTab?: 'home' | 'agendar' | 'agenda' | 'faturas';
+  onPlaceOrder: (order: any) => void;
+  onAddInterest: (interest: any) => void;
+  initialTab?: 'home' | 'agendar' | 'agenda' | 'faturas' | 'loja';
 }
 
 const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ 
@@ -26,6 +29,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   services, 
   transactions,
   settings, 
+  inventory,
   onLogout,
   onUpdateProfile,
   onCancelBooking,
@@ -33,12 +37,25 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   waitlist,
   onRemoveWaitlist,
   promotions,
+  onPlaceOrder,
+  onAddInterest,
   initialTab = 'home'
 }) => {
-  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'faturas'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'home' | 'agendar' | 'agenda' | 'faturas' | 'loja'>(initialTab);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [isBooking, setIsBooking] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [showInterestModal, setShowInterestModal] = useState(false);
+  const [orderData, setOrderData] = useState({
+    paymentMethod: 'pix' as 'pix' | 'cash' | 'debit' | 'credit',
+    deliveryMethod: 'pickup' as 'pickup' | 'delivery'
+  });
+  const [interestData, setInterestData] = useState({
+    whatsapp: customer.whatsapp || '',
+    name: customer.name || ''
+  });
 
   const handleCancelBooking = async (id: string) => {
     if (!confirm("Deseja realmente cancelar este agendamento?")) return;
@@ -257,6 +274,58 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     );
   }, [customer.productHistory]);
 
+  const storeProducts = useMemo(() => {
+    return inventory.filter(item => item.showOnSite);
+  }, [inventory]);
+
+  const getProductPrice = (product: InventoryItem) => {
+    if (product.customerPrice) return product.customerPrice;
+    const markup = settings.visitorMarkupPercent || 0;
+    const basePrice = product.purchasePrice || 0;
+    return basePrice * (1 + markup / 100);
+  };
+
+  const handleConfirmOrder = () => {
+    if (!selectedProduct) return;
+    
+    const order = {
+      id: Math.random().toString(36).substr(2, 9),
+      customerId: customer.id,
+      customerName: customer.name,
+      productId: selectedProduct.id,
+      productName: selectedProduct.name,
+      amount: getProductPrice(selectedProduct),
+      paymentMethod: orderData.paymentMethod,
+      deliveryMethod: orderData.deliveryMethod,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    
+    onPlaceOrder(order);
+    setShowCheckoutModal(false);
+    setSelectedProduct(null);
+    alert("Pedido realizado com sucesso! A Moriá entrará em contato para combinar a entrega.");
+  };
+
+  const handleConfirmInterest = () => {
+    if (!selectedProduct) return;
+    
+    const interest = {
+      id: Math.random().toString(36).substr(2, 9),
+      productId: selectedProduct.id,
+      productName: selectedProduct.name,
+      customerName: interestData.name,
+      customerWhatsapp: interestData.whatsapp,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    
+    onAddInterest(interest);
+    setShowInterestModal(false);
+    setSelectedProduct(null);
+    alert("Interesse registrado! Avisaremos você assim que o produto estiver disponível.");
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in font-sans">
       <header className="bg-gradient-to-b from-tea-900 to-tea-950 pt-16 pb-28 px-8 rounded-b-[5rem] shadow-2xl relative overflow-hidden">
@@ -279,6 +348,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           <button onClick={() => setActiveTab('faturas')} className={`p-8 rounded-[3rem] shadow-xl border flex flex-col items-center gap-4 transition-all ${activeTab === 'faturas' ? 'bg-tea-50 border-tea-200' : 'bg-white border-gray-50'}`}>
             <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${activeTab === 'faturas' ? 'bg-tea-900 text-white' : 'bg-tea-50 text-tea-800'}`}>💳</div>
             <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Faturas</span>
+          </button>
+          <button onClick={() => setActiveTab('loja')} className={`p-8 rounded-[3rem] shadow-xl border flex flex-col items-center gap-4 transition-all ${activeTab === 'loja' ? 'bg-tea-50 border-tea-200' : 'bg-white border-gray-50'}`}>
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${activeTab === 'loja' ? 'bg-tea-900 text-white' : 'bg-tea-50 text-tea-800'}`}>🛍️</div>
+            <span className="text-[10px] font-bold text-tea-950 uppercase tracking-widest">Loja</span>
           </button>
         </div>
 
@@ -562,6 +635,55 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
           </div>
         )}
 
+        {activeTab === 'loja' && (
+          <div className="space-y-8 animate-slide-up">
+            <h3 className="text-2xl font-serif text-tea-950 italic font-bold text-center">Loja Moriá</h3>
+            <div className="grid grid-cols-1 gap-8">
+              {storeProducts.map(product => {
+                const price = getProductPrice(product);
+                const canBuy = product.quantity >= 2;
+                
+                return (
+                  <div key={product.id} className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
+                    <div className="aspect-square bg-gray-50 relative">
+                      {product.imageUrl ? (
+                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-tea-200 text-6xl">🛍️</div>
+                      )}
+                      {!canBuy && (
+                        <div className="absolute inset-0 bg-white/60 backdrop-blur-[2px] flex items-center justify-center p-6 text-center">
+                          <p className="text-tea-900 font-bold text-xs uppercase tracking-widest">Estoque Limitado</p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-8 space-y-4">
+                      <div>
+                        <h4 className="text-xl font-serif font-bold text-tea-950 italic">{product.name}</h4>
+                        <p className="text-xs text-gray-500 italic line-clamp-2 mt-2">{product.description}</p>
+                      </div>
+                      <div className="text-2xl font-serif font-bold text-tea-900 italic">R$ {price.toFixed(2)}</div>
+                      <button 
+                        onClick={() => {
+                          setSelectedProduct(product);
+                          if (canBuy) setShowCheckoutModal(true);
+                          else setShowInterestModal(true);
+                        }}
+                        className="w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase tracking-widest text-[10px] hover:bg-black transition-all"
+                      >
+                        {canBuy ? 'Comprar Agora' : 'Tenho Interesse'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+              {storeProducts.length === 0 && (
+                <div className="text-center py-20 opacity-30 italic text-sm">Nenhum produto disponível no momento.</div>
+              )}
+            </div>
+          </div>
+        )}
+
         {activeTab === 'home' && (
           <div className="space-y-8 animate-slide-up">
              {pendingInvoices.length > 0 && (
@@ -658,11 +780,138 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
          <div className="w-full max-w-xs bg-tea-950 rounded-[3rem] p-3 flex justify-around items-center border border-white/10 shadow-2xl backdrop-blur-md">
             <button onClick={() => setActiveTab('home')} className={`text-xl transition-all ${activeTab === 'home' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>🏠</button>
             <button onClick={() => setActiveTab('agendar')} className={`text-xl transition-all ${activeTab === 'agendar' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>✨</button>
+            <button onClick={() => setActiveTab('loja')} className={`text-xl transition-all ${activeTab === 'loja' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>🛍️</button>
             <button onClick={() => setActiveTab('agenda')} className={`text-xl transition-all ${activeTab === 'agenda' ? 'text-tea-400 scale-125' : 'text-white/30'}`}>🗓️</button>
             <button onClick={onGoToProfile} className="text-xl text-white/30 hover:text-tea-400 transition-all">👤</button>
             <button onClick={onLogout} className="text-xl text-red-900/40">👋</button>
          </div>
       </nav>
+
+      {/* Modais da Loja */}
+      {showCheckoutModal && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
+            <div className="p-10 md:p-14 overflow-y-auto custom-scroll space-y-8">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <span className="bg-tea-50 text-tea-700 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest inline-block border border-tea-100">Finalizar Pedido</span>
+                  <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedProduct.name}</h3>
+                </div>
+                <button onClick={() => setShowCheckoutModal(false)} className="p-4 hover:bg-tea-50 rounded-2xl transition-all text-gray-300 hover:text-tea-900">✕</button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="bg-tea-50 p-6 rounded-3xl border border-tea-100 flex justify-between items-center">
+                  <span className="text-xs font-bold text-tea-900 uppercase tracking-widest">Valor do Produto</span>
+                  <span className="text-2xl font-serif font-bold text-tea-950 italic">R$ {getProductPrice(selectedProduct).toFixed(2)}</span>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest border-b border-gray-100 pb-2">Forma de Pagamento</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { id: 'pix', label: 'PIX', icon: '📱' },
+                      { id: 'credit', label: 'Crédito', icon: '💳' },
+                      { id: 'debit', label: 'Débito', icon: '🏧' },
+                      { id: 'cash', label: 'Dinheiro', icon: '💵' }
+                    ].map(method => (
+                      <button 
+                        key={method.id}
+                        onClick={() => setOrderData({ ...orderData, paymentMethod: method.id as any })}
+                        className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${orderData.paymentMethod === method.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 bg-white'}`}
+                      >
+                        <span className="text-xl">{method.icon}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{method.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest border-b border-gray-100 pb-2">Entrega / Retirada</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      onClick={() => setOrderData({ ...orderData, deliveryMethod: 'pickup' })}
+                      className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${orderData.deliveryMethod === 'pickup' ? 'border-tea-900 bg-tea-50' : 'border-gray-50 bg-white'}`}
+                    >
+                      <span className="text-xl">🏪</span>
+                      <div className="text-left">
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Retirada</p>
+                        <p className="text-[8px] text-gray-400">No Studio Moriá</p>
+                      </div>
+                    </button>
+                    <button 
+                      onClick={() => setOrderData({ ...orderData, deliveryMethod: 'delivery' })}
+                      className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${orderData.deliveryMethod === 'delivery' ? 'border-tea-900 bg-tea-50' : 'border-gray-50 bg-white'}`}
+                    >
+                      <span className="text-xl">🛵</span>
+                      <div className="text-left">
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Entrega</p>
+                        <p className="text-[8px] text-gray-400">A combinar</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button 
+                onClick={handleConfirmOrder}
+                className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-black transition-all"
+              >
+                Confirmar Pedido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showInterestModal && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50">
+            <div className="p-10 md:p-14 space-y-8">
+              <div className="flex justify-between items-start">
+                <div className="space-y-2">
+                  <span className="bg-tea-50 text-tea-700 px-4 py-1.5 rounded-full text-[9px] font-bold uppercase tracking-widest inline-block border border-tea-100">Tenho Interesse</span>
+                  <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedProduct.name}</h3>
+                </div>
+                <button onClick={() => setShowInterestModal(false)} className="p-4 hover:bg-tea-50 rounded-2xl transition-all text-gray-300 hover:text-tea-900">✕</button>
+              </div>
+
+              <p className="text-sm text-gray-500 italic leading-relaxed">
+                Este produto está com estoque limitado. Deixe seu contato e avisaremos você assim que estiver disponível para compra!
+              </p>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Seu Nome</label>
+                  <input 
+                    type="text" 
+                    value={interestData.name}
+                    onChange={e => setInterestData({ ...interestData, name: e.target.value })}
+                    className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-medium"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Seu WhatsApp</label>
+                  <input 
+                    type="text" 
+                    value={interestData.whatsapp}
+                    onChange={e => setInterestData({ ...interestData, whatsapp: e.target.value })}
+                    className="w-full p-5 bg-gray-50 rounded-2xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-medium"
+                  />
+                </div>
+              </div>
+
+              <button 
+                onClick={handleConfirmInterest}
+                className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase tracking-[0.2em] text-[11px] shadow-2xl hover:bg-black transition-all"
+              >
+                Registrar Interesse
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

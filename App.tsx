@@ -768,6 +768,7 @@ const App: React.FC = () => {
             services={services}
             transactions={transactions}
             settings={settings}
+            inventory={inventory}
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
             onCancelBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
@@ -775,6 +776,8 @@ const App: React.FC = () => {
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))}
             promotions={promotions}
+            onPlaceOrder={handlePlaceOrder}
+            onAddInterest={handleAddInterest}
             initialTab={customerInitialTab}
          />
        );
