@@ -190,18 +190,40 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setTimeout(async () => {
       if (cardRef.current) {
         try {
-          const dataUrl = await toPng(cardRef.current, {
-            cacheBust: true,
-            width: 500,
-            height: 500,
-            style: {
-              transform: 'scale(1)',
-              transformOrigin: 'top left'
-            }
-          });
+          let dataUrl;
+          try {
+            dataUrl = await toPng(cardRef.current, {
+              cacheBust: true,
+              width: 500,
+              height: 500,
+              filter: (node: any) => {
+                if (node.tagName === 'LINK' && node.rel === 'stylesheet' && !node.href.includes(window.location.origin)) {
+                  return false;
+                }
+                return true;
+              },
+              style: {
+                transform: 'scale(1)',
+                transformOrigin: 'top left'
+              }
+            });
+          } catch (firstErr) {
+            console.warn('Tentativa inicial de gerar imagem falhou (provavelmente erro de CORS nas fontes). Tentando sem embutir fontes...', firstErr);
+            // Segunda tentativa: desabilita o processamento de fontes externas que causa o erro de 'cssRules'
+            dataUrl = await toPng(cardRef.current, {
+              cacheBust: true,
+              width: 500,
+              height: 500,
+              fontEmbedCSS: '', // Pula a busca por fontes em stylesheets externos
+              style: {
+                transform: 'scale(1)',
+                transformOrigin: 'top left'
+              }
+            });
+          }
           setGeneratedImageUrl(dataUrl);
         } catch (err) {
-          console.error('Erro ao gerar imagem:', err);
+          console.error('Erro ao gerar imagem em todas as tentativas:', err);
         }
       }
       setIsGenerating(false);
@@ -536,37 +558,47 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   <div className="flex justify-center">
                     <div 
                       ref={cardRef}
-                      className="w-[300px] h-[300px] bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col items-center justify-center p-8 text-center relative border-8 border-tea-50"
-                      style={{ backgroundColor: '#ffffff' }}
+                      className="w-[500px] h-[500px] bg-tea-900 rounded-[4rem] shadow-2xl overflow-hidden flex flex-col items-center justify-between p-12 text-center relative border-[12px] border-tea-800"
+                      style={{ backgroundColor: '#1e3d28' }}
                     >
-                      {/* Decoração Simples */}
-                      <div className="absolute top-0 left-0 w-full h-2 bg-tea-900" />
-                      <div className="absolute bottom-0 left-0 w-full h-2 bg-tea-900" />
-                      <div className="absolute top-4 right-4 opacity-10 text-4xl">✨</div>
-                      <div className="absolute bottom-4 left-4 opacity-10 text-4xl">🌸</div>
+                      {/* Decoração Simples - Agora mais sutis e fixas */}
+                      <div className="absolute top-0 left-0 w-full h-3 bg-tea-800" />
+                      <div className="absolute bottom-0 left-0 w-full h-3 bg-tea-800" />
+                      
+                      {/* Conteúdo Central */}
+                      <div className="flex-1 flex flex-col items-center justify-center w-full space-y-6">
+                        {/* Logotipo */}
+                        {settings.logo ? (
+                          <img 
+                            src={settings.logo} 
+                            alt="Logo" 
+                            className="w-72 object-contain drop-shadow-xl" 
+                            referrerPolicy="no-referrer" 
+                          />
+                        ) : (
+                          <h1 className="text-4xl font-serif italic font-bold text-white">{settings.name}</h1>
+                        )}
 
-                      {/* Logotipo */}
-                      {settings.logo ? (
-                        <img 
-                          src={settings.logo} 
-                          alt="Logo" 
-                          className="w-48 object-contain mb-6 drop-shadow-xl" 
-                          referrerPolicy="no-referrer" 
-                        />
-                      ) : (
-                        <h1 className="text-2xl font-serif italic font-bold text-tea-950 mb-4">{settings.name}</h1>
-                      )}
+                        <div className="w-20 h-1 bg-tea-700" />
 
-                      <div className="w-12 h-0.5 bg-tea-100 mb-6" />
-
-                      <h2 className="text-lg font-serif italic text-tea-950 font-bold mb-2">Olá, {selectedCustomer?.name}!</h2>
-                      <p className="text-sm text-gray-600 leading-relaxed italic">
-                        {generatedMessage || "Selecione uma ação para gerar seu lembrete personalizado."}
-                      </p>
-
-                      <div className="mt-6 text-[8px] text-gray-300 uppercase tracking-[0.2em] font-bold">
-                        {settings.name} • Estética & Bem-estar
+                        <div className="space-y-3 max-w-[420px]">
+                          <h2 className="text-2xl font-serif italic text-white font-bold">Olá, {selectedCustomer?.name?.split(' ')[0] || 'Cliente'}!</h2>
+                          <p className="text-lg text-tea-50 leading-relaxed italic">
+                            {generatedMessage || "Selecione uma ação para gerar seu lembrete personalizado."}
+                          </p>
+                        </div>
                       </div>
+
+                      {/* Rodapé - Agora parte do fluxo flex para evitar sobreposição */}
+                      <div className="pt-4 w-full">
+                        <div className="text-[10px] text-tea-300 uppercase tracking-[0.3em] font-bold opacity-60">
+                          {settings.name} • Estética & Bem-estar
+                        </div>
+                      </div>
+
+                      {/* Ícones decorativos em posições que não atrapalham */}
+                      <div className="absolute top-10 right-10 opacity-5 text-5xl">✨</div>
+                      <div className="absolute bottom-10 left-10 opacity-5 text-5xl">🌸</div>
                     </div>
                   </div>
 
