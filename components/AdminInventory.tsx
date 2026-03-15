@@ -44,7 +44,8 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
     visitorPrice: 0,
     showOnSite: false,
     exclusiveForCustomers: false,
-    associatedServiceIds: []
+    associatedServiceIds: [],
+    isSalonUseOnly: false
   };
 
   const [formItem, setFormItem] = useState<Omit<InventoryItem, 'id'>>(initialItem);
@@ -334,7 +335,25 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
                   <label className="flex items-center gap-2 cursor-pointer group">
                     <input 
                       type="checkbox" 
+                      checked={formItem.isSalonUseOnly || false}
+                      onChange={e => {
+                        const isSalonUse = e.target.checked;
+                        setFormItem({
+                          ...formItem, 
+                          isSalonUseOnly: isSalonUse,
+                          // If it's for salon use only, it shouldn't be on the site
+                          showOnSite: isSalonUse ? false : formItem.showOnSite
+                        });
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-tea-600 focus:ring-tea-500"
+                    />
+                    <span className="text-xs font-bold text-tea-700 group-hover:text-tea-800 transition-colors">Uso do Salão (Não disponível para venda online)</span>
+                  </label>
+                  <label className={`flex items-center gap-2 cursor-pointer group ${formItem.isSalonUseOnly ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                    <input 
+                      type="checkbox" 
                       checked={formItem.showOnSite || false}
+                      disabled={formItem.isSalonUseOnly}
                       onChange={e => setFormItem({...formItem, showOnSite: e.target.checked})}
                       className="w-4 h-4 rounded border-gray-300 text-tea-600 focus:ring-tea-500"
                     />
@@ -426,7 +445,12 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
               inventory.map(item => (
               <tr key={item.id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-6 py-4">
-                  <div className="font-bold text-tea-900">{item.name}</div>
+                  <div className="font-bold text-tea-900 flex items-center gap-2">
+                    {item.name}
+                    {item.isSalonUseOnly && (
+                      <span className="px-1.5 py-0.5 bg-tea-100 text-tea-700 rounded text-[8px] font-bold uppercase tracking-tighter">Uso Interno</span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-gray-400 uppercase tracking-tight">{item.category}</div>
                 </td>
                 <td className="px-6 py-4">
@@ -491,17 +515,19 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
                         <span className="text-[10px] font-bold uppercase">Excluir</span>
                       </button>
                     </div>
-                    <button 
-                      onClick={() => {
-                        setSellingItem(item);
-                        setSaleForm({ customerId: '', quantity: 1, price: 0 });
-                      }}
-                      className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-sm active:scale-95"
-                      title="Vender para cliente"
-                    >
-                      <span className="text-xs">💰</span>
-                      <span className="text-[10px] font-bold uppercase">Vender p/ Cliente</span>
-                    </button>
+                    {!item.isSalonUseOnly && (
+                      <button 
+                        onClick={() => {
+                          setSellingItem(item);
+                          setSaleForm({ customerId: '', quantity: 1, price: 0 });
+                        }}
+                        className="w-full flex items-center justify-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-sm active:scale-95"
+                        title="Vender para cliente"
+                      >
+                        <span className="text-xs">💰</span>
+                        <span className="text-[10px] font-bold uppercase">Vender p/ Cliente</span>
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>

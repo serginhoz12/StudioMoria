@@ -206,6 +206,7 @@ export interface InventoryItem {
   showOnSite?: boolean;
   exclusiveForCustomers?: boolean;
   associatedServiceIds?: string[];
+  isSalonUseOnly?: boolean;
 }
 
 export interface ProductInterest {
@@ -227,11 +228,12 @@ export interface ProductOrder {
   productName: string;
   quantity: number;
   totalPrice: number;
-  paymentMethod: 'pix' | 'cash' | 'debit' | 'credit';
+  paymentMethod: PaymentMethod;
   deliveryOption: 'pickup' | 'delivery';
   deliveryAddress?: string;
   status: 'pending' | 'paid' | 'delivered' | 'cancelled';
   createdAt: string;
+  installmentsCount?: number;
 }
 
 export interface LoyaltyConfig {

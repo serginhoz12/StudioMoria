@@ -83,7 +83,9 @@ const AdminStoreManagement: React.FC<AdminStoreManagementProps> = ({
                            order.paymentMethod === 'cash' ? 'Dinheiro' : 
                            order.paymentMethod === 'debit' ? 'Débito' : 
                            order.paymentMethod === 'credit' ? 'Crédito' : 
+                           order.paymentMethod === 'store_installments' ? 'A Prazo' :
                            order.paymentMethod}
+                          {order.installmentsCount && order.installmentsCount > 1 && ` (${order.installmentsCount}x)`}
                         </div>
                         <div className="text-[10px] text-gray-500">{order.deliveryOption === 'pickup' ? 'Retirada no Local' : 'Entrega na Região'}</div>
                         {order.deliveryAddress && (

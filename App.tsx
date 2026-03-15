@@ -404,6 +404,55 @@ const App: React.FC = () => {
     }
     try {
       await updateDoc(doc(db, 'productOrders', id), data);
+      
+      // If order is being marked as paid or delivered (for store_installments), generate transactions
+      if (data.status === 'paid' || (data.status === 'delivered' && data.paymentMethod === 'store_installments')) {
+        const order = productOrders.find(o => o.id === id);
+        if (order) {
+          const isInstallment = order.paymentMethod === 'store_installments' && (order.installmentsCount || 1) > 1;
+          
+          if (isInstallment) {
+            const parentId = Math.random().toString(36).substr(2, 9);
+            const count = order.installmentsCount || 1;
+            const installmentValue = Number((order.totalPrice / count).toFixed(2));
+            
+            for (let i = 0; i < count; i++) {
+              const dueDateObj = new Date(new Date().setMonth(new Date().getMonth() + i));
+              const dueDateStr = dueDateObj.toISOString().split('T')[0];
+              
+              await addDoc(collection(db, "transactions"), {
+                type: 'receivable',
+                description: `Venda Loja: ${order.productName} - ${order.customerName} (${i + 1}/${count}) (A Prazo)`,
+                amount: installmentValue,
+                date: new Date().toISOString().split('T')[0],
+                dueDate: dueDateStr,
+                status: 'pending',
+                customerId: order.customerId,
+                customerName: order.customerName,
+                paymentMethod: order.paymentMethod,
+                installmentsCount: count,
+                installmentNumber: i + 1,
+                parentTransactionId: parentId,
+                createdAt: new Date().toISOString()
+              });
+            }
+          } else {
+            await addDoc(collection(db, "transactions"), {
+              type: 'receivable',
+              description: `Venda Loja: ${order.productName} - ${order.customerName}${order.paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
+              amount: order.totalPrice,
+              date: new Date().toISOString().split('T')[0],
+              dueDate: order.paymentMethod === 'store_installments' ? new Date().toISOString().split('T')[0] : null,
+              status: order.paymentMethod === 'store_installments' ? 'pending' : 'paid',
+              customerId: order.customerId,
+              customerName: order.customerName,
+              paymentMethod: order.paymentMethod,
+              paidAt: order.paymentMethod === 'store_installments' ? null : new Date().toISOString(),
+              createdAt: new Date().toISOString()
+            });
+          }
+        }
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, 'productOrders');
     }

@@ -407,24 +407,55 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                                        (selectedBookingForPayment.status === 'completed' && confirm("Este atendimento já consta como pago. Deseja gerar um NOVO lançamento no caixa mesmo assim?"));
 
         if (shouldCreateTransaction) {
-          await addDoc(collection(db, "transactions"), {
-            type: 'receivable',
-            description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
-            amount: totalAmount,
-            date: new Date().toISOString().split('T')[0],
-            dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
-            status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
-            customerId: selectedBookingForPayment.customerId,
-            customerName: selectedBookingForPayment.customerName,
-            bookingId: selectedBookingForPayment.id,
-            serviceName: selectedBookingForPayment.serviceName,
-            procedureDate: selectedBookingForPayment.dateTime,
-            paymentMethod: paymentMethod,
-            paymentType: paymentType,
-            installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-            paidAt: paymentMethod === 'store_installments' ? null : new Date().toISOString(),
-            createdAt: new Date().toISOString()
-          });
+          const isInstallment = paymentMethod === 'store_installments' && paymentType === 'installments' && installmentsCount > 1;
+          
+          if (isInstallment) {
+            const parentId = Math.random().toString(36).substr(2, 9);
+            for (let i = 0; i < installmentsCount; i++) {
+              const dueDateObj = new Date(new Date().setMonth(new Date().getMonth() + i));
+              const dueDateStr = dueDateObj.toISOString().split('T')[0];
+              
+              await addDoc(collection(db, "transactions"), {
+                type: 'receivable',
+                description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName} (${i + 1}/${installmentsCount}) (A Prazo)`,
+                amount: installmentValue,
+                date: new Date().toISOString().split('T')[0],
+                dueDate: dueDateStr,
+                status: 'pending',
+                customerId: selectedBookingForPayment.customerId,
+                customerName: selectedBookingForPayment.customerName,
+                bookingId: selectedBookingForPayment.id,
+                serviceName: selectedBookingForPayment.serviceName,
+                procedureDate: selectedBookingForPayment.dateTime,
+                paymentMethod: paymentMethod,
+                paymentType: paymentType,
+                installmentsCount: installmentsCount,
+                installmentNumber: i + 1,
+                parentTransactionId: parentId,
+                paidAt: null,
+                createdAt: new Date().toISOString()
+              });
+            }
+          } else {
+            await addDoc(collection(db, "transactions"), {
+              type: 'receivable',
+              description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
+              amount: totalAmount,
+              date: new Date().toISOString().split('T')[0],
+              dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
+              status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
+              customerId: selectedBookingForPayment.customerId,
+              customerName: selectedBookingForPayment.customerName,
+              bookingId: selectedBookingForPayment.id,
+              serviceName: selectedBookingForPayment.serviceName,
+              procedureDate: selectedBookingForPayment.dateTime,
+              paymentMethod: paymentMethod,
+              paymentType: paymentType,
+              installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
+              paidAt: paymentMethod === 'store_installments' ? null : new Date().toISOString(),
+              createdAt: new Date().toISOString()
+            });
+          }
         }
 
         // 3. Update Inventory (only if completing)

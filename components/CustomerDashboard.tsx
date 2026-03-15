@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Customer, Booking, Service, SalonSettings, WaitlistEntry, Promotion, Transaction, InventoryItem } from '../types';
+import { Customer, Booking, Service, SalonSettings, WaitlistEntry, Promotion, Transaction, InventoryItem, PaymentMethod } from '../types';
 import { db } from '../firebase.ts';
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore";
 
@@ -49,8 +49,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [orderData, setOrderData] = useState({
-    paymentMethod: 'pix' as 'pix' | 'cash' | 'debit' | 'credit',
-    deliveryMethod: 'pickup' as 'pickup' | 'delivery'
+    paymentMethod: 'pix' as PaymentMethod,
+    deliveryMethod: 'pickup' as 'pickup' | 'delivery',
+    installmentsCount: 1
   });
   const [interestData, setInterestData] = useState({
     whatsapp: customer.whatsapp || '',
@@ -275,14 +276,15 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   }, [customer.productHistory]);
 
   const storeProducts = useMemo(() => {
-    return inventory.filter(item => item.showOnSite);
+    return inventory.filter(item => item.showOnSite && !item.isSalonUseOnly);
   }, [inventory]);
 
   const getProductPrice = (product: InventoryItem) => {
-    if (product.customerPrice) return product.customerPrice;
+    if (product.customerPrice && product.customerPrice > 0) return product.customerPrice;
     const markup = settings.visitorMarkupPercent || 0;
     const basePrice = product.purchasePrice || 0;
-    return basePrice * (1 + markup / 100);
+    const calculatedPrice = basePrice * (1 + markup / 100);
+    return calculatedPrice > 0 ? calculatedPrice : (product.customerPrice || 0);
   };
 
   const handleConfirmOrder = () => {
@@ -297,6 +299,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       amount: getProductPrice(selectedProduct),
       paymentMethod: orderData.paymentMethod,
       deliveryMethod: orderData.deliveryMethod,
+      installmentsCount: orderData.installmentsCount,
       status: 'pending',
       createdAt: new Date().toISOString()
     };
@@ -813,11 +816,12 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       { id: 'pix', label: 'PIX', icon: '📱' },
                       { id: 'credit', label: 'Crédito', icon: '💳' },
                       { id: 'debit', label: 'Débito', icon: '🏧' },
+                      { id: 'store_installments', label: 'A Prazo', icon: '📅' },
                       { id: 'cash', label: 'Dinheiro', icon: '💵' }
                     ].map(method => (
                       <button 
                         key={method.id}
-                        onClick={() => setOrderData({ ...orderData, paymentMethod: method.id as any })}
+                        onClick={() => setOrderData({ ...orderData, paymentMethod: method.id as any, installmentsCount: 1 })}
                         className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 ${orderData.paymentMethod === method.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 bg-white'}`}
                       >
                         <span className="text-xl">{method.icon}</span>
@@ -826,6 +830,32 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     ))}
                   </div>
                 </div>
+
+                {['credit', 'store_installments'].includes(orderData.paymentMethod) && (
+                  <div className="space-y-4 animate-fade-in">
+                    <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest border-b border-gray-100 pb-2">Parcelamento</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Nº de Parcelas</label>
+                        <select
+                          value={orderData.installmentsCount}
+                          onChange={(e) => setOrderData({ ...orderData, installmentsCount: Number(e.target.value) })}
+                          className="w-full p-4 bg-gray-50 border-none rounded-2xl font-bold outline-none focus:ring-2 focus:ring-tea-100 text-xs"
+                        >
+                          {[1, 2, 3, 4, 5, 6].map(n => (
+                            <option key={n} value={n}>{n}x</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Valor da Parcela</label>
+                        <div className="w-full p-4 bg-gray-100 border-none rounded-2xl font-bold text-tea-900 flex items-center text-xs">
+                          R$ {(getProductPrice(selectedProduct) / orderData.installmentsCount).toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest border-b border-gray-100 pb-2">Entrega / Retirada</h4>
