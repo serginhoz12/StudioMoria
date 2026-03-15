@@ -48,6 +48,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showInterestModal, setShowInterestModal] = useState(false);
+  const [showProductDetailModal, setShowProductDetailModal] = useState(false);
   const [orderData, setOrderData] = useState({
     paymentMethod: 'pix' as PaymentMethod,
     deliveryMethod: 'pickup' as 'pickup' | 'delivery',
@@ -647,10 +648,17 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                 const canBuy = product.quantity >= 2;
                 
                 return (
-                  <div key={product.id} className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-                    <div className="aspect-square bg-gray-50 relative">
+                  <div 
+                    key={product.id} 
+                    onClick={() => {
+                      setSelectedProduct(product);
+                      setShowProductDetailModal(true);
+                    }}
+                    className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col cursor-pointer hover:shadow-xl transition-all group"
+                  >
+                    <div className="aspect-square bg-gray-50 relative overflow-hidden">
                       {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" referrerPolicy="no-referrer" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-tea-200 text-6xl">🛍️</div>
                       )}
@@ -664,10 +672,12 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                       <div>
                         <h4 className="text-xl font-serif font-bold text-tea-950 italic">{product.name}</h4>
                         <p className="text-xs text-gray-500 italic line-clamp-2 mt-2">{product.description}</p>
+                        <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-2 block">Toque para ver detalhes</span>
                       </div>
                       <div className="text-2xl font-serif font-bold text-tea-900 italic">R$ {price.toFixed(2)}</div>
                       <button 
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setSelectedProduct(product);
                           if (canBuy) setShowCheckoutModal(true);
                           else setShowInterestModal(true);
@@ -791,6 +801,55 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       </nav>
 
       {/* Modais da Loja */}
+      {showProductDetailModal && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
+            <div className="relative aspect-square bg-gray-50">
+              {selectedProduct.imageUrl ? (
+                <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-tea-200 text-8xl">🛍️</div>
+              )}
+              <button 
+                onClick={() => setShowProductDetailModal(false)} 
+                className="absolute top-6 right-6 w-12 h-12 bg-white/80 backdrop-blur-md rounded-2xl flex items-center justify-center text-tea-950 shadow-lg hover:bg-white transition-all"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-10 md:p-14 overflow-y-auto custom-scroll space-y-8">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start gap-4">
+                  <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedProduct.name}</h3>
+                  <div className="text-2xl font-serif font-bold text-tea-900 italic whitespace-nowrap">
+                    R$ {getProductPrice(selectedProduct).toFixed(2)}
+                  </div>
+                </div>
+                
+                <div className="space-y-4 pt-4 border-t border-gray-50">
+                  <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest">Descrição do Produto</h4>
+                  <p className="text-gray-600 leading-relaxed whitespace-pre-line text-sm md:text-base">
+                    {selectedProduct.description || 'Sem descrição disponível.'}
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setShowProductDetailModal(false);
+                  if (selectedProduct.quantity >= 2) setShowCheckoutModal(true);
+                  else setShowInterestModal(true);
+                }}
+                className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl"
+              >
+                {selectedProduct.quantity >= 2 ? 'Comprar Agora' : 'Tenho Interesse'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCheckoutModal && selectedProduct && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
           <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">

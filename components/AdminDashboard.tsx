@@ -166,15 +166,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
 
   // Ranking: Clientes mais frequentes
   const topFrequent = useMemo(() => {
-    const frequent: Record<string, { id: string, name: string, count: number }> = {};
+    const frequent: Record<string, { 
+      id: string, 
+      name: string, 
+      count: number, 
+      days: Set<string>,
+      totalSpent: number 
+    }> = {};
+
     filteredData.bookings
       .filter(b => b.status === 'completed')
       .forEach(b => {
-        if (!frequent[b.customerId]) frequent[b.customerId] = { id: b.customerId, name: b.customerName, count: 0 };
+        if (!frequent[b.customerId]) {
+          frequent[b.customerId] = { 
+            id: b.customerId, 
+            name: b.customerName, 
+            count: 0, 
+            days: new Set<string>(),
+            totalSpent: 0
+          };
+        }
         frequent[b.customerId].count += 1;
+        const datePart = b.dateTime.split(' ')[0];
+        frequent[b.customerId].days.add(datePart);
       });
-    return Object.values(frequent).sort((a, b) => b.count - a.count).slice(0, 10);
-  }, [filteredData.bookings]);
+
+    // Somar gastos das transações para calcular ticket médio
+    filteredData.transactions
+      .filter(t => t.type === 'receivable' && t.status === 'paid' && t.customerId)
+      .forEach(t => {
+        if (frequent[t.customerId!]) {
+          frequent[t.customerId!].totalSpent += t.amount;
+        }
+      });
+
+    return Object.values(frequent)
+      .map(f => ({
+        id: f.id,
+        name: f.name,
+        count: f.count,
+        dayCount: f.days.size,
+        avgTicket: f.days.size > 0 ? f.totalSpent / f.days.size : 0
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+  }, [filteredData.bookings, filteredData.transactions]);
 
   // Dados para Gráfico de Pizza: Distribuição de Serviços
   const serviceDistribution = useMemo(() => {
@@ -541,7 +577,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ bookings, transactions,
                       <div className="w-8 h-8 bg-tea-200 text-tea-900 rounded-lg flex items-center justify-center font-bold text-xs">{i + 1}</div>
                       <span className="text-xs font-bold text-gray-800 line-clamp-1 group-hover:text-tea-800 transition-colors">{s.name}</span>
                    </div>
-                   <span className="text-[10px] font-bold uppercase tracking-widest text-tea-700">{s.count} visitas</span>
+                   <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-tea-700">{s.count} agend. | {s.dayCount} {s.dayCount === 1 ? 'dia' : 'dias'}</p>
+                      <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Ticket: R$ {s.avgTicket.toFixed(0)}</p>
+                   </div>
                 </button>
               ))}
               {topFrequent.length === 0 && <p className="text-center py-10 text-gray-300 italic">Sem agendamentos concluídos.</p>}

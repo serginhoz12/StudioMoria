@@ -1,18 +1,21 @@
 
-import React, { useState } from 'react';
-import { InventoryItem, Customer, ProductSale, Service } from '../types';
+import React, { useState, useRef } from 'react';
+import { InventoryItem, Customer, ProductSale, Service, Transaction } from '../types';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
 
 interface AdminInventoryProps {
   inventory: InventoryItem[];
   customers: Customer[];
   services: Service[];
+  transactions: Transaction[];
   onUpdate: (id: string, data: Partial<InventoryItem>) => void;
   onDelete: (id: string) => void;
   onAdd: (data: Omit<InventoryItem, 'id'>) => void;
   onSellProduct: (sale: Omit<ProductSale, 'id'>) => void;
 }
 
-const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, services, onUpdate, onDelete, onAdd, onSellProduct }) => {
+const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, services, transactions, onUpdate, onDelete, onAdd, onSellProduct }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sellingItem, setSellingItem] = useState<InventoryItem | null>(null);
@@ -50,6 +53,61 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
 
   const [formItem, setFormItem] = useState<Omit<InventoryItem, 'id'>>(initialItem);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const suggestions = React.useMemo(() => {
+    if (!formItem.name) return null;
+
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0];
+
+    // 1. Média de gastos dos últimos 3 meses (Total de saídas / 3)
+    const recentPayables = transactions.filter(t => 
+      t.type === 'payable' && 
+      t.date >= threeMonthsAgoStr
+    );
+    const totalExpenses = recentPayables.reduce((sum, t) => sum + t.amount, 0);
+    const avgMonthlyExpenses = totalExpenses / 3;
+
+    // 2. Média do valor de compra do mesmo (últimos 3 meses)
+    const sameProductPurchases = inventory.filter(item => 
+      item.name.toLowerCase().trim() === formItem.name.toLowerCase().trim() &&
+      item.purchaseDate >= threeMonthsAgoStr &&
+      item.purchasePrice > 0 &&
+      item.quantity > 0
+    );
+
+    let avgPurchasePrice = 0;
+    if (sameProductPurchases.length > 0) {
+      const totalUnitPrice = sameProductPurchases.reduce((sum, item) => sum + (item.purchasePrice / item.quantity), 0);
+      avgPurchasePrice = totalUnitPrice / sameProductPurchases.length;
+    } else {
+      // Fallback para qualquer período se não houver recentes
+      const allSameProduct = inventory.filter(item => 
+        item.name.toLowerCase().trim() === formItem.name.toLowerCase().trim() &&
+        item.purchasePrice > 0 &&
+        item.quantity > 0
+      );
+      if (allSameProduct.length > 0) {
+        const totalUnitPrice = allSameProduct.reduce((sum, item) => sum + (item.purchasePrice / item.quantity), 0);
+        avgPurchasePrice = totalUnitPrice / allSameProduct.length;
+      }
+    }
+
+    // 3. Sugestão de Preço (Markup de 60% sobre o custo médio)
+    const suggestedPrice = avgPurchasePrice * 1.6;
+    const estimatedProfit = suggestedPrice - avgPurchasePrice;
+
+    return {
+      avgMonthlyExpenses,
+      avgPurchasePrice,
+      suggestedPrice,
+      estimatedProfit
+    };
+  }, [formItem.name, transactions, inventory]);
 
   const categories = Array.from(new Set(inventory.map(item => item.category)));
 
@@ -68,14 +126,26 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
     
     setIsSaving(true);
     try {
+      let finalImageUrl = formItem.imageUrl;
+
+      if (selectedFile) {
+        const storageRef = ref(storage, `products/${Date.now()}_${selectedFile.name}`);
+        const snapshot = await uploadBytes(storageRef, selectedFile);
+        finalImageUrl = await getDownloadURL(snapshot.ref);
+      }
+
+      const itemToSave = { ...formItem, imageUrl: finalImageUrl };
+
       if (editingId) {
-        await onUpdate(editingId, formItem);
+        await onUpdate(editingId, itemToSave);
       } else {
-        await onAdd(formItem);
+        await onAdd(itemToSave);
       }
       setIsAdding(false);
       setEditingId(null);
       setFormItem(initialItem);
+      setSelectedFile(null);
+      setUploadProgress(0);
     } catch (err) {
       console.error("Erro ao salvar item no componente:", err);
     } finally {
@@ -228,6 +298,42 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
                 className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
               />
             </div>
+            {suggestions && suggestions.avgPurchasePrice > 0 && (
+              <div className="md:col-span-2 bg-tea-50/50 p-4 rounded-2xl border border-tea-100 space-y-3">
+                <div className="flex items-center gap-2 text-tea-800 font-bold text-xs uppercase tracking-widest">
+                  <span>💡</span> Sugestões Baseadas no Histórico (3 meses)
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[9px] text-gray-500 uppercase font-bold">Gasto Médio Mensal</p>
+                    <p className="text-sm font-bold text-tea-900">R$ {suggestions.avgMonthlyExpenses.toFixed(2)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] text-gray-500 uppercase font-bold">Custo Médio Un.</p>
+                    <p className="text-sm font-bold text-tea-900">R$ {suggestions.avgPurchasePrice.toFixed(2)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] text-tea-700 uppercase font-bold">Preço Sugerido</p>
+                    <p className="text-sm font-bold text-tea-900">R$ {suggestions.suggestedPrice.toFixed(2)}</p>
+                    <button 
+                      type="button"
+                      onClick={() => setFormItem({
+                        ...formItem, 
+                        customerPrice: Number(suggestions.suggestedPrice.toFixed(2)),
+                        visitorPrice: Number((suggestions.suggestedPrice * 1.1).toFixed(2))
+                      })}
+                      className="text-[8px] text-tea-600 underline font-bold uppercase"
+                    >
+                      Aplicar na Loja
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[9px] text-green-700 uppercase font-bold">Lucro Estimado</p>
+                    <p className="text-sm font-bold text-green-600">R$ {suggestions.estimatedProfit.toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
             <div>
               <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Data da Compra</label>
               <input 
@@ -286,18 +392,62 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">URL da Foto do Produto</label>
-                  <div className="flex gap-2">
-                    <input 
-                      type="text" 
-                      value={formItem.imageUrl || ''}
-                      onChange={e => setFormItem({...formItem, imageUrl: e.target.value})}
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-tea-500 outline-none"
-                      placeholder="https://exemplo.com/foto.jpg"
-                    />
-                    {formItem.imageUrl && (
-                      <div className="w-10 h-10 rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
-                        <img src={formItem.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Foto do Produto</label>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-4">
+                      <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-24 h-24 rounded-2xl border-2 border-dashed border-tea-200 flex flex-col items-center justify-center cursor-pointer hover:bg-tea-50 transition-all overflow-hidden relative group"
+                      >
+                        {selectedFile ? (
+                          <img 
+                            src={URL.createObjectURL(selectedFile)} 
+                            alt="Preview" 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : formItem.imageUrl ? (
+                          <img 
+                            src={formItem.imageUrl} 
+                            alt="Current" 
+                            className="w-full h-full object-cover" 
+                          />
+                        ) : (
+                          <>
+                            <span className="text-2xl mb-1">📸</span>
+                            <span className="text-[8px] font-bold text-tea-600 uppercase">Anexar Foto</span>
+                          </>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <span className="text-white text-[10px] font-bold uppercase">Trocar</span>
+                        </div>
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        <input 
+                          type="file" 
+                          ref={fileInputRef}
+                          onChange={e => setSelectedFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                          accept="image/*"
+                        />
+                        <p className="text-[10px] text-gray-400 leading-relaxed">
+                          Selecione uma imagem clara do produto. Formatos aceitos: JPG, PNG. Máx 5MB.
+                        </p>
+                        {selectedFile && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-bold text-tea-700 truncate max-w-[150px]">{selectedFile.name}</span>
+                            <button 
+                              onClick={() => setSelectedFile(null)}
+                              className="text-red-500 text-[10px] font-bold uppercase hover:underline"
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {isSaving && selectedFile && (
+                      <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-tea-600 animate-pulse w-1/2"></div>
                       </div>
                     )}
                   </div>

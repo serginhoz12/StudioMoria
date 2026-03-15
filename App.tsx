@@ -603,6 +603,7 @@ const App: React.FC = () => {
           inventory={inventory} 
           customers={customers}
           services={services}
+          transactions={transactions}
           onUpdate={async (id, data) => {
             if (isMockMode) {
               setInventory(prev => prev.map(item => item.id === id ? { ...item, ...data } : item));

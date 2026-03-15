@@ -45,6 +45,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
   const [selectedProduct, setSelectedProduct] = useState<InventoryItem | null>(null);
   const [showInterestModal, setShowInterestModal] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [showProductDetailModal, setShowProductDetailModal] = useState(false);
   const [interestData, setInterestData] = useState({ name: '', whatsapp: '' });
   const [checkoutData, setCheckoutData] = useState({ 
     paymentMethod: 'pix' as any, 
@@ -265,7 +266,11 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
               return (
                 <div 
                   key={product.id} 
-                  className="group bg-white rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] flex flex-col h-full relative overflow-hidden"
+                  onClick={() => {
+                    setSelectedProduct(product);
+                    setShowProductDetailModal(true);
+                  }}
+                  className="group bg-white rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] flex flex-col h-full relative overflow-hidden cursor-pointer"
                 >
                   <div className="aspect-square bg-gray-50 relative overflow-hidden">
                     {product.imageUrl ? (
@@ -286,9 +291,10 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                   <div className="p-10 flex flex-col flex-grow">
                     <div className="mb-6">
                       <h3 className="text-2xl font-serif font-bold text-tea-950 mb-2">{product.name}</h3>
-                      <p className="text-gray-400 text-sm leading-relaxed line-clamp-2 italic mb-4">
+                      <p className="text-gray-400 text-sm leading-relaxed line-clamp-2 italic mb-2">
                         {product.description || 'Sem descrição disponível.'}
                       </p>
+                      <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mb-4 block">Toque para ver detalhes</span>
                       <div className="text-2xl font-serif font-bold text-tea-800 italic">
                         R$ {price.toFixed(2)}
                       </div>
@@ -297,7 +303,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                     <div className="mt-auto pt-6 border-t border-gray-50">
                       {canBuy ? (
                         <button 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedProduct(product);
                             setShowCheckoutModal(true);
                           }}
@@ -307,7 +314,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                         </button>
                       ) : (
                         <button 
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             setSelectedProduct(product);
                             setShowInterestModal(true);
                           }}
@@ -865,6 +873,55 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
             >
               {isProcessing ? 'Processando...' : 'Confirmar Pedido'}
             </button>
+          </div>
+        </div>
+      )}
+      {/* Modal de Detalhes do Produto */}
+      {showProductDetailModal && selectedProduct && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-tea-950/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-lg rounded-[4rem] overflow-hidden shadow-3xl animate-slide-up flex flex-col border border-tea-50 max-h-[90vh]">
+            <div className="relative aspect-square bg-gray-50">
+              {selectedProduct.imageUrl ? (
+                <img src={selectedProduct.imageUrl} alt={selectedProduct.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-tea-200 text-8xl">🛍️</div>
+              )}
+              <button 
+                onClick={() => setShowProductDetailModal(false)} 
+                className="absolute top-6 right-6 w-12 h-12 bg-white/80 backdrop-blur-md rounded-2xl flex items-center justify-center text-tea-950 shadow-lg hover:bg-white transition-all"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-10 md:p-14 overflow-y-auto custom-scroll space-y-8">
+              <div className="space-y-4">
+                <div className="flex justify-between items-start gap-4">
+                  <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedProduct.name}</h3>
+                  <div className="text-2xl font-serif font-bold text-tea-900 italic whitespace-nowrap">
+                    R$ {getProductPrice(selectedProduct).toFixed(2)}
+                  </div>
+                </div>
+                
+                <div className="space-y-4 pt-4 border-t border-gray-50">
+                  <h4 className="text-[10px] font-bold text-tea-900 uppercase tracking-widest">Descrição do Produto</h4>
+                  <p className="text-gray-600 leading-relaxed whitespace-pre-line text-sm md:text-base">
+                    {selectedProduct.description || 'Sem descrição disponível.'}
+                  </p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => {
+                  setShowProductDetailModal(false);
+                  if (selectedProduct.quantity >= 2) setShowCheckoutModal(true);
+                  else setShowInterestModal(true);
+                }}
+                className="w-full py-6 bg-tea-900 text-white rounded-3xl font-bold uppercase tracking-widest text-xs hover:bg-black transition-all shadow-xl"
+              >
+                {selectedProduct.quantity >= 2 ? 'Comprar Agora' : 'Tenho Interesse'}
+              </button>
+            </div>
           </div>
         </div>
       )}
