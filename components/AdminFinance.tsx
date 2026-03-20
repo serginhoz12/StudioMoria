@@ -558,50 +558,109 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
         </div>
       </div>
 
+      {/* Validação de Lançamentos */}
+      {missingTransactions.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 p-8 rounded-[3rem] shadow-sm animate-fade-in">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-2xl shadow-sm">⚠️</div>
+            <div>
+              <h4 className="text-lg font-bold text-orange-900 font-serif italic">Pendências de Lançamento</h4>
+              <p className="text-[10px] text-orange-700 font-bold uppercase tracking-widest">Procedimentos realizados que ainda não constam no caixa</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {missingTransactions.map(b => (
+              <div key={b.id} className="bg-white p-5 rounded-2xl border border-orange-100 shadow-sm flex flex-col justify-between group hover:border-orange-300 transition-all">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="text-sm font-bold text-gray-800">{b.customerName}</p>
+                    <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-bold uppercase tracking-widest">Pendente</span>
+                  </div>
+                  <p className="text-[10px] text-tea-700 font-bold uppercase tracking-widest mb-1">{b.serviceName}</p>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{new Date(b.dateTime.replace(' ', 'T')).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    resetForm();
+                    setNewTrans({
+                      ...newTrans,
+                      type: 'receivable',
+                      description: `Pagamento: ${b.serviceName}`,
+                      amount: services.find(s => s.id === b.serviceId)?.price || 0,
+                      date: b.dateTime.split(' ')[0],
+                      customerId: b.customerId,
+                      bookingId: b.id,
+                      status: 'paid'
+                    });
+                    setCustomerSearch(b.customerName);
+                    setShowForm(true);
+                  }}
+                  className="mt-4 w-full bg-orange-600 text-white py-3 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-black transition-all shadow-md"
+                >
+                  Lançar no Caixa
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-[3.5rem] border border-gray-100 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Data</th>
+                <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Data / Proc.</th>
                 <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Descrição</th>
                 <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Valor</th>
                 <th className="px-10 py-6 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredTransactions.sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime()).map(t => (
-                <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group">
-                  <td className="px-10 py-8 text-xs font-bold text-gray-500">{new Date(t.date + 'T00:00:00').toLocaleDateString()}</td>
-                  <td className="px-10 py-8">
-                    <p className="font-bold text-tea-950 text-sm">{t.description}</p>
-                    <div className="flex gap-2 mt-1">
-                      {t.customerName && <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter">{t.customerName}</p>}
-                      {t.status === 'pending' && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>}
-                    </div>
-                  </td>
-                  <td className={`px-10 py-8 text-right font-bold text-base ${t.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
-                    {t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}
-                  </td>
-                  <td className="px-10 py-8 text-center">
-                    <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => handleEdit(t)} 
-                        className="p-2 bg-tea-50 text-tea-700 rounded-lg hover:bg-tea-100 transition-colors"
-                        title="Editar"
-                      >
-                        ✏️
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(t.id)} 
-                        className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                        title="Excluir"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+              {groupedTransactions.map(([customerName, customerTrans]) => (
+                <React.Fragment key={customerName}>
+                  <tr className="bg-gray-50/50">
+                    <td colSpan={4} className="px-10 py-4 text-[10px] font-black text-tea-900 uppercase tracking-[0.2em] border-y border-gray-100">
+                      👤 {customerName}
+                    </td>
+                  </tr>
+                  {customerTrans.map(t => (
+                    <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group">
+                      <td className="px-10 py-8">
+                        <p className="text-xs font-bold text-gray-500">{new Date((t.procedureDate || t.date).replace(' ', 'T')).toLocaleDateString()}</p>
+                        {t.procedureDate && <p className="text-[8px] text-gray-400 font-bold uppercase mt-1">Lanç: {new Date(t.date.replace(' ', 'T')).toLocaleDateString()}</p>}
+                      </td>
+                      <td className="px-10 py-8">
+                        <p className="font-bold text-tea-950 text-sm">{t.description}</p>
+                        <div className="flex gap-2 mt-1">
+                          {t.serviceName && <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter">{t.serviceName}</p>}
+                          {t.status === 'pending' && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>}
+                        </div>
+                      </td>
+                      <td className={`px-10 py-8 text-right font-bold text-base ${t.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
+                        {t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}
+                      </td>
+                      <td className="px-10 py-8 text-center">
+                        <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button 
+                            onClick={() => handleEdit(t)} 
+                            className="p-2 bg-tea-50 text-tea-700 rounded-lg hover:bg-tea-100 transition-colors"
+                            title="Editar"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            onClick={() => handleDelete(t.id)} 
+                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                            title="Excluir"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </React.Fragment>
               ))}
               {filteredTransactions.length === 0 && (
                 <tr><td colSpan={4} className="py-24 text-center text-gray-300 italic font-serif text-lg">Nenhum registro financeiro neste período.</td></tr>
@@ -619,6 +678,42 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     const pending = filteredTransactions.filter(t => t.type === 'receivable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
     return { revenue, expenses, pending, balance: revenue - expenses };
   }, [filteredTransactions]);
+
+  // Agrupamento de transações por cliente para a visão de lançamentos
+  const groupedTransactions = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {};
+    
+    filteredTransactions.forEach(t => {
+      const groupKey = t.customerName || 'Geral / Despesas';
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push(t);
+    });
+
+    // Ordenar transações dentro de cada grupo pela data do procedimento (ou data do lançamento)
+    Object.keys(groups).forEach(key => {
+      groups[key].sort((a, b) => {
+        const dateA = new Date((a.procedureDate || a.date).replace(' ', 'T')).getTime();
+        const dateB = new Date((b.procedureDate || b.date).replace(' ', 'T')).getTime();
+        return dateB - dateA; // Mais recentes primeiro
+      });
+    });
+
+    // Ordenar grupos por nome do cliente
+    return Object.entries(groups).sort(([nameA], [nameB]) => {
+      if (nameA === 'Geral / Despesas') return 1;
+      if (nameB === 'Geral / Despesas') return -1;
+      return nameA.localeCompare(nameB);
+    });
+  }, [filteredTransactions]);
+
+  // Validação: Agendamentos concluídos sem lançamento no caixa
+  const missingTransactions = useMemo(() => {
+    return filteredBookings.filter(b => {
+      if (b.status !== 'completed') return false;
+      // Verifica se existe alguma transação vinculada a este agendamento
+      return !allTransactions.some(t => t.bookingId === b.id);
+    });
+  }, [filteredBookings, allTransactions]);
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">
