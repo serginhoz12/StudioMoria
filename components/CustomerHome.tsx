@@ -244,6 +244,10 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                   <span className="text-[9px] text-tea-600 font-bold uppercase tracking-widest mt-4 block">Toque para ver detalhes</span>
                 </div>
                 <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
+                  <div className="text-left">
+                    <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Valor do Cuidado</p>
+                    <p className="text-lg font-serif font-bold text-tea-900 italic">A partir de R$ {service.price.toFixed(0)}</p>
+                  </div>
                   <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
                 </div>
               </div>
@@ -581,10 +585,14 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-6 pt-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-6">
                  <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Duração Média</p>
                     <p className="text-xl font-serif text-tea-900 font-bold italic">{selectedServiceDetail.duration} min</p>
+                 </div>
+                 <div className="p-6 bg-tea-50 rounded-3xl border border-tea-100">
+                    <p className="text-[9px] font-bold text-tea-700 uppercase tracking-widest mb-1">Investimento</p>
+                    <p className="text-xl font-serif text-tea-900 font-bold italic">A partir de R$ {selectedServiceDetail.price.toFixed(0)}</p>
                  </div>
                  <div className="p-6 bg-tea-900 rounded-3xl text-white flex items-center justify-center">
                     <p className="text-sm font-bold uppercase tracking-widest">Studio Moriá</p>

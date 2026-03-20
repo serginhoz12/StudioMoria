@@ -417,7 +417,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                     <button key={s.id} onClick={() => setSelectedService(s)} className="w-full p-8 rounded-[2.5rem] border-2 bg-white border-gray-50 hover:border-tea-200 transition-all flex justify-between items-center group">
                        <div className="text-left">
                           <p className="font-bold text-tea-950 text-lg group-hover:text-tea-800">{s.name}</p>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.duration}min</p>
+                          <div className="flex gap-4 mt-1">
+                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{s.duration}min</p>
+                             <p className="text-[10px] text-tea-600 font-bold uppercase tracking-widest">A partir de R$ {s.price.toFixed(0)}</p>
+                          </div>
                        </div>
                        <div className="text-2xl opacity-20 group-hover:opacity-100 transition-opacity">🌿</div>
                     </button>
