@@ -969,7 +969,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                     className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                   >
                     <option value="">Selecione o serviço...</option>
-                    {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {services.map(s => <option key={s.id} value={s.id}>{s.name} (A partir de R$ {s.price.toFixed(0)})</option>)}
                   </select>
 
                   {selectedServiceId && (
@@ -1062,7 +1062,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                     >
                       <option value="">Selecione o serviço...</option>
-                      {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {services.map(s => <option key={s.id} value={s.id}>{s.name} (A partir de R$ {s.price.toFixed(0)})</option>)}
                     </select>
 
                     {selectedServiceId && (
@@ -1234,7 +1234,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                     >
                       <option value="">Selecione o serviço...</option>
-                      {services.filter(s => s.isVisible).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {services.map(s => <option key={s.id} value={s.id}>{s.name} (A partir de R$ {s.price.toFixed(0)})</option>)}
                     </select>
 
                     {selectedServiceId && (

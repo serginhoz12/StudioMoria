@@ -32,7 +32,28 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   onDelete 
 }) => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'transactions'>('dashboard');
+  const [transactionFilter, setTransactionFilter] = useState<'all' | 'pending' | 'paid'>('all');
   const [showForm, setShowForm] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (groupName: string) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupName]: !prev[groupName]
+    }));
+  };
+
+  const expandAll = () => {
+    const all: Record<string, boolean> = {};
+    groupedTransactions.forEach(([name]) => {
+      all[name] = true;
+    });
+    setExpandedGroups(all);
+  };
+
+  const collapseAll = () => {
+    setExpandedGroups({});
+  };
   
   // Filtro de Período (Início e Fim)
   const [dateRange, setDateRange] = useState({
@@ -121,12 +142,15 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
 
   // 8. Procedimentos mais lucrativos (Baseado em transações faturadas)
   const profitableProcedures = useMemo(() => {
-    const stats: Record<string, { count: number, revenue: number }> = {};
+    const stats: Record<string, { count: number, revenue: number, basePrice: number }> = {};
     filteredTransactions
       .filter(t => t.type === 'receivable' && t.status === 'paid' && t.serviceName)
       .forEach(t => {
         const name = t.serviceName!;
-        if (!stats[name]) stats[name] = { count: 0, revenue: 0 };
+        if (!stats[name]) {
+          const service = services.find(s => s.name === name);
+          stats[name] = { count: 0, revenue: 0, basePrice: service?.price || 0 };
+        }
         stats[name].count += 1;
         stats[name].revenue += t.amount;
       });
@@ -135,11 +159,12 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
         name,
         count: data.count,
         revenue: data.revenue,
-        avg: data.revenue / data.count
+        avg: data.revenue / data.count,
+        basePrice: data.basePrice
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
-  }, [filteredTransactions]);
+  }, [filteredTransactions, services]);
 
   // 9. Ranking de Clientes
   const topCustomers = useMemo(() => {
@@ -201,7 +226,16 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   }, 0);
   const forecastTotal = periodRevenue + forecastedFutureRevenue;
 
-  // 13. Alertas Financeiros
+  // 13. Validação: Agendamentos concluídos sem lançamento no caixa
+  const missingTransactions = useMemo(() => {
+    return filteredBookings.filter(b => {
+      if (b.status !== 'completed') return false;
+      // Verifica se existe alguma transação vinculada a este agendamento
+      return !allTransactions.some(t => t.bookingId === b.id);
+    });
+  }, [filteredBookings, allTransactions]);
+
+  // 14. Alertas Financeiros
   const alerts = [];
   if (periodRevenue < revenueGoal * 0.5 && new Date().getDate() > 15) {
     alerts.push({ type: 'warning', text: 'Faturamento abaixo da meta esperada.' });
@@ -211,6 +245,9 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   }
   if (realProfit < 0) {
     alerts.push({ type: 'danger', text: 'Lucro negativo! Suas despesas estão superando as receitas.' });
+  }
+  if (missingTransactions.length > 0) {
+    alerts.push({ type: 'warning', text: `${missingTransactions.length} atendimentos concluídos ainda não foram lançados no caixa.` });
   }
 
   const COLORS = ['#418d50', '#8ec99a', '#2a5b35', '#bbe1c2', '#1e3d28', '#5eaa6e'];
@@ -483,7 +520,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                   <div className="w-10 h-10 bg-tea-900 text-white rounded-xl flex items-center justify-center font-bold text-sm">{idx + 1}</div>
                   <div>
                     <p className="text-xs font-bold text-tea-950">{p.name}</p>
-                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{p.count} atendimentos • R$ {p.avg.toFixed(0)} avg</p>
+                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">{p.count} atendimentos • A partir de R$ {p.basePrice.toFixed(0)} • R$ {p.avg.toFixed(0)} avg</p>
                   </div>
                 </div>
                 <p className="text-sm font-bold text-tea-800">R$ {p.revenue.toFixed(0)}</p>
@@ -606,6 +643,45 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       )}
 
       <div className="bg-white rounded-[3.5rem] border border-gray-100 overflow-hidden shadow-sm">
+        <div className="p-6 border-b border-gray-50 flex flex-wrap gap-4 items-center justify-between">
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setTransactionFilter('all')}
+              className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${transactionFilter === 'all' ? 'bg-tea-900 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+            >
+              Todos
+            </button>
+            <button 
+              onClick={() => setTransactionFilter('pending')}
+              className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${transactionFilter === 'pending' ? 'bg-orange-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+            >
+              Pendentes
+            </button>
+            <button 
+              onClick={() => setTransactionFilter('paid')}
+              className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${transactionFilter === 'paid' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+            >
+              Pagos
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={expandAll}
+              className="px-4 py-2 bg-gray-100 text-gray-500 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-200 transition-all"
+            >
+              Expandir Tudo
+            </button>
+            <button 
+              onClick={collapseAll}
+              className="px-4 py-2 bg-gray-100 text-gray-500 rounded-xl text-[9px] font-bold uppercase tracking-widest hover:bg-gray-200 transition-all"
+            >
+              Recolher Tudo
+            </button>
+          </div>
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            {displayTransactions.length} {displayTransactions.length === 1 ? 'Lançamento' : 'Lançamentos'}
+          </p>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-gray-50 border-b border-gray-100">
@@ -617,53 +693,71 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {groupedTransactions.map(([customerName, customerTrans]) => (
-                <React.Fragment key={customerName}>
-                  <tr className="bg-gray-50/50">
-                    <td colSpan={4} className="px-10 py-4 text-[10px] font-black text-tea-900 uppercase tracking-[0.2em] border-y border-gray-100">
-                      👤 {customerName}
-                    </td>
-                  </tr>
-                  {customerTrans.map(t => (
-                    <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group">
-                      <td className="px-10 py-8">
-                        <p className="text-xs font-bold text-gray-500">{new Date((t.procedureDate || t.date).replace(' ', 'T')).toLocaleDateString()}</p>
-                        {t.procedureDate && <p className="text-[8px] text-gray-400 font-bold uppercase mt-1">Lanç: {new Date(t.date.replace(' ', 'T')).toLocaleDateString()}</p>}
+              {groupedTransactions.map(([customerName, customerTrans]) => {
+                const isExpanded = expandedGroups[customerName];
+                const groupTotal = customerTrans.reduce((sum, t) => sum + (t.type === 'receivable' ? t.amount : -t.amount), 0);
+                
+                return (
+                  <React.Fragment key={customerName}>
+                    <tr 
+                      className="bg-gray-50/50 cursor-pointer hover:bg-gray-100 transition-colors"
+                      onClick={() => toggleGroup(customerName)}
+                    >
+                      <td colSpan={3} className="px-10 py-4 text-[10px] font-black text-tea-900 uppercase tracking-[0.2em] border-y border-gray-100">
+                        <span className="inline-block w-4 mr-2 transition-transform duration-200" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
+                        👤 {customerName} <span className="ml-2 opacity-40 font-normal italic">({customerTrans.length} {customerTrans.length === 1 ? 'lançamento' : 'lançamentos'})</span>
                       </td>
-                      <td className="px-10 py-8">
-                        <p className="font-bold text-tea-950 text-sm">{t.description}</p>
-                        <div className="flex gap-2 mt-1">
-                          {t.serviceName && <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter">{t.serviceName}</p>}
-                          {t.status === 'pending' && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>}
-                        </div>
-                      </td>
-                      <td className={`px-10 py-8 text-right font-bold text-base ${t.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
-                        {t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}
-                      </td>
-                      <td className="px-10 py-8 text-center">
-                        <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button 
-                            onClick={() => handleEdit(t)} 
-                            className="p-2 bg-tea-50 text-tea-700 rounded-lg hover:bg-tea-100 transition-colors"
-                            title="Editar"
-                          >
-                            ✏️
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(t.id)} 
-                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
-                            title="Excluir"
-                          >
-                            🗑️
-                          </button>
-                        </div>
+                      <td className="px-10 py-4 text-right border-y border-gray-100">
+                        <span className={`text-[10px] font-bold ${groupTotal >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          Saldo: R$ {groupTotal.toFixed(2)}
+                        </span>
                       </td>
                     </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-              {filteredTransactions.length === 0 && (
-                <tr><td colSpan={4} className="py-24 text-center text-gray-300 italic font-serif text-lg">Nenhum registro financeiro neste período.</td></tr>
+                    {isExpanded && customerTrans.map(t => (
+                      <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group animate-fade-in">
+                        <td className="px-10 py-8">
+                          <p className="text-xs font-bold text-gray-500">{new Date((t.procedureDate || t.date).replace(' ', 'T')).toLocaleDateString()}</p>
+                          {t.procedureDate && <p className="text-[8px] text-gray-400 font-bold uppercase mt-1">Lanç: {new Date(t.date.replace(' ', 'T')).toLocaleDateString()}</p>}
+                        </td>
+                        <td className="px-10 py-8">
+                          <p className="font-bold text-tea-950 text-sm">{t.description}</p>
+                          <div className="flex gap-2 mt-1">
+                            {t.serviceName && (
+                              <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter">
+                                {t.serviceName} {services.find(s => s.name === t.serviceName) && `(A partir de R$ ${services.find(s => s.name === t.serviceName)?.price.toFixed(0)})`}
+                              </p>
+                            )}
+                            {t.status === 'pending' && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>}
+                          </div>
+                        </td>
+                        <td className={`px-10 py-8 text-right font-bold text-base ${t.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
+                          {t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}
+                        </td>
+                        <td className="px-10 py-8 text-center">
+                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleEdit(t); }} 
+                              className="p-2 bg-tea-50 text-tea-700 rounded-lg hover:bg-tea-100 transition-colors"
+                              title="Editar"
+                            >
+                              ✏️
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }} 
+                              className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                              title="Excluir"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+              {displayTransactions.length === 0 && (
+                <tr><td colSpan={4} className="py-24 text-center text-gray-300 italic font-serif text-lg">Nenhum registro financeiro neste período com este filtro.</td></tr>
               )}
             </tbody>
           </table>
@@ -679,11 +773,18 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     return { revenue, expenses, pending, balance: revenue - expenses };
   }, [filteredTransactions]);
 
+  const displayTransactions = useMemo(() => {
+    return filteredTransactions.filter(t => {
+      if (transactionFilter === 'all') return true;
+      return t.status === transactionFilter;
+    });
+  }, [filteredTransactions, transactionFilter]);
+
   // Agrupamento de transações por cliente para a visão de lançamentos
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
     
-    filteredTransactions.forEach(t => {
+    displayTransactions.forEach(t => {
       const groupKey = t.customerName || 'Geral / Despesas';
       if (!groups[groupKey]) groups[groupKey] = [];
       groups[groupKey].push(t);
@@ -705,15 +806,6 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       return nameA.localeCompare(nameB);
     });
   }, [filteredTransactions]);
-
-  // Validação: Agendamentos concluídos sem lançamento no caixa
-  const missingTransactions = useMemo(() => {
-    return filteredBookings.filter(b => {
-      if (b.status !== 'completed') return false;
-      // Verifica se existe alguma transação vinculada a este agendamento
-      return !allTransactions.some(t => t.bookingId === b.id);
-    });
-  }, [filteredBookings, allTransactions]);
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">

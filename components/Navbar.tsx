@@ -46,6 +46,17 @@ const Navbar: React.FC<NavbarProps> = ({
     { id: View.ADMIN_SETTINGS, label: 'Config', icon: '⚙️' },
   ];
 
+  const formattedLastUpdate = lastUpdated 
+    ? new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(lastUpdated))
+    : LAST_UPDATE_DATE;
+
   return (
     <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
       <nav className="max-w-7xl mx-auto px-4 md:px-6">
@@ -71,7 +82,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
               <span className="text-[6px] font-bold text-tea-600 uppercase tracking-widest mt-0.5">
-                v{APP_VERSION} • Publicado em {LAST_UPDATE_DATE}
+                v{APP_VERSION} • Publicado em {formattedLastUpdate}
               </span>
             </div>
           </div>
