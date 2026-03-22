@@ -306,8 +306,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       });
 
       if (conflict) {
-        alert(`Não é possível sobrepor atendimentos. O horário já está ocupado por ${conflict.customerName}. Se deseja realizar atendimentos simultâneos, abra uma nova vaga primeiro.`);
-        return;
+        if (!confirm(`O horário já está ocupado por ${conflict.customerName}. Deseja realizar este atendimento simultaneamente?`)) {
+          return;
+        }
       }
     }
 

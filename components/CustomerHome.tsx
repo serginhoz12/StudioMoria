@@ -62,19 +62,40 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
       b.dateTime >= today
     );
 
-    // 2. Identify slots that are open
+    // 2. Identify slots that are open AND not occupied by another booking
     const openSlots = bookings.filter(slot => {
       if (slot.status !== 'open' || slot.dateTime < today) return false;
-      return true;
+      
+      const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
+      const slotEnd = slotStart + 30 * 60 * 1000; // Assume open slots are 30 min intervals
+
+      // Check if any active booking overlaps with this slot
+      const isOccupied = activeBookings.some(b => {
+        if (b.teamMemberId !== slot.teamMemberId) return false;
+        const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+        const bEnd = bStart + (b.duration || 30) * 60 * 1000;
+        return slotStart < bEnd && slotEnd > bStart;
+      });
+
+      return !isOccupied;
     });
 
-    // 3. If a service is selected, ensure the entire duration fits without hitting closing time
+    // 3. If a service is selected, ensure the entire duration fits without hitting closing time or overlapping other bookings
     if (selectedServiceDetail) {
       const serviceDurationMs = selectedServiceDetail.duration * 60 * 1000;
       
       return openSlots.filter(slot => {
         const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
         const slotEnd = slotStart + serviceDurationMs;
+
+        // Check for overlaps with other bookings
+        const hasOverlap = activeBookings.some(b => {
+          if (b.teamMemberId !== slot.teamMemberId) return false;
+          const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
+          const bEnd = bStart + (b.duration || 30) * 60 * 1000;
+          return slotStart < bEnd && slotEnd > bStart;
+        });
+        if (hasOverlap) return false;
 
         // Check if the service exceeds business hours (Allow up to 2 hours overtime per CLT)
         const [date] = slot.dateTime.split(' ');
