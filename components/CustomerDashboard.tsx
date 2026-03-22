@@ -94,9 +94,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
       const slotEnd = slotStart + 30 * 60 * 1000; // Assume open slots are 30 min intervals
 
-      // Check if any active booking overlaps with this slot
+      // Check if any active booking overlaps with this slot (GLOBALLY for customers)
       const isOccupied = activeBookings.some(b => {
-        if (b.teamMemberId !== slot.teamMemberId) return false;
         const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
         const bDuration = b.duration || 30;
         const bEnd = bStart + bDuration * 60 * 1000;
@@ -106,17 +105,29 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       return !isOccupied;
     });
 
-    // 3. If a service is selected, ensure the entire duration fits without hitting closing time or overlapping other bookings
+    // 3. Filter to unique times (if multiple pros are free, show only one slot)
+    const uniqueTimeSlots: Booking[] = [];
+    const seenTimes = new Set<string>();
+    
+    const sortedOpenSlots = [...openSlots].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    
+    for (const slot of sortedOpenSlots) {
+      if (!seenTimes.has(slot.dateTime)) {
+        uniqueTimeSlots.push(slot);
+        seenTimes.add(slot.dateTime);
+      }
+    }
+
+    // 4. If a service is selected, ensure the entire duration fits without hitting closing time or overlapping other bookings
     if (selectedService) {
       const serviceDurationMs = selectedService.duration * 60 * 1000;
       
-      return openSlots.filter(slot => {
+      return uniqueTimeSlots.filter(slot => {
         const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
         const slotEnd = slotStart + serviceDurationMs;
 
-        // Check for overlaps with other bookings
+        // Check for overlaps with other bookings (GLOBALLY)
         const hasOverlap = activeBookings.some(b => {
-          if (b.teamMemberId !== slot.teamMemberId) return false;
           const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
           const bDuration = b.duration || 30;
           const bEnd = bStart + bDuration * 60 * 1000;
@@ -124,7 +135,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         });
         if (hasOverlap) return false;
 
-        // Check if the service exceeds business hours (Allow up to 2 hours overtime per CLT)
+        // Check if the service exceeds business hours
         const [date] = slot.dateTime.split(' ');
         const pro = settings.teamMembers.find(m => m.id === slot.teamMemberId);
         const closingTimeStr = pro?.businessHours?.end || settings.businessHours.end;
@@ -132,8 +143,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         // Use a more robust date construction to avoid timezone issues
         const closingTime = new Date(`${date}T${closingTimeStr}:00`).getTime();
         
-        // CLT: Max 2 hours overtime (120 minutes). 
-        // We block if the service ends even 1 second after the 2h limit.
         const maxEndTime = closingTime + (120 * 60 * 1000); 
         if (slotEnd > maxEndTime) return false;
 
@@ -141,7 +150,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
     }
 
-    return openSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    return uniqueTimeSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
   }, [bookings, selectedService, settings.businessHours.end, settings.teamMembers]);
 
   const groupedSlots = useMemo(() => {
@@ -299,12 +308,36 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     );
   }, [customer.productHistory]);
 
+  const isEligibleForCustomerPrice = useMemo(() => {
+    return bookings.some(b => 
+      b.customerId === customer.id && 
+      b.status === 'completed' && 
+      (b.paymentReceived || b.originalPrice || 0) > 50
+    );
+  }, [customer.id, bookings]);
+
   const storeProducts = useMemo(() => {
-    return inventory.filter(item => item.showOnSite && !item.isSalonUseOnly);
+    return inventory.filter(item => {
+      // Don't show if it's for salon use only
+      if (item.isSalonUseOnly) return false;
+      // Don't show if it's not marked to show on site
+      if (!item.showOnSite) return false;
+      return true;
+    });
   }, [inventory]);
 
   const getProductPrice = (product: InventoryItem) => {
-    if (product.customerPrice && product.customerPrice > 0) return product.customerPrice;
+    // Customer price only if eligible (spent > 50 in a single procedure)
+    if (isEligibleForCustomerPrice && product.customerPrice && product.customerPrice > 0) {
+      return product.customerPrice;
+    }
+    
+    // Otherwise use visitor price
+    if (product.visitorPrice && product.visitorPrice > 0) {
+      return product.visitorPrice;
+    }
+
+    // Fallback to markup calculation
     const markup = settings.visitorMarkupPercent || 0;
     const basePrice = product.purchasePrice || 0;
     const calculatedPrice = basePrice * (1 + markup / 100);

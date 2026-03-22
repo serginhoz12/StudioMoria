@@ -69,9 +69,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
       const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
       const slotEnd = slotStart + 30 * 60 * 1000; // Assume open slots are 30 min intervals
 
-      // Check if any active booking overlaps with this slot
+      // Check if any active booking overlaps with this slot (GLOBALLY for customers)
       const isOccupied = activeBookings.some(b => {
-        if (b.teamMemberId !== slot.teamMemberId) return false;
         const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
         const bEnd = bStart + (b.duration || 30) * 60 * 1000;
         return slotStart < bEnd && slotEnd > bStart;
@@ -80,24 +79,36 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
       return !isOccupied;
     });
 
-    // 3. If a service is selected, ensure the entire duration fits without hitting closing time or overlapping other bookings
+    // 3. Filter to unique times (if multiple pros are free, show only one slot)
+    const uniqueTimeSlots: Booking[] = [];
+    const seenTimes = new Set<string>();
+    
+    const sortedOpenSlots = [...openSlots].sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    
+    for (const slot of sortedOpenSlots) {
+      if (!seenTimes.has(slot.dateTime)) {
+        uniqueTimeSlots.push(slot);
+        seenTimes.add(slot.dateTime);
+      }
+    }
+
+    // 4. If a service is selected, ensure the entire duration fits without hitting closing time or overlapping other bookings
     if (selectedServiceDetail) {
       const serviceDurationMs = selectedServiceDetail.duration * 60 * 1000;
       
-      return openSlots.filter(slot => {
+      return uniqueTimeSlots.filter(slot => {
         const slotStart = new Date(slot.dateTime.replace(' ', 'T')).getTime();
         const slotEnd = slotStart + serviceDurationMs;
 
-        // Check for overlaps with other bookings
+        // Check for overlaps with other bookings (GLOBALLY)
         const hasOverlap = activeBookings.some(b => {
-          if (b.teamMemberId !== slot.teamMemberId) return false;
           const bStart = new Date(b.dateTime.replace(' ', 'T')).getTime();
           const bEnd = bStart + (b.duration || 30) * 60 * 1000;
           return slotStart < bEnd && slotEnd > bStart;
         });
         if (hasOverlap) return false;
 
-        // Check if the service exceeds business hours (Allow up to 2 hours overtime per CLT)
+        // Check if the service exceeds business hours
         const [date] = slot.dateTime.split(' ');
         const pro = settings.teamMembers.find(m => m.id === slot.teamMemberId);
         const closingTimeStr = pro?.businessHours?.end || settings.businessHours.end;
@@ -109,7 +120,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
       }).sort((a, b) => a.dateTime.localeCompare(b.dateTime));
     }
 
-    return openSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+    return uniqueTimeSlots.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
   }, [bookings, selectedServiceDetail, settings.businessHours.end]);
 
   const availableDays = useMemo(() => {
@@ -133,17 +144,33 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
 
   const regularServices = useMemo(() => services.filter(s => s.isVisible), [services]);
 
+  const isEligibleForCustomerPrice = useMemo(() => {
+    if (!currentUser) return false;
+    return bookings.some(b => 
+      b.customerId === currentUser.id && 
+      b.status === 'completed' && 
+      (b.paymentReceived || b.originalPrice || 0) > 50
+    );
+  }, [currentUser, bookings]);
+
   const storeProducts = useMemo(() => {
     return inventory.filter(item => {
+      // Don't show if it's for salon use only
+      if (item.isSalonUseOnly) return false;
+      // Don't show if it's not marked to show on site
       if (!item.showOnSite) return false;
-      if (item.exclusiveForCustomers && !currentUser) return false;
       return true;
     });
-  }, [inventory, currentUser]);
+  }, [inventory]);
 
   const getProductPrice = (item: InventoryItem) => {
-    if (currentUser && item.customerPrice) return item.customerPrice;
+    // Customer price only if logged in AND eligible (spent > 50 in a single procedure)
+    if (isEligibleForCustomerPrice && item.customerPrice) return item.customerPrice;
+    
+    // Otherwise use visitor price
     if (item.visitorPrice) return item.visitorPrice;
+    
+    // Fallback to markup calculation
     if (item.purchasePrice && settings.visitorMarkupPercent) {
       return item.purchasePrice * (1 + settings.visitorMarkupPercent / 100);
     }

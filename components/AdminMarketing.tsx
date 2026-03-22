@@ -897,7 +897,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                       <img 
                         src={settings.logo} 
                         alt="Logo" 
-                        className="object-contain drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)] pointer-events-none" 
+                        className="max-w-none object-contain drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)] pointer-events-none" 
                         style={{ width: `${noticeLogoSize}px` }}
                         referrerPolicy="no-referrer" 
                       />
