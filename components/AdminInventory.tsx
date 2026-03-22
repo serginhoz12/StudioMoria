@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { InventoryItem, Customer, ProductSale, Service, Transaction } from '../types';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase';
 
 interface AdminInventoryProps {
@@ -53,6 +53,7 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
 
   const [formItem, setFormItem] = useState<Omit<InventoryItem, 'id'>>(initialItem);
   const [isSaving, setIsSaving] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<'idle' | 'uploading' | 'saving'>('idle');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,15 +126,50 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
     }
     
     setIsSaving(true);
+    setSavingStatus('uploading');
+    setUploadProgress(0);
     try {
       let finalImageUrl = formItem.imageUrl;
 
       if (selectedFile) {
-        const storageRef = ref(storage, `products/${Date.now()}_${selectedFile.name}`);
-        const snapshot = await uploadBytes(storageRef, selectedFile);
-        finalImageUrl = await getDownloadURL(snapshot.ref);
+        // Enforce 5MB limit
+        if (selectedFile.size > 5 * 1024 * 1024) {
+          alert("O arquivo é muito grande. O limite é 5MB.");
+          setIsSaving(false);
+          setSavingStatus('idle');
+          return;
+        }
+
+        const storageRef = ref(storage, `products/${Date.now()}_${selectedFile.name.replace(/[^a-zA-Z0-9.]/g, '_')}`);
+        const uploadTask = uploadBytesResumable(storageRef, selectedFile);
+
+        finalImageUrl = await new Promise((resolve, reject) => {
+          // Set a timeout of 60 seconds
+          const timeout = setTimeout(() => {
+            uploadTask.cancel();
+            reject(new Error("O upload expirou (timeout). Verifique sua conexão."));
+          }, 60000);
+
+          uploadTask.on('state_changed', 
+            (snapshot) => {
+              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+              setUploadProgress(progress);
+            }, 
+            (error) => {
+              clearTimeout(timeout);
+              console.error("Erro no upload:", error);
+              reject(error);
+            }, 
+            async () => {
+              clearTimeout(timeout);
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve(downloadURL);
+            }
+          );
+        });
       }
 
+      setSavingStatus('saving');
       const itemToSave = { ...formItem, imageUrl: finalImageUrl };
 
       if (editingId) {
@@ -146,8 +182,11 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
       setFormItem(initialItem);
       setSelectedFile(null);
       setUploadProgress(0);
-    } catch (err) {
+      setSavingStatus('idle');
+    } catch (err: any) {
       console.error("Erro ao salvar item no componente:", err);
+      alert(`Erro ao salvar: ${err.message || 'Verifique sua conexão e tente novamente.'}`);
+      setSavingStatus('idle');
     } finally {
       setIsSaving(false);
     }
@@ -430,7 +469,7 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
                           accept="image/*"
                         />
                         <p className="text-[10px] text-gray-400 leading-relaxed">
-                          Selecione uma imagem clara do produto. Formatos aceitos: JPG, PNG. Máx 5MB.
+                          Selecione uma imagem clara do produto. Formatos aceitos: JPG, PNG, AVIF. Máx 5MB.
                         </p>
                         {selectedFile && (
                           <div className="flex items-center gap-2">
@@ -447,7 +486,10 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
                     </div>
                     {isSaving && selectedFile && (
                       <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-tea-600 animate-pulse w-1/2"></div>
+                        <div 
+                          className="h-full bg-tea-600 transition-all duration-300"
+                          style={{ width: `${uploadProgress}%` }}
+                        ></div>
                       </div>
                     )}
                   </div>
@@ -557,7 +599,12 @@ const AdminInventory: React.FC<AdminInventoryProps> = ({ inventory, customers, s
               disabled={isSaving}
               className="bg-tea-800 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-lg disabled:opacity-50"
             >
-              {isSaving ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Salvar Item'}
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  {savingStatus === 'uploading' ? `Enviando (${Math.round(uploadProgress)}%)...` : 'Salvando...'}
+                </span>
+              ) : editingId ? 'Salvar Alterações' : 'Salvar Item'}
             </button>
           </div>
         </div>
