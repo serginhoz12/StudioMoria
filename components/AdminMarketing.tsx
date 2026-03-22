@@ -6,6 +6,39 @@ import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { toPng } from 'html-to-image';
 
 import { GoogleGenAI } from "@google/genai";
+import { 
+  Download, 
+  Share2, 
+  Trash2, 
+  Search, 
+  Calendar, 
+  MessageSquare, 
+  User, 
+  Clock, 
+  CheckCircle2, 
+  AlertCircle, 
+  ChevronRight, 
+  ArrowLeft, 
+  Image as ImageIcon, 
+  Sparkles, 
+  Type, 
+  Palette, 
+  RefreshCw, 
+  Send, 
+  Smartphone, 
+  Instagram, 
+  Layout, 
+  Maximize2, 
+  Minimize2, 
+  Move, 
+  Camera, 
+  Zap, 
+  Star, 
+  Heart, 
+  Smile, 
+  Sparkle, 
+  Loader2 
+} from 'lucide-react';
 
 interface AdminMarketingProps {
   customers: Customer[];
@@ -44,6 +77,11 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const [noticeFontColor, setNoticeFontColor] = useState('#ffffff');
   const [noticeLogoSize, setNoticeLogoSize] = useState(420);
   const [noticeFontSize, setNoticeFontSize] = useState(36);
+  const [noticeLogoPos, setNoticeLogoPos] = useState({ x: 0, y: 0 });
+  const [noticeTextPos, setNoticeTextPos] = useState({ x: 0, y: 0 });
+  const [noticeBgImage, setNoticeBgImage] = useState<string | null>(null);
+  const [draggingElement, setDraggingElement] = useState<'logo' | 'text' | null>(null);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Estados específicos para Lembretes
   const [reminderType, setReminderType] = useState<'billing' | 'promotion' | 'renewal' | null>(null);
@@ -235,6 +273,37 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     }
   };
 
+  const generateAIBgImage = async () => {
+    if (!noticePrompt && activeTab === 'notices') return alert("Descreva o assunto para gerar a imagem.");
+    setIsGenerating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const prompt = `Crie uma imagem de fundo profissional, elegante e minimalista para um salão de estética. 
+        O assunto é: ${noticePrompt || reminderType}. 
+        Estilo: Luxuoso, tons de ${noticeColor}, sem rostos humanos, apenas elementos abstratos, flores, ou spa. 
+        A imagem deve ser limpa para que o texto seja legível.`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: { parts: [{ text: prompt }] },
+      });
+
+      if (response.candidates?.[0]?.content?.parts) {
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            setNoticeBgImage(`data:image/png;base64,${part.inlineData.data}`);
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao gerar imagem com IA:", error);
+      alert("Erro ao gerar imagem. Tente novamente.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const generateAIReminder = async (type: 'billing' | 'promotion' | 'renewal', data: any) => {
     if (!selectedCustomer) return;
     setIsGenerating(true);
@@ -252,16 +321,15 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
         context = `Lembrete de que está na hora de renovar o procedimento "${data.service.name}" para manter os resultados. A última sessão foi há algum tempo.`;
       }
 
-      const prompt = `Crie uma mensagem curta para enviar via WhatsApp para a cliente ${selectedCustomer.name.split(' ')[0]}.
+      const prompt = `Crie uma mensagem curta e carinhosa para enviar via WhatsApp para a cliente ${selectedCustomer.name.split(' ')[0]}.
       O salão se chama "${settings.name}".
       
-      TOM DE VOZ: ${noticeTone}
       CONTEXTO: ${context}
       
       REGRAS:
-      1. Siga o tom de voz solicitado.
+      1. Seja gentil e profissional.
       2. Use emojis delicados.
-      3. O texto deve ser conciso (máximo 120 caracteres).
+      3. O texto deve caber em uma imagem quadrada de 500x500px, então seja conciso (máximo 120 caracteres).
       4. Retorne APENAS o texto da mensagem.`;
 
       const result = await ai.models.generateContent({
@@ -298,17 +366,12 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setTimeout(async () => {
       if (cardRef.current) {
         try {
-          const isNotice = activeTab === 'notices';
-          const width = 1080;
-          const height = isNotice ? 1920 : 1080;
-          const scale = 2.7; // 400px * 2.7 = 1080px
-
           let dataUrl;
           try {
             dataUrl = await toPng(cardRef.current, {
               cacheBust: true,
-              width,
-              height,
+              width: 1080,
+              height: 1920,
               filter: (node: any) => {
                 if (node.tagName === 'LINK' && node.rel === 'stylesheet' && !node.href.includes(window.location.origin)) {
                   return false;
@@ -316,7 +379,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                 return true;
               },
               style: {
-                transform: `scale(${scale})`,
+                transform: 'scale(2.7)',
                 transformOrigin: 'top left'
               }
             });
@@ -325,11 +388,11 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
             // Segunda tentativa: desabilita o processamento de fontes externas que causa o erro de 'cssRules'
             dataUrl = await toPng(cardRef.current, {
               cacheBust: true,
-              width,
-              height,
+              width: 1080,
+              height: 1920,
               fontEmbedCSS: '', // Pula a busca por fontes em stylesheets externos
               style: {
-                transform: `scale(${scale})`,
+                transform: 'scale(2.7)',
                 transformOrigin: 'top left'
               }
             });
@@ -381,6 +444,30 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setGeneratedMessage('');
     setGeneratedImageUrl(null);
     setReminderType(null);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent, element: 'logo' | 'text') => {
+    setDraggingElement(element);
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!draggingElement) return;
+
+    const dx = e.clientX - dragStart.x;
+    const dy = e.clientY - dragStart.y;
+
+    if (draggingElement === 'logo') {
+      setNoticeLogoPos(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    } else {
+      setNoticeTextPos(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    }
+
+    setDragStart({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseUp = () => {
+    setDraggingElement(null);
   };
 
   return (
@@ -551,342 +638,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
         </div>
       )}
 
-      {/* ABA DE LEMBRETES */}
-      {activeTab === 'reminders' && (
-        <div className="space-y-8 animate-slide-up">
-          {/* Busca de Cliente */}
-          <div className="max-w-xl mx-auto relative">
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                <span className="text-gray-400">🔍</span>
-              </div>
-              <input 
-                type="text" 
-                placeholder="Buscar cliente para lembrete personalizado..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onFocus={() => setIsSearchFocused(true)}
-                className="w-full pl-12 pr-4 py-4 bg-white rounded-2xl shadow-sm border border-gray-100 font-bold text-sm outline-none focus:ring-2 focus:ring-tea-100 transition-all"
-              />
-              {selectedCustomer && (
-                <button 
-                  onClick={resetSelection}
-                  className="absolute inset-y-0 right-4 flex items-center text-gray-400 hover:text-red-500"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Resultados da Busca */}
-            {isSearchFocused && filteredCustomers.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                {filteredCustomers.map(c => (
-                  <button 
-                    key={c.id}
-                    onClick={() => {
-                      setSelectedCustomerId(c.id);
-                      setIsSearchFocused(false);
-                      setSearchTerm(c.name);
-                    }}
-                    className="w-full p-4 text-left hover:bg-gray-50 flex items-center justify-between border-b border-gray-50 last:border-0"
-                  >
-                    <div>
-                      <p className="font-bold text-tea-950 text-sm">{c.name}</p>
-                      <p className="text-[10px] text-gray-400">{c.whatsapp}</p>
-                    </div>
-                    <span className="text-xs">👤</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {selectedCustomer ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Lado Esquerdo: Listas de Lembretes */}
-              <div className="space-y-6">
-                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-tea-50 rounded-2xl flex items-center justify-center text-xl">👤</div>
-                    <div>
-                      <h3 className="text-lg font-serif text-tea-950 font-bold italic">{selectedCustomer.name}</h3>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Cliente Selecionada</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    {/* Cobranças */}
-                    <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Cobranças Pendentes</h4>
-                      {pendingTransactions.length > 0 ? (
-                        <div className="space-y-2">
-                          {pendingTransactions.map(t => (
-                            <button 
-                              key={t.id}
-                              onClick={() => handleSelectBilling(t)}
-                              className={`w-full p-4 rounded-2xl text-left transition-all border ${selectedTransactionId === t.id ? 'bg-tea-50 border-tea-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}
-                            >
-                              <div className="flex justify-between items-center">
-                                <span className="font-bold text-sm text-tea-950">{t.serviceName || t.description}</span>
-                                <span className="text-xs font-bold text-red-500">R$ {t.amount.toFixed(2)}</span>
-                              </div>
-                              <p className="text-[10px] text-gray-400 mt-1">Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</p>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-gray-400 italic ml-2">Nenhuma cobrança pendente.</p>
-                      )}
-                    </div>
-
-                    {/* Renovação */}
-                    <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Sugestão de Renovação</h4>
-                      {renewalCandidates.length > 0 ? (
-                        <div className="space-y-2">
-                          {renewalCandidates.map(item => (
-                            <button 
-                              key={item.booking.id}
-                              onClick={() => handleSelectRenewal(item)}
-                              className={`w-full p-4 rounded-2xl text-left transition-all border ${selectedBookingId === item.booking.id ? 'bg-tea-50 border-tea-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}
-                            >
-                              <div className="flex justify-between items-center">
-                                <span className="font-bold text-sm text-tea-950">{item.service.name}</span>
-                                <span className="text-[10px] font-bold text-tea-600">{item.diffDays} dias</span>
-                              </div>
-                              <p className="text-[10px] text-gray-400 mt-1">Próxima data ideal: {item.nextDate.toLocaleDateString()}</p>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-gray-400 italic ml-2">Nenhuma renovação pendente.</p>
-                      )}
-                    </div>
-
-                    {/* Promoções */}
-                    <div className="space-y-3">
-                      <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Enviar Promoção</h4>
-                      <div className="space-y-2">
-                        {activePromotions.map(p => (
-                          <button 
-                            key={p.id}
-                            onClick={() => handleSelectPromotion(p)}
-                            className={`w-full p-4 rounded-2xl text-left transition-all border ${selectedPromotionId === p.id ? 'bg-tea-50 border-tea-200' : 'bg-gray-50 border-transparent hover:bg-gray-100'}`}
-                          >
-                            <div className="flex justify-between items-center">
-                              <span className="font-bold text-sm text-tea-950">{p.title}</span>
-                              <span className="text-[10px] bg-tea-900 text-white px-2 py-0.5 rounded-lg">-{p.discountPercentage}%</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Lado Direito: Prévia e Ações */}
-              <div className="space-y-6">
-                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 flex flex-col items-center">
-                  <div className="w-full flex items-center justify-between mb-6">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Estilo e Prévia</h4>
-                    <button 
-                      onClick={() => {
-                        setNoticeColor('#1e3d28');
-                        setNoticeFontColor('#ffffff');
-                        setNoticeFontFamily('font-serif');
-                        setNoticeFontSize(36);
-                      }}
-                      className="text-[9px] font-bold text-tea-900 uppercase tracking-widest hover:underline"
-                    >
-                      Resetar Estilo 🔄
-                    </button>
-                  </div>
-                  
-                  {/* Controles de Estilo Compactos */}
-                  <div className="w-full grid grid-cols-4 gap-3 mb-8">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Fundo</label>
-                      <input 
-                        type="color" 
-                        value={noticeColor}
-                        onChange={(e) => setNoticeColor(e.target.value)}
-                        className="w-full h-10 rounded-xl border-none p-0 cursor-pointer overflow-hidden"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Texto</label>
-                      <input 
-                        type="color" 
-                        value={noticeFontColor}
-                        onChange={(e) => setNoticeFontColor(e.target.value)}
-                        className="w-full h-10 rounded-xl border-none p-0 cursor-pointer overflow-hidden"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Fonte</label>
-                      <select 
-                        value={noticeFontFamily}
-                        onChange={(e) => setNoticeFontFamily(e.target.value)}
-                        className="w-full h-10 bg-gray-50 rounded-xl text-[10px] font-bold outline-none px-2"
-                      >
-                        <option value="font-serif">Serif</option>
-                        <option value="font-sans">Sans</option>
-                        <option value="font-mono">Mono</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-1">Tam.</label>
-                      <input 
-                        type="number" 
-                        value={noticeFontSize}
-                        onChange={(e) => setNoticeFontSize(Number(e.target.value))}
-                        className="w-full h-10 bg-gray-50 rounded-xl text-[10px] font-bold outline-none px-2"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="relative group">
-                    <div 
-                      ref={cardRef}
-                      className="w-[400px] h-[400px] rounded-[2.5rem] p-10 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-2xl"
-                      style={{ backgroundColor: noticeColor }}
-                    >
-                      {/* Decoração sutil */}
-                      <div className="absolute top-0 left-0 w-full h-full opacity-[0.05] pointer-events-none">
-                        <div className="absolute top-6 left-6 text-5xl rotate-12">✨</div>
-                        <div className="absolute bottom-6 right-6 text-5xl -rotate-12">🌸</div>
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[15rem] opacity-[0.03]">✨</div>
-                      </div>
-
-                      {settings.logo && (
-                        <img 
-                          src={settings.logo} 
-                          alt="Logo" 
-                          className="object-contain opacity-20 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" 
-                          style={{ width: `${noticeLogoSize / 2}px` }}
-                          referrerPolicy="no-referrer"
-                        />
-                      )}
-                      
-                      <p className={`leading-tight drop-shadow-md z-10 ${noticeFontFamily}`} style={{ fontSize: `${noticeFontSize}px`, color: noticeFontColor }}>
-                        {generatedMessage || "Selecione um lembrete para gerar a mensagem..."}
-                      </p>
-
-                      <div className="absolute bottom-8 w-16 h-1 bg-white/20 rounded-full" />
-                    </div>
-
-                    {isGenerating && (
-                      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-[2.5rem] flex flex-col items-center justify-center z-20">
-                        <div className="w-12 h-12 border-4 border-tea-900 border-t-transparent rounded-full animate-spin mb-4" />
-                        <p className="text-[10px] font-bold text-tea-900 uppercase tracking-widest">Gerando com IA...</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {generatedImageUrl && (
-                    <div className="w-full mt-8 grid grid-cols-2 gap-4">
-                      <button 
-                        onClick={downloadImage}
-                        className="py-4 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:scale-[1.02] transition-all"
-                      >
-                        Baixar Imagem 📥
-                      </button>
-                      <button 
-                        onClick={sendWhatsApp}
-                        className="py-4 bg-green-500 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-lg hover:scale-[1.02] transition-all"
-                      >
-                        Enviar WhatsApp 📱
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Top 10 Cobranças Geral */}
-              <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
-                <div className="text-center">
-                  <h3 className="text-lg font-serif text-tea-950 font-bold italic">Cobranças Pendentes</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Próximos vencimentos (Geral)</p>
-                </div>
-                <div className="space-y-3">
-                  {globalPendingTransactions.map(t => {
-                    const customer = customers.find(c => c.id === t.customerId);
-                    return (
-                      <button 
-                        key={t.id}
-                        onClick={() => {
-                          setSelectedCustomerId(t.customerId);
-                          handleSelectBilling(t);
-                        }}
-                        className="w-full p-4 bg-gray-50 rounded-2xl text-left hover:bg-tea-50 transition-all group border border-transparent hover:border-tea-100"
-                      >
-                        <div className="flex justify-between items-center">
-                          <span className="font-bold text-sm text-tea-950">{customer?.name || 'Cliente'}</span>
-                          <span className="text-xs font-bold text-red-500">R$ {t.amount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between items-center mt-1">
-                          <span className="text-[10px] text-gray-400">{t.serviceName || t.description}</span>
-                          <span className={`text-[9px] font-bold uppercase tracking-widest ${t.diffDays < 0 ? 'text-red-600' : 'text-orange-500'}`}>
-                            {t.diffDays < 0 ? `Atrasado ${Math.abs(t.diffDays)}d` : `Vence em ${t.diffDays}d`}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                  {globalPendingTransactions.length === 0 && (
-                    <div className="text-center py-12 opacity-50">
-                      <span className="text-4xl mb-2 block">✅</span>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Nenhuma cobrança pendente</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Top 10 Renovação Geral */}
-              <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
-                <div className="text-center">
-                  <h3 className="text-lg font-serif text-tea-950 font-bold italic">Renovação de Serviços</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Clientes que precisam voltar</p>
-                </div>
-                <div className="space-y-3">
-                  {globalRenewalCandidates.map((item, idx) => (
-                    <button 
-                      key={`${item.customerId}-${idx}`}
-                      onClick={() => {
-                        setSelectedCustomerId(item.customerId);
-                        handleSelectRenewal(item);
-                      }}
-                      className="w-full p-4 bg-gray-50 rounded-2xl text-left hover:bg-tea-50 transition-all group border border-transparent hover:border-tea-100"
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-sm text-tea-950">{item.customerName}</span>
-                        <span className={`text-[10px] font-bold ${item.diffDays < 0 ? 'text-red-500' : 'text-tea-600'}`}>
-                          {item.diffDays < 0 ? `Atrasado ${Math.abs(item.diffDays)}d` : `Em ${item.diffDays}d`}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-[10px] text-gray-400">{item.service.name}</span>
-                        <span className="text-[9px] font-bold text-tea-600 uppercase tracking-widest group-hover:underline">Convidar →</span>
-                      </div>
-                    </button>
-                  ))}
-                  {globalRenewalCandidates.length === 0 && (
-                    <div className="text-center py-12 opacity-50">
-                      <span className="text-4xl mb-2 block">📅</span>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Nenhuma renovação sugerida</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ABA DE AVISOS IA */}
       {activeTab === 'notices' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-slide-up">
@@ -942,13 +693,13 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                       <input 
                         type="range" 
                         min="100" 
-                        max="1200" 
+                        max="900" 
                         step="10"
                         value={noticeLogoSize}
                         onChange={(e) => setNoticeLogoSize(Number(e.target.value))}
                         className="flex-1 accent-tea-900"
                       />
-                      <span className="text-[10px] font-bold text-tea-900 w-10">{noticeLogoSize}px</span>
+                      <span className="text-[10px] font-bold text-tea-900 w-8">{noticeLogoSize}px</span>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -1023,6 +774,38 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   </div>
                 </div>
 
+                <div className="space-y-4 pt-4 border-t border-gray-100">
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Posição do Logo</label>
+                    <button onClick={() => setNoticeLogoPos({ x: 0, y: 0 })} className="text-[8px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Resetar</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                      <span className="text-[10px] font-bold text-gray-400">X</span>
+                      <input type="range" min="-200" max="200" value={noticeLogoPos.x} onChange={e => setNoticeLogoPos(p => ({ ...p, x: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                      <span className="text-[10px] font-bold text-gray-400">Y</span>
+                      <input type="range" min="-300" max="300" value={noticeLogoPos.y} onChange={e => setNoticeLogoPos(p => ({ ...p, y: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Posição do Texto</label>
+                    <button onClick={() => setNoticeTextPos({ x: 0, y: 0 })} className="text-[8px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Resetar</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                      <span className="text-[10px] font-bold text-gray-400">X</span>
+                      <input type="range" min="-200" max="200" value={noticeTextPos.x} onChange={e => setNoticeTextPos(p => ({ ...p, x: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                      <span className="text-[10px] font-bold text-gray-400">Y</span>
+                      <input type="range" min="-300" max="300" value={noticeTextPos.y} onChange={e => setNoticeTextPos(p => ({ ...p, y: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                    </div>
+                  </div>
+                </div>
+
                 <button 
                   onClick={generateAINotice}
                   disabled={isGenerating}
@@ -1037,6 +820,21 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
               <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-4">
                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Ações</h4>
                 <div className="grid grid-cols-2 gap-3">
+                  <button 
+                    onClick={generateAIBgImage}
+                    disabled={isGenerating}
+                    className="py-4 bg-tea-100 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-md hover:bg-tea-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {noticeBgImage ? 'Atualizar Fundo' : 'Gerar Fundo (IA)'}
+                  </button>
+                  <button 
+                    onClick={() => generateImage(generatedMessage)}
+                    disabled={isGenerating || !generatedMessage}
+                    className="py-4 bg-tea-100 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-md hover:bg-tea-200 disabled:opacity-50"
+                  >
+                    Capturar Imagem 📸
+                  </button>
                   <button 
                     onClick={downloadImage}
                     className="py-4 bg-tea-950 text-white rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-lg"
@@ -1060,11 +858,20 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
           <div className="lg:col-span-7 space-y-4">
             <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Prévia do Aviso (9:16)</h4>
             
-            <div className="flex justify-center">
+            <div className="flex justify-center select-none">
               <div 
                 ref={cardRef}
-                className="w-[400px] h-[711px] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col items-center justify-between p-12 text-center relative border-[10px]"
-                style={{ backgroundColor: noticeColor, borderColor: 'rgba(0,0,0,0.1)' }}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+                className="w-[400px] h-[711px] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col items-center justify-between p-12 text-center relative border-[10px] cursor-default"
+                style={{ 
+                  backgroundColor: noticeColor, 
+                  borderColor: 'rgba(0,0,0,0.1)',
+                  backgroundImage: noticeBgImage ? `url(${noticeBgImage})` : 'none',
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center'
+                }}
               >
                 {/* Decoração de Fundo - Itens de Salão */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03] select-none">
@@ -1080,40 +887,45 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                 <div className="absolute top-0 left-0 w-full h-4 bg-black/10" />
                 <div className="absolute bottom-0 left-0 w-full h-4 bg-black/10" />
                 
-                {/* Logotipo como Fundo (Atrás das Letras) */}
-                {settings.logo && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden">
-                    <img 
-                      src={settings.logo} 
-                      alt="Logo Background" 
-                      className="object-contain opacity-60 drop-shadow-[0_20px_20px_rgba(0,0,0,0.3)]" 
-                      style={{ width: `${noticeLogoSize}px`, maxWidth: 'none' }}
-                      referrerPolicy="no-referrer" 
-                    />
-                  </div>
-                )}
-
-                {/* Brilhos extras */}
-                <div className="absolute top-20 right-16 opacity-20 text-4xl animate-pulse">✨</div>
-                <div className="absolute bottom-32 left-16 opacity-20 text-4xl animate-pulse" style={{ animationDelay: '1s' }}>✨</div>
-
-                {/* Conteúdo Principal */}
-                <div className="w-full flex flex-col items-center mt-24 space-y-12 z-10">
-                  {!settings.logo && (
-                    <h1 className="font-serif italic font-bold text-white drop-shadow-md" style={{ color: noticeFontColor, fontSize: `${noticeFontSize * 1.5}px` }}>{settings.name}</h1>
+                <div className="w-full flex flex-col items-center mt-16 space-y-12 z-10">
+                  {settings.logo ? (
+                    <div 
+                      onMouseDown={(e) => handleMouseDown(e, 'logo')}
+                      className={`flex justify-center transition-transform duration-75 cursor-move ${draggingElement === 'logo' ? 'scale-105' : ''}`} 
+                      style={{ transform: `translate(${noticeLogoPos.x}px, ${noticeLogoPos.y}px)` }}
+                    >
+                      <img 
+                        src={settings.logo} 
+                        alt="Logo" 
+                        className="object-contain drop-shadow-[0_15px_15px_rgba(0,0,0,0.4)] pointer-events-none" 
+                        style={{ width: `${noticeLogoSize}px` }}
+                        referrerPolicy="no-referrer" 
+                      />
+                    </div>
+                  ) : (
+                    <h1 
+                      onMouseDown={(e) => handleMouseDown(e, 'logo')}
+                      className={`font-serif italic font-bold text-white drop-shadow-md transition-transform duration-75 cursor-move ${draggingElement === 'logo' ? 'scale-105' : ''}`} 
+                      style={{ color: noticeFontColor, fontSize: `${noticeFontSize * 1.5}px`, transform: `translate(${noticeLogoPos.x}px, ${noticeLogoPos.y}px)` }}
+                    >
+                      {settings.name}
+                    </h1>
                   )}
 
-                  <div className="w-32 h-1.5 bg-white/30 rounded-full" />
+                  <div className="w-32 h-1.5 bg-white/30 rounded-full pointer-events-none" />
 
-                  <div className="space-y-8 max-w-[360px]">
-                    <p className={`leading-tight drop-shadow-lg ${noticeFontFamily}`} style={{ color: noticeFontColor, fontSize: `${noticeFontSize}px` }}>
+                  <div 
+                    onMouseDown={(e) => handleMouseDown(e, 'text')}
+                    className={`space-y-8 max-w-[360px] transition-transform duration-75 cursor-move ${draggingElement === 'text' ? 'scale-105' : ''}`} 
+                    style={{ transform: `translate(${noticeTextPos.x}px, ${noticeTextPos.y}px)` }}
+                  >
+                    <p className={`leading-tight drop-shadow-sm ${noticeFontFamily} pointer-events-none`} style={{ color: noticeFontColor, fontSize: `${noticeFontSize}px` }}>
                       {generatedMessage || "Sua mensagem gerada por IA aparecerá aqui..."}
                     </p>
                   </div>
                 </div>
 
-                {/* Rodapé */}
-                <div className="w-full pb-10 z-10">
+                <div className="w-full pb-16 z-10">
                   <div className="w-16 h-1 bg-white/20 mx-auto mb-6 rounded-full" />
                   <div className="flex flex-col items-center space-y-2">
                     {settings.socialLinks?.whatsapp && (
@@ -1126,19 +938,426 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                         <span>📸</span> @{settings.socialLinks.instagram.replace(/https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '')}
                       </div>
                     )}
-                    <div className="text-[10px] font-bold tracking-widest flex items-center gap-2" style={{ color: noticeFontColor + '99' }}>
-                      <span>🌐</span> studiomoriaestetica.com.br
+                    {settings.usefulLinks?.[0]?.url && (
+                      <div className="text-[10px] font-bold tracking-widest flex items-center gap-2" style={{ color: noticeFontColor + '99' }}>
+                        <span>🌐</span> {settings.usefulLinks[0].url.replace(/https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Brilhos extras */}
+                <div className="absolute top-20 right-16 opacity-20 text-4xl animate-pulse">✨</div>
+                <div className="absolute bottom-32 left-16 opacity-20 text-4xl animate-pulse" style={{ animationDelay: '1s' }}>✨</div>
+              </div>
+            </div>
+            
+            {isGenerating && (
+              <div className="text-center py-4 text-xs text-tea-600 font-bold animate-pulse">
+                A IA está criando algo especial para você...
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ABA DE LEMBRETES (A NOVA SUBSEÇÃO) */}
+      {activeTab === 'reminders' && (
+        <div className="space-y-8">
+          {!selectedCustomerId ? (
+            <div className="space-y-8 max-w-5xl mx-auto">
+              <div className="bg-white p-10 rounded-[3.5rem] shadow-sm border border-gray-100 max-w-2xl mx-auto">
+                <h3 className="text-xl font-serif text-tea-950 font-bold italic mb-6 text-center">Selecione uma Cliente para Lembretes</h3>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por nome ou WhatsApp..." 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                    className="w-full p-5 bg-gray-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-tea-100 focus:bg-white transition-all"
+                  />
+                  {isSearchFocused && filteredCustomers.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
+                      {filteredCustomers.map(c => (
+                        <button 
+                          key={c.id}
+                          onClick={() => setSelectedCustomerId(c.id)}
+                          className="w-full p-4 text-left hover:bg-tea-50 flex items-center gap-4 transition-colors"
+                        >
+                          <div className="w-10 h-10 bg-tea-100 rounded-xl flex items-center justify-center font-bold text-tea-900">
+                            {c.name.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-bold text-tea-950 text-sm">{c.name}</p>
+                            <p className="text-[10px] text-gray-400 uppercase tracking-widest">{c.whatsapp}</p>
+                          </div>
+                        </button>
+                      ))}
                     </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* TOP 10 COBRANÇAS GERAL */}
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
+                  <h4 className="font-serif italic font-bold text-tea-950 text-lg">Próximas 10 Cobranças (Geral)</h4>
+                  <div className="space-y-3">
+                    {globalPendingTransactions.length > 0 ? globalPendingTransactions.map(t => {
+                      const customer = customers.find(c => c.id === t.customerId);
+                      return (
+                        <div 
+                          key={t.id} 
+                          onClick={() => {
+                            setSelectedCustomerId(t.customerId!);
+                            setReminderType('billing');
+                            handleSelectBilling(t);
+                          }}
+                          className="p-4 rounded-2xl border-2 border-gray-50 hover:border-tea-100 transition-all cursor-pointer flex justify-between items-center"
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-tea-950">{customer?.name || 'Cliente'}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {t.serviceName ? `${t.serviceName}${t.installmentNumber ? ` (${t.installmentNumber}/${t.installmentsCount})` : ''}` : t.description}
+                            </p>
+                            <p className="text-[8px] text-gray-400 uppercase tracking-widest">
+                              Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}
+                            </p>
+                            <p className={`text-[8px] font-bold uppercase tracking-widest ${t.diffDays < 0 ? 'text-red-500' : 'text-tea-600'}`}>
+                              {t.diffDays < 0 ? `Vencido há ${Math.abs(t.diffDays)} dias` : t.diffDays === 0 ? 'Vence hoje' : `Vence em ${t.diffDays} dias`}
+                            </p>
+                          </div>
+                          <span className="text-xs font-serif font-bold">R$ {t.amount.toFixed(2)}</span>
+                        </div>
+                      );
+                    }) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma cobrança pendente encontrada.</p>}
+                  </div>
+                </div>
+
+                {/* TOP 10 RENOVAÇÕES GERAL */}
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
+                  <h4 className="font-serif italic font-bold text-tea-950 text-lg">Próximas 10 Renovações (Geral)</h4>
+                  <div className="space-y-3">
+                    {globalRenewalCandidates.length > 0 ? globalRenewalCandidates.map((item: any) => (
+                      <div 
+                        key={item.booking.id} 
+                        onClick={() => {
+                          setSelectedCustomerId(item.customerId);
+                          setReminderType('renewal');
+                          handleSelectRenewal(item);
+                        }}
+                        className="p-4 rounded-2xl border-2 border-gray-50 hover:border-tea-100 transition-all cursor-pointer flex justify-between items-center"
+                      >
+                        <div>
+                          <p className="text-xs font-bold text-tea-950">{item.customerName}</p>
+                          <p className="text-[10px] text-gray-500">{item.service.name}</p>
+                          <p className="text-[8px] text-gray-400 uppercase tracking-widest">Retorno Ideal: {item.nextDate ? item.nextDate.toLocaleDateString() : 'N/A'}</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-tea-600 uppercase tracking-widest">{item.diffDays <= 0 ? 'Vencido' : `Em ${item.diffDays} dias`}</span>
+                      </div>
+                    )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma renovação pendente encontrada.</p>}
                   </div>
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-slide-up">
+              <div className="lg:col-span-4 space-y-6">
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 text-center relative overflow-hidden">
+                  <div className="w-20 h-20 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-3xl font-serif italic mx-auto mb-4 shadow-xl">
+                    {selectedCustomer?.name.charAt(0)}
+                  </div>
+                  <h3 className="text-xl font-serif text-tea-950 font-bold italic">{selectedCustomer?.name}</h3>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">{selectedCustomer?.whatsapp}</p>
+                  <button onClick={resetSelection} className="mt-6 text-[10px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Trocar Cliente</button>
+                </div>
+
+                {/* VISUALIZAÇÃO DO CARD (IMAGEM) */}
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Prévia da Imagem</h4>
+                  
+                  {/* O CARD QUE SERÁ CONVERTIDO EM IMAGEM */}
+                  <div className="flex justify-center select-none">
+                    <div 
+                      ref={cardRef}
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                      className="w-[400px] h-[711px] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col items-center justify-between p-10 text-center relative border-[10px] cursor-default"
+                      style={{ 
+                        backgroundColor: noticeColor, 
+                        borderColor: 'rgba(0,0,0,0.1)',
+                        backgroundImage: noticeBgImage ? `url(${noticeBgImage})` : 'none',
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center'
+                      }}
+                    >
+                      {/* Decoração de Fundo */}
+                      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-[0.03] select-none">
+                        <div className="absolute top-10 left-10 text-7xl rotate-12">✂️</div>
+                        <div className="absolute top-40 right-[-10px] text-8xl -rotate-12">🧴</div>
+                        <div className="absolute bottom-40 right-10 text-7xl -rotate-45">💅</div>
+                        <div className="absolute bottom-10 left-10 text-8xl rotate-12">💄</div>
+                      </div>
+
+                      {/* Bordas */}
+                      <div className="absolute top-0 left-0 w-full h-3 bg-black/10" />
+                      <div className="absolute bottom-0 left-0 w-full h-3 bg-black/10" />
+                      
+                      {/* Conteúdo */}
+                      <div className="w-full flex flex-col items-center mt-14 space-y-8 z-10">
+                        {settings.logo ? (
+                          <div 
+                            onMouseDown={(e) => handleMouseDown(e, 'logo')}
+                            className={`flex justify-center transition-transform duration-75 cursor-move ${draggingElement === 'logo' ? 'scale-105' : ''}`} 
+                            style={{ transform: `translate(${noticeLogoPos.x}px, ${noticeLogoPos.y}px)` }}
+                          >
+                            <img 
+                              src={settings.logo} 
+                              alt="Logo" 
+                              className="object-contain drop-shadow-2xl pointer-events-none" 
+                              style={{ width: `${noticeLogoSize}px` }}
+                              referrerPolicy="no-referrer" 
+                            />
+                          </div>
+                        ) : (
+                          <h1 
+                            onMouseDown={(e) => handleMouseDown(e, 'logo')}
+                            className={`text-5xl font-serif italic font-bold text-white transition-transform duration-75 cursor-move ${draggingElement === 'logo' ? 'scale-105' : ''}`} 
+                            style={{ color: noticeFontColor, transform: `translate(${noticeLogoPos.x}px, ${noticeLogoPos.y}px)` }}
+                          >
+                            {settings.name}
+                          </h1>
+                        )}
+
+                        <div className="w-24 h-1 bg-white/30 rounded-full pointer-events-none" />
+
+                        <div 
+                          onMouseDown={(e) => handleMouseDown(e, 'text')}
+                          className={`space-y-6 max-w-[340px] transition-transform duration-75 cursor-move ${draggingElement === 'text' ? 'scale-105' : ''}`} 
+                          style={{ transform: `translate(${noticeTextPos.x}px, ${noticeTextPos.y}px)` }}
+                        >
+                          <h2 className={`text-2xl font-bold ${noticeFontFamily} pointer-events-none`} style={{ color: noticeFontColor }}>Olá, {selectedCustomer?.name?.split(' ')[0] || 'Cliente'}!</h2>
+                          <p className={`text-xl leading-snug ${noticeFontFamily} pointer-events-none`} style={{ color: noticeFontColor }}>
+                            {generatedMessage || "Selecione uma ação para gerar seu lembrete personalizado."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="w-full pb-8 z-10">
+                        <div className="text-[10px] uppercase tracking-[0.3em] font-bold" style={{ color: noticeFontColor + '80' }}>
+                          {settings.name}
+                        </div>
+                      </div>
+
+                      <div className="absolute top-10 right-10 opacity-10 text-3xl">✨</div>
+                      <div className="absolute bottom-12 left-10 opacity-10 text-3xl">🌸</div>
+                    </div>
+                  </div>
+
+                  {generatedImageUrl && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <button 
+                        onClick={generateAIBgImage}
+                        disabled={isGenerating}
+                        className="py-4 bg-tea-100 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-md hover:bg-tea-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                        {noticeBgImage ? 'Atualizar Fundo' : 'Gerar Fundo (IA)'}
+                      </button>
+                      <button 
+                        onClick={() => generateImage(generatedMessage)}
+                        disabled={isGenerating || !generatedMessage}
+                        className="py-4 bg-tea-100 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-md hover:bg-tea-200 disabled:opacity-50"
+                      >
+                        Capturar Imagem 📸
+                      </button>
+                      <button 
+                        onClick={downloadImage}
+                        className="py-4 bg-tea-950 text-white rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-lg"
+                      >
+                        Baixar Imagem 📥
+                      </button>
+                      <button 
+                        onClick={sendWhatsApp}
+                        className="py-4 bg-green-500 text-white rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-lg"
+                      >
+                        WhatsApp 📱
+                      </button>
+                    </div>
+                  )}
+                  {isGenerating && (
+                    <div className="text-center py-4 text-xs text-tea-600 font-bold animate-pulse">Gerando imagem personalizada...</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="lg:col-span-8 space-y-6">
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-serif italic font-bold text-tea-950">Personalização da Imagem</h4>
+                    <button 
+                      onClick={() => {
+                        setNoticeLogoPos({ x: 0, y: 0 });
+                        setNoticeTextPos({ x: 0, y: 0 });
+                        setNoticeLogoSize(420);
+                        setNoticeFontSize(36);
+                        setNoticeColor('#1e3d28');
+                        setNoticeFontColor('#ffffff');
+                      }}
+                      className="text-[8px] font-bold text-tea-600 uppercase tracking-widest hover:underline"
+                    >
+                      Resetar Tudo
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Posição do Logo</label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                          <span className="text-[10px] font-bold text-gray-400">X</span>
+                          <input type="range" min="-200" max="200" value={noticeLogoPos.x} onChange={e => setNoticeLogoPos(p => ({ ...p, x: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                        </div>
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                          <span className="text-[10px] font-bold text-gray-400">Y</span>
+                          <input type="range" min="-300" max="300" value={noticeLogoPos.y} onChange={e => setNoticeLogoPos(p => ({ ...p, y: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Posição do Texto</label>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                          <span className="text-[10px] font-bold text-gray-400">X</span>
+                          <input type="range" min="-200" max="200" value={noticeTextPos.x} onChange={e => setNoticeTextPos(p => ({ ...p, x: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                        </div>
+                        <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                          <span className="text-[10px] font-bold text-gray-400">Y</span>
+                          <input type="range" min="-300" max="300" value={noticeTextPos.y} onChange={e => setNoticeTextPos(p => ({ ...p, y: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Logo</label>
+                          <input type="range" min="100" max="900" step="10" value={noticeLogoSize} onChange={(e) => setNoticeLogoSize(Number(e.target.value))} className="w-full accent-tea-900" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Texto</label>
+                          <input type="range" min="12" max="80" step="2" value={noticeFontSize} onChange={(e) => setNoticeFontSize(Number(e.target.value))} className="w-full accent-tea-900" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Fundo</label>
+                          <input type="color" value={noticeColor} onChange={(e) => setNoticeColor(e.target.value)} className="w-full h-10 rounded-xl cursor-pointer" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Letra</label>
+                          <input type="color" value={noticeFontColor} onChange={(e) => setNoticeFontColor(e.target.value)} className="w-full h-10 rounded-xl cursor-pointer" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100">
+                  <div className="flex gap-2 mb-8">
+                    <button 
+                      onClick={() => setReminderType('billing')}
+                      className={`flex-1 py-3 rounded-2xl font-bold uppercase text-[9px] tracking-widest transition-all ${reminderType === 'billing' ? 'bg-tea-900 text-white' : 'bg-gray-50 text-gray-400'}`}
+                    >
+                      Cobrança 💰
+                    </button>
+                    <button 
+                      onClick={() => setReminderType('promotion')}
+                      className={`flex-1 py-3 rounded-2xl font-bold uppercase text-[9px] tracking-widest transition-all ${reminderType === 'promotion' ? 'bg-tea-900 text-white' : 'bg-gray-50 text-gray-400'}`}
+                    >
+                      Promoção 🏷️
+                    </button>
+                    <button 
+                      onClick={() => setReminderType('renewal')}
+                      className={`flex-1 py-3 rounded-2xl font-bold uppercase text-[9px] tracking-widest transition-all ${reminderType === 'renewal' ? 'bg-tea-900 text-white' : 'bg-gray-50 text-gray-400'}`}
+                    >
+                      Renovação 🔄
+                    </button>
+                  </div>
+
+                  {reminderType === 'billing' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-serif italic font-bold text-tea-950">Próximas 10 Cobranças</h4>
+                      </div>
+                      <div className="space-y-3">
+                        {pendingTransactions.length > 0 ? pendingTransactions.map(t => (
+                          <div key={t.id} onClick={() => handleSelectBilling(t)} className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedTransactionId === t.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 hover:border-tea-100'}`}>
+                            <div>
+                              <p className="text-xs font-bold text-tea-950">
+                                {t.serviceName ? `${t.serviceName}${t.installmentNumber ? ` (${t.installmentNumber}/${t.installmentsCount})` : ''}` : t.description}
+                              </p>
+                              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'N/A'}</p>
+                              <p className={`text-[8px] font-bold uppercase tracking-widest ${t.diffDays < 0 ? 'text-red-500' : 'text-tea-600'}`}>
+                                {t.diffDays < 0 ? `Vencido há ${Math.abs(t.diffDays)} dias` : t.diffDays === 0 ? 'Vence hoje' : `Vence em ${t.diffDays} dias`}
+                              </p>
+                            </div>
+                            <span className="text-xs font-serif font-bold">R$ {t.amount.toFixed(2)}</span>
+                          </div>
+                        )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma cobrança pendente encontrada.</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {reminderType === 'promotion' && (
+                    <div className="space-y-6">
+                      <h4 className="font-serif italic font-bold text-tea-950">Promoções Ativas</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {activePromotions.map(p => (
+                          <div key={p.id} onClick={() => handleSelectPromotion(p)} className={`p-4 rounded-2xl border-2 transition-all cursor-pointer ${selectedPromotionId === p.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 hover:border-tea-100'}`}>
+                            <h5 className="text-xs font-bold text-tea-950">{p.title}</h5>
+                            <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{p.content}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {reminderType === 'renewal' && (
+                    <div className="space-y-6">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-serif italic font-bold text-tea-950">Próximas 10 Renovações</h4>
+                      </div>
+                      <div className="space-y-3">
+                        {renewalCandidates.length > 0 ? renewalCandidates.map((item: any) => (
+                          <div key={item.booking.id} onClick={() => handleSelectRenewal(item)} className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex justify-between items-center ${selectedBookingId === item.booking.id ? 'border-tea-900 bg-tea-50' : 'border-gray-50 hover:border-tea-100'}`}>
+                            <div>
+                              <p className="text-xs font-bold text-tea-950">{item.service.name}</p>
+                              <p className="text-[8px] text-gray-400 uppercase tracking-widest">Retorno Ideal: {item.nextDate ? item.nextDate.toLocaleDateString() : 'N/A'}</p>
+                            </div>
+                            <span className="text-[10px] font-bold text-tea-600 uppercase tracking-widest">{item.diffDays <= 0 ? 'Vencido' : `Em ${item.diffDays} dias`}</span>
+                          </div>
+                        )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma renovação pendente encontrada.</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 };
+
 
 const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[], customers: Customer[], type: 'promotion' | 'tip' }> = ({ promotions, services, customers, type }) => {
   const [title, setTitle] = useState('');
