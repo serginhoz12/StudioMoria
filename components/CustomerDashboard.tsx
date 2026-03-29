@@ -177,7 +177,14 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
   }, [transactions, customer.id]);
 
   const paidInvoices = useMemo(() => {
-    return transactions.filter(t => t.customerId === customer.id && t.type === 'receivable' && t.status === 'paid');
+    return transactions.filter(t => 
+      t.customerId === customer.id && 
+      t.type === 'receivable' && 
+      t.status === 'paid' &&
+      // Se for uma transação que foi paga via abatimentos (pai), não mostramos ela no histórico
+      // para evitar duplicidade com os lançamentos de abatimento individuais
+      !(t.paidAmount && t.paidAmount > 0)
+    );
   }, [transactions, customer.id]);
 
   const handleBookSlot = async (slot: Booking) => {
@@ -695,7 +702,9 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   <div key={t.id} className="p-8 bg-white rounded-[3rem] border border-gray-100 shadow-sm space-y-3 opacity-70">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h4 className="text-lg font-serif font-bold text-tea-950 italic">{t.description}</h4>
+                        <h4 className="text-lg font-serif font-bold text-tea-950 italic">
+                          {t.category === 'Abatimento' ? t.description.replace('Abatimento:', 'Pagamento:') : t.description}
+                        </h4>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Pago em: {t.paidAt ? new Date(t.paidAt).toLocaleDateString('pt-BR') : new Date(t.date).toLocaleDateString('pt-BR')}</p>
                       </div>
                       <span className="text-lg font-bold text-tea-900">R$ {t.amount.toFixed(2)}</span>

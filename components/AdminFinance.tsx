@@ -847,10 +847,17 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   );
 
   const totals = useMemo(() => {
-    const revenue = filteredTransactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
-    const expenses = filteredTransactions.filter(t => t.type === 'payable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
+    // Revenue: Sum of paid receivables, excluding "parent" transactions that were paid via abatimentos
+    // to avoid double counting with the individual abatimento records.
+    const revenue = filteredTransactions
+      .filter(t => t.type === 'receivable' && t.status === 'paid' && !(t.paidAmount && t.paidAmount > 0))
+      .reduce((a, b) => a + b.amount, 0);
+
+    const expenses = filteredTransactions
+      .filter(t => t.type === 'payable' && t.status === 'paid')
+      .reduce((a, b) => a + b.amount, 0);
     
-    // Pending is the remaining amount of pending receivables
+    // Pending: The remaining amount of pending receivables
     const pending = filteredTransactions
       .filter(t => t.type === 'receivable' && t.status === 'pending')
       .reduce((a, b) => a + (b.amount - (b.paidAmount || 0)), 0);
@@ -860,6 +867,10 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
 
   const displayTransactions = useMemo(() => {
     return filteredTransactions.filter(t => {
+      // Avoid showing the "parent" transaction in the list if it's already fully paid
+      // because the individual abatimento records already represent the cash flow.
+      if (t.status === 'paid' && t.paidAmount && t.paidAmount > 0) return false;
+
       if (transactionFilter === 'all') return true;
       return t.status === transactionFilter;
     });
