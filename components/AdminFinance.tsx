@@ -278,6 +278,8 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
 
   const [customerSearch, setCustomerSearch] = useState('');
 
+  const [activeTransactionId, setActiveTransactionId] = useState<string | null>(null);
+
   const handleEdit = (t: Transaction) => {
     setEditingId(t.id);
     setNewTrans({
@@ -298,6 +300,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     });
     setCustomerSearch(t.customerName || '');
     setShowForm(true);
+    setActiveTransactionId(null); // Close icons after opening form
   };
 
   const handleDelete = async (id: string) => {
@@ -307,6 +310,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
           await deleteDoc(doc(db, "transactions", id));
         }
         if (onDelete) onDelete(id);
+        setActiveTransactionId(null);
       } catch (error) {
         alert("Erro ao excluir transação.");
       }
@@ -353,6 +357,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       setShowAbateModal(false);
       setSelectedTransForAbate(null);
       setAbateAmount(0);
+      setActiveTransactionId(null);
       alert("Abatimento registrado com sucesso!");
     } catch (error) {
       console.error("Erro ao registrar abatimento:", error);
@@ -764,7 +769,11 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                       </td>
                     </tr>
                     {isExpanded && customerTrans.map(t => (
-                      <tr key={t.id} className="hover:bg-tea-50/10 transition-colors group animate-fade-in">
+                      <tr 
+                        key={t.id} 
+                        onClick={() => setActiveTransactionId(activeTransactionId === t.id ? null : t.id)}
+                        className={`hover:bg-tea-50/10 transition-colors group animate-fade-in cursor-pointer ${activeTransactionId === t.id ? 'bg-tea-50/20' : ''}`}
+                      >
                         <td className="px-10 py-8">
                           <p className="text-xs font-bold text-gray-500">{new Date((t.procedureDate || t.date).replace(' ', 'T')).toLocaleDateString()}</p>
                           {t.procedureDate && <p className="text-[8px] text-gray-400 font-bold uppercase mt-1">Lanç: {new Date(t.date.replace(' ', 'T')).toLocaleDateString()}</p>}
@@ -800,7 +809,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                           )}
                         </td>
                         <td className="px-10 py-8 text-center">
-                          <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className={`flex justify-center gap-2 transition-opacity ${activeTransactionId === t.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                             {t.status === 'pending' && t.type === 'receivable' && (
                               <button 
                                 onClick={(e) => { 
