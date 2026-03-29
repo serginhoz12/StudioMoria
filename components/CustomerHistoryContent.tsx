@@ -12,10 +12,14 @@ interface CustomerHistoryContentProps {
 
 const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ customer, bookings, transactions, waitlist, onUpdatePrice }) => {
   const myBookings = bookings.filter(b => b.customerId === customer.id).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime());
-  const myTransactions = transactions.filter(t => t.customerId === customer.id).sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime());
+  const myTransactions = transactions
+    .filter(t => t.customerId === customer.id && t.category !== 'Abatimento' && !t.parentTransactionId)
+    .sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime());
   const myWaitlist = waitlist.filter(w => w.customerId === customer.id).sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const totalSpent = myTransactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((acc, t) => acc + t.amount, 0);
+  const totalSpent = myTransactions
+    .filter(t => t.type === 'receivable')
+    .reduce((acc, t) => acc + (t.paidAmount || (t.status === 'paid' ? t.amount : 0)), 0);
   const totalVisits = myBookings.filter(b => b.status === 'completed').length;
 
   return (
@@ -100,9 +104,16 @@ const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ custome
                 <p className={`font-bold text-sm ${trans.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
                   {trans.type === 'receivable' ? '+' : '-'} R$ {trans.amount.toFixed(2)}
                 </p>
-                <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded ${trans.status === 'paid' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
-                  {trans.status === 'paid' ? 'Pago' : 'Pendente'}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`text-[8px] font-bold uppercase px-2 py-0.5 rounded ${trans.status === 'paid' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>
+                    {trans.status === 'paid' ? 'Pago' : 'Pendente'}
+                  </span>
+                  {trans.status === 'pending' && trans.paidAmount && trans.paidAmount > 0 && (
+                    <span className="text-[8px] font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded">
+                      Pago: R$ {trans.paidAmount.toFixed(2)} | Resta: R$ {(trans.amount - trans.paidAmount).toFixed(2)}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           ))}

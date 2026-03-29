@@ -110,8 +110,8 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   // 2. Receita do Período (Faturado)
   const periodRevenue = useMemo(() => {
     return filteredTransactions
-      .filter(t => t.type === 'receivable' && t.status === 'paid')
-      .reduce((acc, t) => acc + t.amount, 0);
+      .filter(t => t.type === 'receivable' && t.category !== 'Abatimento')
+      .reduce((acc, t) => acc + (t.paidAmount || (t.status === 'paid' ? t.amount : 0)), 0);
   }, [filteredTransactions]);
 
   // 3. Custos Variáveis (Insumos/Produtos)
@@ -144,7 +144,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   const profitableProcedures = useMemo(() => {
     const stats: Record<string, { count: number, revenue: number, basePrice: number }> = {};
     filteredTransactions
-      .filter(t => t.type === 'receivable' && t.status === 'paid' && t.serviceName)
+      .filter(t => t.type === 'receivable' && t.category !== 'Abatimento' && t.serviceName)
       .forEach(t => {
         const name = t.serviceName!;
         if (!stats[name]) {
@@ -152,7 +152,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
           stats[name] = { count: 0, revenue: 0, basePrice: service?.price || 0 };
         }
         stats[name].count += 1;
-        stats[name].revenue += t.amount;
+        stats[name].revenue += (t.paidAmount || (t.status === 'paid' ? t.amount : 0));
       });
     return Object.entries(stats)
       .map(([name, data]) => ({
@@ -170,10 +170,10 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   const topCustomers = useMemo(() => {
     const spenders: Record<string, { name: string, total: number }> = {};
     filteredTransactions
-      .filter(t => t.type === 'receivable' && t.status === 'paid' && t.customerId)
+      .filter(t => t.type === 'receivable' && t.category !== 'Abatimento' && t.customerId)
       .forEach(t => {
         if (!spenders[t.customerId!]) spenders[t.customerId!] = { name: t.customerName || 'Cliente', total: 0 };
-        spenders[t.customerId!].total += t.amount;
+        spenders[t.customerId!].total += (t.paidAmount || (t.status === 'paid' ? t.amount : 0));
       });
     return Object.entries(spenders)
       .map(([id, data]) => ({ id, ...data }))
@@ -197,11 +197,11 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
     }
 
     filteredTransactions
-      .filter(t => t.type === 'receivable' && t.status === 'paid')
+      .filter(t => t.type === 'receivable' && t.category !== 'Abatimento')
       .forEach(t => {
         const dateStr = t.date;
         if (data[dateStr] !== undefined) {
-          data[dateStr] += t.amount;
+          data[dateStr] += (t.paidAmount || (t.status === 'paid' ? t.amount : 0));
         }
       });
 
@@ -381,6 +381,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
             customerName: customer?.name || '',
             serviceName: booking?.serviceName || '',
             procedureDate: booking?.dateTime || '',
+            paidAmount: newTrans.status === 'paid' ? newTrans.amount : (newTrans.paidAmount || 0),
             paidAt: newTrans.status === 'paid' ? (new Date().toISOString()) : null,
             updatedAt: new Date().toISOString()
           };
@@ -418,6 +419,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
             customerName: customer?.name || '',
             serviceName: booking?.serviceName || '',
             procedureDate: booking?.dateTime || '',
+            paidAmount: newTrans.status === 'paid' ? newTrans.amount : (newTrans.paidAmount || 0),
             paidAt: newTrans.status === 'paid' ? (new Date().toISOString()) : null,
             createdAt: new Date().toISOString()
           };
@@ -771,7 +773,11 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                     {isExpanded && customerTrans.map(t => (
                       <tr 
                         key={t.id} 
-                        onClick={() => setActiveTransactionId(activeTransactionId === t.id ? null : t.id)}
+                        onClick={(e) => {
+                          // Only toggle if not clicking a button
+                          if ((e.target as HTMLElement).closest('button')) return;
+                          setActiveTransactionId(activeTransactionId === t.id ? null : t.id);
+                        }}
                         className={`hover:bg-tea-50/10 transition-colors group animate-fade-in cursor-pointer ${activeTransactionId === t.id ? 'bg-tea-50/20' : ''}`}
                       >
                         <td className="px-10 py-8">
@@ -809,7 +815,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                           )}
                         </td>
                         <td className="px-10 py-8 text-center">
-                          <div className={`flex justify-center gap-2 transition-opacity ${activeTransactionId === t.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                          <div className={`flex justify-center gap-2 transition-all ${activeTransactionId === t.id ? 'opacity-100 scale-100' : 'opacity-0 scale-90 pointer-events-none group-hover:opacity-100 group-hover:scale-100 group-hover:pointer-events-auto'}`}>
                             {t.status === 'pending' && t.type === 'receivable' && (
                               <button 
                                 onClick={(e) => { 
@@ -876,9 +882,24 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
 
   const displayTransactions = useMemo(() => {
     return filteredTransactions.filter(t => {
-      // Avoid showing the "parent" transaction in the list if it's already fully paid
-      // because the individual abatimento records already represent the cash flow.
-      if (t.status === 'paid' && t.paidAmount && t.paidAmount > 0) return false;
+      // Se for um abatimento, sempre mostramos (ele representa o fluxo de caixa real)
+      if (t.category === 'Abatimento') {
+        if (transactionFilter === 'all') return true;
+        return t.status === transactionFilter;
+      }
+
+      // Se for uma transação pai que já foi TOTALMENTE ou PARCIALMENTE paga via abatimentos,
+      // escondemos o pai na visão de lançamentos se houver abatimentos para evitar duplicidade visual,
+      // POIS os abatimentos já mostram o valor que entrou no caixa.
+      // No entanto, se o pai estiver PENDENTE, queremos mostrar o que falta.
+      
+      if (t.status === 'paid') {
+        const hasAbatements = filteredTransactions.some(at => at.parentTransactionId === t.id && at.category === 'Abatimento');
+        if (hasAbatements) return false;
+      }
+
+      // Escondemos parcelas individuais se estivermos visualizando o pai
+      if (t.parentTransactionId && t.category !== 'Abatimento') return false;
 
       if (transactionFilter === 'all') return true;
       return t.status === transactionFilter;
@@ -910,7 +931,7 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       if (nameB === 'Geral / Despesas') return -1;
       return nameA.localeCompare(nameB);
     });
-  }, [filteredTransactions]);
+  }, [displayTransactions]);
 
   return (
     <div className="space-y-8 animate-fade-in pb-20">

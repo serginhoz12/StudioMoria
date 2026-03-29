@@ -126,17 +126,26 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       .map(t => {
         const dueDate = new Date(t.dueDate!);
         const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        return { ...t, diffDays };
+        const remainingAmount = t.amount - (t.paidAmount || 0);
+        return { ...t, diffDays, remainingAmount };
       })
+      .filter(t => t.remainingAmount > 0)
       .sort((a, b) => a.diffDays - b.diffDays)
       .slice(0, 10);
   }, [transactions]);
 
   const globalRenewalCandidates = useMemo(() => {
     const allCandidates: any[] = [];
+    const today = new Date();
     
     customers.forEach(customer => {
       const lastBookings: Record<string, Booking> = {};
+      const futureBookings = bookings.filter(b => 
+        b.customerId === customer.id && 
+        (b.status === 'scheduled' || b.status === 'pending') &&
+        b.dateTime && new Date(b.dateTime) >= today
+      );
+
       bookings
         .filter(b => b.customerId === customer.id && b.status === 'completed' && b.dateTime)
         .forEach(b => {
@@ -151,13 +160,61 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       Object.values(lastBookings).forEach(b => {
         const service = services.find(s => s.id === b.serviceId);
         if (service && service.returnPeriodDays) {
+          const serviceNameLower = service.name.toLowerCase();
+
+          // 1. Verificar se existe algum agendamento FUTURO que já cubra este serviço
+          const hasFutureBooking = futureBookings.some(fb => {
+            const fbService = services.find(s => s.id === fb.serviceId);
+            const isSameCategoryPackage = fbService && service && 
+                                         fbService.category === service.category && 
+                                         (fbService.name.toLowerCase().includes('pacote') || 
+                                          fbService.name.toLowerCase().includes('tratamento') ||
+                                          fbService.name.toLowerCase().includes('combo') ||
+                                          fbService.name.toLowerCase().includes('completo'));
+
+            return (
+              fb.serviceName?.toLowerCase().includes(serviceNameLower) ||
+              fbService?.name.toLowerCase().includes(serviceNameLower) ||
+              fbService?.description?.toLowerCase().includes(serviceNameLower) ||
+              isSameCategoryPackage
+            );
+          });
+
+          if (hasFutureBooking) return;
+
+          // 2. Verificar se existe algum agendamento COMPLETADO mais recente que "cubra" este serviço
+          const hasNewerCoveringBooking = bookings.some(newerB => {
+            if (newerB.customerId !== customer.id || newerB.status !== 'completed' || !newerB.dateTime) return false;
+            const newerDate = new Date(newerB.dateTime);
+            const currentDate = new Date(b.dateTime);
+            
+            if (newerDate <= currentDate) return false;
+
+            const newerService = services.find(s => s.id === newerB.serviceId);
+            
+            const isSameCategoryPackage = newerService && service && 
+                                         newerService.category === service.category && 
+                                         (newerService.name.toLowerCase().includes('pacote') || 
+                                          newerService.name.toLowerCase().includes('tratamento') ||
+                                          newerService.name.toLowerCase().includes('combo') ||
+                                          newerService.name.toLowerCase().includes('completo'));
+
+            return (
+              newerB.serviceName?.toLowerCase().includes(serviceNameLower) ||
+              newerService?.name.toLowerCase().includes(serviceNameLower) ||
+              newerService?.description?.toLowerCase().includes(serviceNameLower) ||
+              isSameCategoryPackage
+            );
+          });
+
+          if (hasNewerCoveringBooking) return;
+
           const lastDate = new Date(b.dateTime);
           const nextDate = new Date(lastDate);
           nextDate.setDate(lastDate.getDate() + service.returnPeriodDays);
           
           if (isNaN(nextDate.getTime())) return;
 
-          const today = new Date();
           const diffDays = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
           allCandidates.push({ booking: b, service, nextDate, diffDays, customerName: customer.name, customerId: customer.id });
         }
@@ -185,8 +242,10 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       .map(t => {
         const dueDate = new Date(t.dueDate!);
         const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        return { ...t, diffDays };
+        const remainingAmount = t.amount - (t.paidAmount || 0);
+        return { ...t, diffDays, remainingAmount };
       })
+      .filter(t => t.remainingAmount > 0)
       .sort((a, b) => a.diffDays - b.diffDays)
       .slice(0, 10);
   }, [transactions, selectedCustomerId]);
@@ -200,8 +259,15 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   // --- LÓGICA DE RENOVAÇÃO ---
   const renewalCandidates = useMemo(() => {
     if (!selectedCustomerId) return [];
+    const today = new Date();
 
     const lastBookings: Record<string, Booking> = {};
+    const futureBookings = bookings.filter(b => 
+      b.customerId === selectedCustomerId && 
+      (b.status === 'scheduled' || b.status === 'pending') &&
+      b.dateTime && new Date(b.dateTime) >= today
+    );
+
     bookings
       .filter(b => b.customerId === selectedCustomerId && b.status === 'completed' && b.dateTime)
       .forEach(b => {
@@ -216,13 +282,62 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     return Object.values(lastBookings).map(b => {
       const service = services.find(s => s.id === b.serviceId);
       if (!service || !service.returnPeriodDays) return null;
+
+      const serviceNameLower = service.name.toLowerCase();
+
+      // 1. Verificar se existe algum agendamento FUTURO que já cubra este serviço
+      const hasFutureBooking = futureBookings.some(fb => {
+        const fbService = services.find(s => s.id === fb.serviceId);
+        const isSameCategoryPackage = fbService && service && 
+                                     fbService.category === service.category && 
+                                     (fbService.name.toLowerCase().includes('pacote') || 
+                                      fbService.name.toLowerCase().includes('tratamento') ||
+                                      fbService.name.toLowerCase().includes('combo') ||
+                                      fbService.name.toLowerCase().includes('completo'));
+
+        return (
+          fb.serviceName?.toLowerCase().includes(serviceNameLower) ||
+          fbService?.name.toLowerCase().includes(serviceNameLower) ||
+          fbService?.description?.toLowerCase().includes(serviceNameLower) ||
+          isSameCategoryPackage
+        );
+      });
+
+      if (hasFutureBooking) return null;
+
+      // 2. Verificar se existe algum agendamento COMPLETADO mais recente que "cubra" este serviço
+      const hasNewerCoveringBooking = bookings.some(newerB => {
+        if (newerB.customerId !== selectedCustomerId || newerB.status !== 'completed' || !newerB.dateTime) return false;
+        const newerDate = new Date(newerB.dateTime);
+        const currentDate = new Date(b.dateTime);
+        
+        if (newerDate <= currentDate) return false;
+
+        const newerService = services.find(s => s.id === newerB.serviceId);
+        
+        const isSameCategoryPackage = newerService && service && 
+                                     newerService.category === service.category && 
+                                     (newerService.name.toLowerCase().includes('pacote') || 
+                                      newerService.name.toLowerCase().includes('tratamento') ||
+                                      newerService.name.toLowerCase().includes('combo') ||
+                                      newerService.name.toLowerCase().includes('completo'));
+
+        return (
+          newerB.serviceName?.toLowerCase().includes(serviceNameLower) ||
+          newerService?.name.toLowerCase().includes(serviceNameLower) ||
+          newerService?.description?.toLowerCase().includes(serviceNameLower) ||
+          isSameCategoryPackage
+        );
+      });
+
+      if (hasNewerCoveringBooking) return null;
+
       const lastDate = new Date(b.dateTime);
       const nextDate = new Date(lastDate);
       nextDate.setDate(lastDate.getDate() + service.returnPeriodDays);
       
       if (isNaN(nextDate.getTime())) return null;
 
-      const today = new Date();
       const diffDays = Math.ceil((nextDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       
       return { booking: b, service, nextDate, diffDays };
@@ -314,7 +429,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       let context = "";
       if (type === 'billing') {
         const description = data.serviceName || data.description;
-        context = `Lembrete de pagamento pendente para o procedimento "${description}" no valor de R$ ${data.amount.toFixed(2)}. O vencimento foi em ${data.dueDate ? new Date(data.dueDate).toLocaleDateString() : 'data não informada'}.`;
+        context = `Lembrete de pagamento pendente para o procedimento "${description}" no valor de R$ ${data.remainingAmount.toFixed(2)}. O vencimento foi em ${data.dueDate ? new Date(data.dueDate).toLocaleDateString() : 'data não informada'}.`;
       } else if (type === 'promotion') {
         context = `Convite para aproveitar a promoção "${data.title}": ${data.content}.`;
       } else if (type === 'renewal') {
@@ -346,7 +461,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       console.error("Erro ao gerar lembrete com IA:", error);
       // Fallback para mensagem padrão se a IA falhar
       let fallbackMsg = "";
-      if (type === 'billing') fallbackMsg = `Olá! ✨ Passando para lembrar sobre o acerto de ${data.serviceName || data.description} (R$ ${data.amount.toFixed(2)}).`;
+      if (type === 'billing') fallbackMsg = `Olá! ✨ Passando para lembrar sobre o acerto de ${data.serviceName || data.description} (R$ ${data.remainingAmount.toFixed(2)}).`;
       else if (type === 'promotion') fallbackMsg = `Promoção: ${data.title}! ✨`;
       else fallbackMsg = `Olá! ✨ Hora de renovar seu procedimento de ${data.service.name}. Vamos agendar? 🌸`;
       
@@ -1029,7 +1144,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                               {t.diffDays < 0 ? `Vencido há ${Math.abs(t.diffDays)} dias` : t.diffDays === 0 ? 'Vence hoje' : `Vence em ${t.diffDays} dias`}
                             </p>
                           </div>
-                          <span className="text-xs font-serif font-bold">R$ {t.amount.toFixed(2)}</span>
+                          <span className="text-xs font-serif font-bold">R$ {t.remainingAmount.toFixed(2)}</span>
                         </div>
                       );
                     }) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma cobrança pendente encontrada.</p>}
@@ -1309,7 +1424,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                                 {t.diffDays < 0 ? `Vencido há ${Math.abs(t.diffDays)} dias` : t.diffDays === 0 ? 'Vence hoje' : `Vence em ${t.diffDays} dias`}
                               </p>
                             </div>
-                            <span className="text-xs font-serif font-bold">R$ {t.amount.toFixed(2)}</span>
+                            <span className="text-xs font-serif font-bold">R$ {t.remainingAmount.toFixed(2)}</span>
                           </div>
                         )) : <p className="text-center py-6 text-gray-400 italic text-xs">Nenhuma cobrança pendente encontrada.</p>}
                       </div>

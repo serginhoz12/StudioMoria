@@ -182,8 +182,10 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
       t.type === 'receivable' && 
       t.status === 'paid' &&
       // Se for uma transação que foi paga via abatimentos (pai), não mostramos ela no histórico
-      // para evitar duplicidade com os lançamentos de abatimento individuais
-      !(t.paidAmount && t.paidAmount > 0)
+      // para evitar duplicidade com os lançamentos de abatimento individuais.
+      // Uma transação é considerada "pai com abatimentos" se tiver paidAmount >= amount 
+      // E existir pelo menos um lançamento de 'Abatimento' vinculado a ela.
+      !(t.paidAmount && t.paidAmount >= t.amount && transactions.some(at => at.parentTransactionId === t.id && at.category === 'Abatimento'))
     );
   }, [transactions, customer.id]);
 
