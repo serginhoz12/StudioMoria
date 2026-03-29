@@ -660,11 +660,28 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                         <h4 className="text-lg font-serif font-bold text-tea-950 italic">{t.description}</h4>
                         <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Vencimento: {t.dueDate ? new Date(t.dueDate).toLocaleDateString('pt-BR') : 'A definir'}</p>
                       </div>
-                      <span className="text-lg font-bold text-tea-900">R$ {t.amount.toFixed(2)}</span>
+                      <div className="text-right">
+                        <span className="text-lg font-bold text-tea-900 block">R$ {(t.amount - (t.paidAmount || 0)).toFixed(2)}</span>
+                        {t.paidAmount && t.paidAmount > 0 && (
+                          <span className="text-[8px] text-gray-400 font-bold uppercase tracking-widest">Total: R$ {t.amount.toFixed(2)}</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                       <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
-                       <span className="text-[9px] text-orange-700 font-bold uppercase tracking-widest">Aguardando Pagamento</span>
+                    <div className="flex flex-col gap-2">
+                       <div className="flex items-center gap-2">
+                         <span className="w-2 h-2 bg-orange-400 rounded-full animate-pulse"></span>
+                         <span className="text-[9px] text-orange-700 font-bold uppercase tracking-widest">
+                           {t.paidAmount && t.paidAmount > 0 ? 'Pagamento Parcial Realizado' : 'Aguardando Pagamento'}
+                         </span>
+                       </div>
+                       {t.paidAmount && t.paidAmount > 0 && (
+                         <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                           <div 
+                             className="h-full bg-orange-500" 
+                             style={{ width: `${(t.paidAmount / t.amount) * 100}%` }}
+                           ></div>
+                         </div>
+                       )}
                     </div>
                   </div>
                 ))}

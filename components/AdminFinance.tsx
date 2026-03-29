@@ -256,6 +256,9 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   const transactionCategories = settings.transactionCategories || defaultTransactionCategories;
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showAbateModal, setShowAbateModal] = useState(false);
+  const [selectedTransForAbate, setSelectedTransForAbate] = useState<Transaction | null>(null);
+  const [abateAmount, setAbateAmount] = useState(0);
   const [newTrans, setNewTrans] = useState({
     type: 'receivable' as 'payable' | 'receivable',
     description: '',
@@ -307,6 +310,53 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       } catch (error) {
         alert("Erro ao excluir transação.");
       }
+    }
+  };
+
+  const handleAbate = async () => {
+    if (!selectedTransForAbate || abateAmount <= 0) return;
+    if (abateAmount > (selectedTransForAbate.amount - (selectedTransForAbate.paidAmount || 0))) {
+      return alert("O valor do abatimento não pode ser maior que o saldo devedor.");
+    }
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const newPaidAmount = (selectedTransForAbate.paidAmount || 0) + abateAmount;
+      const isFullyPaid = newPaidAmount >= selectedTransForAbate.amount;
+
+      if (!(db as any)._isMock) {
+        // 1. Create a new transaction for the cash flow
+        const cashFlowTrans = {
+          type: 'receivable' as const,
+          description: `Abatimento: ${selectedTransForAbate.description}`,
+          amount: abateAmount,
+          date: today,
+          customerId: selectedTransForAbate.customerId,
+          customerName: selectedTransForAbate.customerName,
+          status: 'paid' as const,
+          category: 'Abatimento',
+          paymentMethod: 'cash', // Default to cash, can be changed
+          parentTransactionId: selectedTransForAbate.id,
+          createdAt: new Date().toISOString()
+        };
+        await addDoc(collection(db, "transactions"), cashFlowTrans);
+
+        // 2. Update the original transaction
+        await updateDoc(doc(db, "transactions", selectedTransForAbate.id), {
+          paidAmount: newPaidAmount,
+          status: isFullyPaid ? 'paid' : 'pending',
+          paidAt: isFullyPaid ? new Date().toISOString() : selectedTransForAbate.paidAt || null,
+          updatedAt: new Date().toISOString()
+        });
+      }
+
+      setShowAbateModal(false);
+      setSelectedTransForAbate(null);
+      setAbateAmount(0);
+      alert("Abatimento registrado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao registrar abatimento:", error);
+      alert("Erro ao registrar abatimento.");
     }
   };
 
@@ -721,20 +771,50 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
                         </td>
                         <td className="px-10 py-8">
                           <p className="font-bold text-tea-950 text-sm">{t.description}</p>
-                          <div className="flex gap-2 mt-1">
+                          <div className="flex flex-wrap gap-2 mt-1">
                             {t.serviceName && (
                               <p className="text-[9px] text-tea-600 font-bold uppercase tracking-tighter">
                                 {t.serviceName} {services.find(s => s.name === t.serviceName) && `(A partir de R$ ${services.find(s => s.name === t.serviceName)?.price.toFixed(0)})`}
                               </p>
                             )}
-                            {t.status === 'pending' && <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>}
+                            {t.status === 'pending' && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-[8px] bg-orange-100 text-orange-600 px-2 py-0.5 rounded font-bold uppercase">Pendente</span>
+                                {t.paidAmount && t.paidAmount > 0 && (
+                                  <span className="text-[8px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded font-bold uppercase">
+                                    Pago: R$ {t.paidAmount.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className={`px-10 py-8 text-right font-bold text-base ${t.type === 'receivable' ? 'text-tea-800' : 'text-red-500'}`}>
-                          {t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}
+                          {t.type === 'receivable' && t.status === 'pending' && t.paidAmount && t.paidAmount > 0 ? (
+                            <div className="flex flex-col items-end">
+                              <span className="text-gray-400 text-[10px] line-through">R$ {t.amount.toFixed(2)}</span>
+                              <span>R$ {(t.amount - t.paidAmount).toFixed(2)}</span>
+                            </div>
+                          ) : (
+                            <>{t.type === 'receivable' ? '+' : '-'} R$ {t.amount.toFixed(2)}</>
+                          )}
                         </td>
                         <td className="px-10 py-8 text-center">
                           <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {t.status === 'pending' && t.type === 'receivable' && (
+                              <button 
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  setSelectedTransForAbate(t); 
+                                  setAbateAmount(t.amount - (t.paidAmount || 0));
+                                  setShowAbateModal(true); 
+                                }} 
+                                className="p-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-colors"
+                                title="Abater Valor"
+                              >
+                                💰
+                              </button>
+                            )}
                             <button 
                               onClick={(e) => { e.stopPropagation(); handleEdit(t); }} 
                               className="p-2 bg-tea-50 text-tea-700 rounded-lg hover:bg-tea-100 transition-colors"
@@ -769,7 +849,12 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
   const totals = useMemo(() => {
     const revenue = filteredTransactions.filter(t => t.type === 'receivable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
     const expenses = filteredTransactions.filter(t => t.type === 'payable' && t.status === 'paid').reduce((a, b) => a + b.amount, 0);
-    const pending = filteredTransactions.filter(t => t.type === 'receivable' && t.status === 'pending').reduce((a, b) => a + b.amount, 0);
+    
+    // Pending is the remaining amount of pending receivables
+    const pending = filteredTransactions
+      .filter(t => t.type === 'receivable' && t.status === 'pending')
+      .reduce((a, b) => a + (b.amount - (b.paidAmount || 0)), 0);
+      
     return { revenue, expenses, pending, balance: revenue - expenses };
   }, [filteredTransactions]);
 
@@ -858,6 +943,58 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       </div>
 
       {activeTab === 'dashboard' ? renderDashboard() : renderTransactions()}
+
+      {showAbateModal && selectedTransForAbate && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[3rem] p-10 shadow-3xl space-y-6">
+            <div className="text-center space-y-2">
+              <h3 className="text-2xl font-serif text-tea-950 font-bold italic">Abater Valor</h3>
+              <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">Registrar pagamento parcial</p>
+            </div>
+
+            <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Descrição</p>
+              <p className="text-sm font-bold text-tea-900">{selectedTransForAbate.description}</p>
+              <div className="flex justify-between pt-2">
+                <div>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Total</p>
+                  <p className="text-xs font-bold text-gray-600">R$ {selectedTransForAbate.amount.toFixed(2)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Saldo Devedor</p>
+                  <p className="text-xs font-bold text-orange-600">R$ {(selectedTransForAbate.amount - (selectedTransForAbate.paidAmount || 0)).toFixed(2)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Valor do Pagamento R$</label>
+              <input 
+                type="number" 
+                value={abateAmount || ''} 
+                onChange={e => setAbateAmount(parseFloat(e.target.value))} 
+                className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-2xl text-emerald-600 shadow-inner" 
+                placeholder="0,00" 
+              />
+            </div>
+
+            <div className="pt-4 space-y-3">
+              <button 
+                onClick={handleAbate}
+                className="w-full py-5 bg-emerald-600 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-emerald-700 transition-all"
+              >
+                Confirmar Abatimento
+              </button>
+              <button 
+                onClick={() => { setShowAbateModal(false); setSelectedTransForAbate(null); }}
+                className="w-full py-2 text-gray-300 font-bold uppercase text-[9px] tracking-widest hover:text-gray-500"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in">

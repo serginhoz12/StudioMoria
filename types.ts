@@ -116,6 +116,7 @@ export interface Transaction {
   installmentsCount?: number;
   installmentNumber?: number;
   parentTransactionId?: string;
+  paidAmount?: number;
 }
 
 export interface WaitlistEntry {
