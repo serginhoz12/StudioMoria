@@ -4,7 +4,7 @@ import { Customer } from '../types';
 import TermsModal from './TermsModal';
 
 interface CustomerRegisterProps {
-  onRegister: (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean) => void;
+  onRegister: (name: string, whatsapp: string, cpf: string, password: string, receivesNotifications: boolean, instagramData?: any) => void;
   onBack: () => void;
   customers: Customer[];
 }
@@ -16,8 +16,40 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
   const [password, setPassword] = useState('');
   const [receivesNotifications, setReceivesNotifications] = useState(true);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [instagramData, setInstagramData] = useState<any>(null);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isInstagramLoading, setIsInstagramLoading] = useState(false);
+
+  // Listen for Instagram Auth Success
+  React.useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'INSTAGRAM_AUTH_SUCCESS') {
+        const data = event.data.data;
+        setInstagramData(data);
+        setName(data.username || '');
+        alert(`Conectado com Instagram: @${data.username}`);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleInstagramLogin = async () => {
+    setIsInstagramLoading(true);
+    try {
+      const response = await fetch('/api/auth/instagram/url');
+      if (!response.ok) throw new Error('Falha ao obter URL de autenticação');
+      const { url } = await response.json();
+      
+      window.open(url, 'instagram_auth', 'width=600,height=700');
+    } catch (error) {
+      console.error('Erro ao conectar com Instagram:', error);
+      alert('Não foi possível conectar com o Instagram. Tente novamente mais tarde.');
+    } finally {
+      setIsInstagramLoading(false);
+    }
+  };
   
   const [modalConfig, setModalConfig] = useState<{ open: boolean; title: string; type: 'terms' | 'privacy' }>({
     open: false,
@@ -41,7 +73,7 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
     if (name && whatsapp && password && agreedToTerms) {
       setIsSubmitting(true);
       try {
-        await onRegister(name, whatsapp, cpf, password, receivesNotifications);
+        await onRegister(name, whatsapp, cpf, password, receivesNotifications, instagramData);
       } finally {
         setIsSubmitting(false);
       }
@@ -73,6 +105,34 @@ const CustomerRegister: React.FC<CustomerRegisterProps> = ({ onRegister, onBack,
         <div className="mb-12">
           <h2 className="text-4xl font-serif text-tea-900 mb-4 italic">Sua Conta Moriá</h2>
           <p className="text-gray-500 font-light text-lg italic leading-relaxed">Cadastre-se para agendar seus procedimentos e acessar seu histórico de beleza.</p>
+        </div>
+
+        <div className="mb-12">
+          <button
+            type="button"
+            onClick={handleInstagramLogin}
+            disabled={isInstagramLoading || !!instagramData}
+            className={`w-full flex items-center justify-center gap-3 py-4 rounded-2xl font-bold transition-all ${instagramData ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white hover:opacity-90 shadow-lg shadow-orange-100'}`}
+          >
+            {isInstagramLoading ? (
+              <span className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></span>
+            ) : instagramData ? (
+              <>
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.058-1.69-.072-4.949-.072zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                Conectado como @{instagramData.username}
+              </>
+            ) : (
+              <>
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.058-1.69-.072-4.949-.072zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                Conectar com Instagram
+              </>
+            )}
+          </button>
+          <div className="flex items-center gap-4 mt-6">
+            <div className="flex-1 h-[1px] bg-gray-100"></div>
+            <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">ou preencha manualmente</span>
+            <div className="flex-1 h-[1px] bg-gray-100"></div>
+          </div>
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-8">

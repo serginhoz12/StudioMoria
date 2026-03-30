@@ -4,7 +4,7 @@ import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistE
 import { INITIAL_SERVICES, DEFAULT_SETTINGS, INITIAL_INVENTORY } from './constants.ts';
 import { db, auth } from './firebase.ts';
 import firebaseConfig from './firebase-applet-config.json';
-import { signInAnonymously } from "firebase/auth";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { 
   collection, 
   onSnapshot, 
@@ -18,7 +18,8 @@ import {
   query,
   where,
   getDoc,
-  getDocFromServer
+  getDocFromServer,
+  writeBatch
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -47,8 +48,39 @@ enum OperationType {
   WRITE = 'write',
 }
 
-const handleFirestoreError = (error: any, operation: OperationType, collection: string) => {
-  console.error(`Firestore Error [${operation}] on ${collection}:`, error);
+const getLocalDateString = (date: Date) => {
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+};
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+const handleFirestoreError = (error: any, operation: OperationType, path: string) => {
+  const errInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType: operation,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
 };
 
 const App: React.FC = () => {
@@ -64,6 +96,8 @@ const App: React.FC = () => {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
     return localStorage.getItem('moria_isAdminAuth') === 'true';
   });
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
@@ -94,9 +128,14 @@ const App: React.FC = () => {
 
   // Firebase Auth Initialization
   useEffect(() => {
-    if (!isMockMode) {
-      signInAnonymously(auth).catch(err => console.error("Erro no Auth Anônimo:", err));
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsAuthReady(true);
+      if (!user && !isMockMode) {
+        signInAnonymously(auth).catch(err => console.error("Erro no Auth Anônimo:", err));
+      }
+    });
+    return () => unsubscribe();
   }, [isMockMode]);
 
   // Persist session state
@@ -475,13 +514,13 @@ const App: React.FC = () => {
             
             for (let i = 0; i < count; i++) {
               const dueDateObj = new Date(new Date().setMonth(new Date().getMonth() + i));
-              const dueDateStr = dueDateObj.toISOString().split('T')[0];
+              const dueDateStr = getLocalDateString(dueDateObj);
               
               await addDoc(collection(db, "transactions"), {
                 type: 'receivable',
                 description: `Venda Loja: ${order.productName} - ${order.customerName} (${i + 1}/${count}) (A Prazo)`,
                 amount: installmentValue,
-                date: new Date().toISOString().split('T')[0],
+                date: getLocalDateString(new Date()),
                 dueDate: dueDateStr,
                 status: 'pending',
                 customerId: order.customerId,
@@ -498,8 +537,8 @@ const App: React.FC = () => {
               type: 'receivable',
               description: `Venda Loja: ${order.productName} - ${order.customerName}${order.paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
               amount: order.totalPrice,
-              date: new Date().toISOString().split('T')[0],
-              dueDate: order.paymentMethod === 'store_installments' ? new Date().toISOString().split('T')[0] : null,
+              date: getLocalDateString(new Date()),
+              dueDate: order.paymentMethod === 'store_installments' ? getLocalDateString(new Date()) : null,
               status: order.paymentMethod === 'store_installments' ? 'pending' : 'paid',
               customerId: order.customerId,
               customerName: order.customerName,
@@ -540,10 +579,10 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isAdminAuthenticated && auth.currentUser && !isMockMode) {
+    if (isAdminAuthenticated && firebaseUser && isAuthReady && !isMockMode) {
       const authorizeSession = async () => {
         try {
-          await setDoc(doc(db, "admin_sessions", auth.currentUser!.uid), {
+          await setDoc(doc(db, "admin_sessions", firebaseUser.uid), {
             authorizedAt: new Date().toISOString(),
             method: 'auto-restore'
           });
@@ -554,17 +593,17 @@ const App: React.FC = () => {
       };
       authorizeSession();
     }
-  }, [isAdminAuthenticated, auth.currentUser, isMockMode]);
+  }, [isAdminAuthenticated, firebaseUser, isAuthReady, isMockMode]);
 
   const handleAdminLogin = async (method: string) => {
     setIsAdminAuthenticated(true);
     localStorage.setItem('moria_isAdminAuth', 'true');
     
     // Authorize session in Firebase if not already
-    if (auth.currentUser) {
+    if (firebaseUser) {
       try {
-        console.log("Authorizing admin session for UID:", auth.currentUser.uid);
-        await setDoc(doc(db, "admin_sessions", auth.currentUser.uid), {
+        console.log("Authorizing admin session for UID:", firebaseUser.uid);
+        await setDoc(doc(db, "admin_sessions", firebaseUser.uid), {
           authorizedAt: new Date().toISOString(),
           method: method === 'google-auth' ? 'google' : 'password'
         });
@@ -755,7 +794,7 @@ const App: React.FC = () => {
                 }
               });
 
-              if (!cleanData.purchaseDate) cleanData.purchaseDate = new Date().toISOString().split('T')[0];
+              if (!cleanData.purchaseDate) cleanData.purchaseDate = getLocalDateString(new Date());
               if (!cleanData.lastRestockedAt) cleanData.lastRestockedAt = new Date().toISOString();
 
               let docRef;
@@ -784,7 +823,7 @@ const App: React.FC = () => {
                         description: `Compra Estoque: ${cleanData.name} (${i + 1}/${count})`,
                         amount: Number((cleanData.purchasePrice / count).toFixed(2)),
                         date: pDate,
-                        dueDate: dueDate.toISOString().split('T')[0],
+                        dueDate: getLocalDateString(dueDate),
                         status: i === 0 ? 'paid' : 'pending',
                         category: 'supplies',
                         paymentMethod: cleanData.paymentMethod,
@@ -1110,9 +1149,14 @@ const App: React.FC = () => {
 
               // Handle Booking
               if (bookingId && serviceId && !isWaitlist) {
+                const service = services.find(s => s.id === serviceId);
                 await updateDoc(doc(db, "bookings", bookingId), {
                   customerId: user.id,
+                  customerName: user.name,
                   serviceId: serviceId,
+                  serviceName: service?.name || 'Procedimento',
+                  originalPrice: service?.price || 0,
+                  duration: service?.duration || 30,
                   status: 'pending',
                   bookedAt: new Date().toISOString()
                 });

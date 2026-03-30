@@ -26,7 +26,9 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
     name: '',
     whatsapp: '',
     cpf: '',
-    password: ''
+    password: '',
+    instagramProfile: '',
+    profilePhoto: ''
   });
 
   const filtered = customers.filter(c => {
@@ -57,7 +59,9 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
         whatsapp: selectedCustomer.whatsapp, 
         cpf: selectedCustomer.cpf,
         password: selectedCustomer.password,
-        loyaltyPoints: selectedCustomer.loyaltyPoints || 0
+        loyaltyPoints: selectedCustomer.loyaltyPoints || 0,
+        instagramProfile: selectedCustomer.instagramProfile || '',
+        profilePhoto: selectedCustomer.profilePhoto || ''
       });
       setIsEditing(true);
     }
@@ -90,6 +94,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
       whatsapp: newCustomer.whatsapp,
       cpf: newCustomer.cpf || `S/C-${id.toUpperCase()}`,
       password: newCustomer.password || (newCustomer.cpf ? cleanCpf.substring(0, 4) : '1234'), 
+      instagramProfile: newCustomer.instagramProfile,
+      profilePhoto: newCustomer.profilePhoto,
       receivesNotifications: true,
       agreedToTerms: true,
       history: [],
@@ -102,7 +108,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
         await setDoc(doc(db, "customers", id), customerData);
       }
       setShowAddModal(false);
-      setNewCustomer({ name: '', whatsapp: '', cpf: '', password: '' });
+      setNewCustomer({ name: '', whatsapp: '', cpf: '', password: '', instagramProfile: '', profilePhoto: '' });
       alert("Cliente cadastrada com sucesso!");
     } catch (e) {
       alert("Erro ao salvar cadastro.");
@@ -217,21 +223,35 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
                   className={`p-8 cursor-pointer hover:bg-tea-50/20 transition-all group ${selectedCustomer?.id === customer.id ? 'bg-tea-50 border-l-8 border-tea-800' : 'border-l-8 border-transparent'}`}
                 >
                   <div className="flex justify-between items-center">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-800 text-base">{customer.name}</p>
-                        {hasAlert && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Índice de cancelamento alto"></span>}
+                    <div className="flex items-center gap-4">
+                      {customer.profilePhoto ? (
+                        <img 
+                          src={customer.profilePhoto} 
+                          alt={customer.name} 
+                          referrerPolicy="no-referrer"
+                          className="w-12 h-12 rounded-xl object-cover border border-gray-100"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-tea-100 text-tea-700 flex items-center justify-center font-bold text-sm">
+                          {customer.name.charAt(0)}
+                        </div>
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-gray-800 text-base">{customer.name}</p>
+                          {hasAlert && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Índice de cancelamento alto"></span>}
+                        </div>
+                        <p className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-widest">{customer.whatsapp}</p>
+                        <p className="text-[9px] text-tea-600/60 mt-0.5 italic font-medium">
+                          {(() => {
+                            const date = getCreationDate(customer);
+                            if (date) {
+                              return <>Desde: {date.toLocaleDateString('pt-BR')} {customer.createdBy === 'admin' ? '(Equipe)' : '(App)'}</>;
+                            }
+                            return <>Cadastro Legado</>;
+                          })()}
+                        </p>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-widest">{customer.whatsapp}</p>
-                      <p className="text-[9px] text-tea-600/60 mt-0.5 italic font-medium">
-                        {(() => {
-                          const date = getCreationDate(customer);
-                          if (date) {
-                            return <>Desde: {date.toLocaleDateString('pt-BR')} {customer.createdBy === 'admin' ? '(Equipe)' : '(App)'}</>;
-                          }
-                          return <>Cadastro Legado</>;
-                        })()}
-                      </p>
                     </div>
                     <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">👤</div>
                   </div>
@@ -247,27 +267,47 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
           {selectedCustomer ? (
             <div className="bg-white rounded-[3.5rem] shadow-sm border border-gray-100 overflow-hidden animate-slide-up h-full flex flex-col">
               <div className="p-10 bg-gray-50/50 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-6">
-                <div className="flex gap-6 items-center">
-                  <div className="w-20 h-20 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-3xl font-serif font-bold shadow-xl">
-                    {selectedCustomer.name.charAt(0)}
-                  </div>
-                  <div>
-                    <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedCustomer.name}</h3>
-                    <div className="flex gap-3 mt-1 flex-wrap">
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-100">CPF: {selectedCustomer.cpf}</span>
-                      <span className="text-[9px] font-bold text-tea-600 uppercase tracking-widest bg-tea-50 px-3 py-1 rounded-full border border-tea-100">WhatsApp: {selectedCustomer.whatsapp}</span>
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-100">
-                        {(() => {
-                          const date = getCreationDate(selectedCustomer);
-                          if (date) {
-                            return <>Cadastrada em: {date.toLocaleString('pt-BR')} {selectedCustomer.createdBy === 'admin' ? '(pela equipe)' : '(pelo cliente)'}</>;
-                          }
-                          return <>Cadastro Legado</>;
-                        })()}
-                      </span>
+                  <div className="flex gap-6 items-center">
+                    {selectedCustomer.profilePhoto ? (
+                      <img 
+                        src={selectedCustomer.profilePhoto} 
+                        alt={selectedCustomer.name} 
+                        referrerPolicy="no-referrer"
+                        className="w-20 h-20 rounded-[2rem] object-cover shadow-xl border-2 border-white"
+                      />
+                    ) : (
+                      <div className="w-20 h-20 bg-tea-900 text-white rounded-[2rem] flex items-center justify-center text-3xl font-serif font-bold shadow-xl">
+                        {selectedCustomer.name.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-3xl font-serif text-tea-950 font-bold italic leading-tight">{selectedCustomer.name}</h3>
+                      <div className="flex gap-3 mt-1 flex-wrap">
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-100">CPF: {selectedCustomer.cpf}</span>
+                        <span className="text-[9px] font-bold text-tea-600 uppercase tracking-widest bg-tea-50 px-3 py-1 rounded-full border border-tea-100">WhatsApp: {selectedCustomer.whatsapp}</span>
+                        {selectedCustomer.instagramProfile && (
+                          <a 
+                            href={selectedCustomer.instagramProfile} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[9px] font-bold text-pink-600 uppercase tracking-widest bg-pink-50 px-3 py-1 rounded-full border border-pink-100 hover:bg-pink-100 transition-colors flex items-center gap-1"
+                          >
+                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.058-1.69-.072-4.949-.072zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                            Instagram
+                          </a>
+                        )}
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-white px-3 py-1 rounded-full border border-gray-100">
+                          {(() => {
+                            const date = getCreationDate(selectedCustomer);
+                            if (date) {
+                              return <>Cadastrada em: {date.toLocaleString('pt-BR')} {selectedCustomer.createdBy === 'admin' ? '(pela equipe)' : '(pelo cliente)'}</>;
+                            }
+                            return <>Cadastro Legado</>;
+                          })()}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
                 <div className="flex gap-2">
                   <button onClick={handleEditClick} className="p-4 bg-white border border-gray-100 rounded-2xl hover:border-tea-500 shadow-sm transition-all hover:scale-105" title="Editar Dados">✏️</button>
                   <button onClick={handleDeleteClick} className="p-4 bg-white border border-gray-100 rounded-2xl hover:border-red-500 shadow-sm transition-all text-red-400 hover:scale-105" title="Remover Cliente">🗑️</button>
@@ -339,6 +379,28 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
               </div>
 
               <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Link Instagram</label>
+                <input 
+                  type="text" 
+                  value={newCustomer.instagramProfile} 
+                  onChange={e => setNewCustomer({...newCustomer, instagramProfile: e.target.value})}
+                  className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner"
+                  placeholder="https://instagram.com/usuario"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Foto de Perfil (URL)</label>
+                <input 
+                  type="text" 
+                  value={newCustomer.profilePhoto} 
+                  onChange={e => setNewCustomer({...newCustomer, profilePhoto: e.target.value})}
+                  className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Senha de Acesso</label>
                 <input 
                   type="text" 
@@ -386,6 +448,14 @@ const AdminClients: React.FC<AdminClientsProps> = ({ customers, bookings, transa
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">CPF</label>
                 <input type="text" value={editData.cpf} onChange={e => setEditData({...editData, cpf: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Link Instagram</label>
+                <input type="text" value={editData.instagramProfile} onChange={e => setEditData({...editData, instagramProfile: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Foto de Perfil (URL)</label>
+                <input type="text" value={editData.profilePhoto} onChange={e => setEditData({...editData, profilePhoto: e.target.value})} className="w-full p-5 bg-gray-50 rounded-2xl outline-none font-bold text-sm shadow-inner" />
               </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-gray-400 uppercase ml-2 tracking-widest">Senha de Acesso</label>

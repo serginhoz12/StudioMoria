@@ -51,7 +51,8 @@ service cloud.firestore {
 
     match /admin_sessions/{sessionId} {
       allow read: if true;
-      allow write: if isOwner(sessionId);
+      allow create, update: if isAuthenticated() && request.auth.uid == sessionId;
+      allow delete: if isAuthenticated() && request.auth.uid == sessionId;
     }
 
     match /settings/main {

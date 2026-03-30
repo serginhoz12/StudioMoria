@@ -43,6 +43,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [productSearch, setProductSearch] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [editingPrices, setEditingPrices] = useState<{ [key: string]: number }>({});
+  const [editingServices, setEditingServices] = useState<{ [key: string]: string }>({});
+  const [editingPros, setEditingPros] = useState<{ [key: string]: string }>({});
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -79,13 +81,16 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     
     setIsProcessing(true);
     try {
+      const selectedServiceId = editingServices[selectedBookingForPayment.id] || selectedBookingForPayment.serviceId;
+      const selectedService = services.find(s => s.id === selectedServiceId);
+      
       const totalAmount = editingPrices[selectedBookingForPayment.id] !== undefined 
         ? editingPrices[selectedBookingForPayment.id] 
-        : (selectedBookingForPayment.originalPrice || services.find(s => s.id === selectedBookingForPayment.serviceId)?.price || 0);
+        : (selectedBookingForPayment.originalPrice || selectedService?.price || 0);
 
       if (!(db as any)._isMock) {
         // 1. Update booking
-        await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), {
+        const updateData: any = {
           status: 'scheduled',
           depositStatus: paymentMethod === 'store_installments' ? 'pending' : 'paid',
           paymentReceived: totalAmount,
@@ -96,12 +101,27 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           originalPrice: totalAmount,
           dueDate: paymentMethod === 'store_installments' ? dueDate : null,
           updatedAt: new Date().toISOString()
-        });
+        };
+
+        if (editingServices[selectedBookingForPayment.id]) {
+          updateData.serviceId = selectedService?.id;
+          updateData.serviceName = selectedService?.name;
+        }
+
+        if (editingPros[selectedBookingForPayment.id]) {
+          const selectedPro = teamMembers.find(m => m.id === editingPros[selectedBookingForPayment.id]);
+          if (selectedPro) {
+            updateData.teamMemberId = selectedPro.id;
+            updateData.teamMemberName = selectedPro.name;
+          }
+        }
+
+        await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), updateData);
 
         // 2. Create transaction
         await addDoc(collection(db, "transactions"), {
           type: 'receivable',
-          description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
+          description: `Atendimento: ${selectedService?.name || selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
           amount: totalAmount,
           date: new Date().toISOString().split('T')[0],
           dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
@@ -109,7 +129,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           customerId: selectedBookingForPayment.customerId,
           customerName: selectedBookingForPayment.customerName,
           bookingId: selectedBookingForPayment.id,
-          serviceName: selectedBookingForPayment.serviceName,
+          serviceName: selectedService?.name || selectedBookingForPayment.serviceName,
           procedureDate: selectedBookingForPayment.dateTime,
           paymentMethod: paymentMethod,
           paymentType: paymentType,
@@ -299,8 +319,29 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           updatedAt: new Date().toISOString()
         };
         
-        if (status === 'scheduled' && editingPrices[id] !== undefined) {
-          updateData.originalPrice = editingPrices[id];
+        if (status === 'scheduled') {
+          if (editingPrices[id] !== undefined) {
+            updateData.originalPrice = editingPrices[id];
+          }
+          
+          if (editingServices[id]) {
+            const selectedService = services.find(s => s.id === editingServices[id]);
+            if (selectedService) {
+              updateData.serviceId = selectedService.id;
+              updateData.serviceName = selectedService.name;
+              if (editingPrices[id] === undefined) {
+                updateData.originalPrice = selectedService.price;
+              }
+            }
+          }
+
+          if (editingPros[id]) {
+            const selectedPro = teamMembers.find(m => m.id === editingPros[id]);
+            if (selectedPro) {
+              updateData.teamMemberId = selectedPro.id;
+              updateData.teamMemberName = selectedPro.name;
+            }
+          }
         }
 
         await updateDoc(doc(db, "bookings", id), updateData);
@@ -352,9 +393,41 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    >
                     {b.customerName || 'Cliente'}
                    </button>
-                   <p className="text-[12px] text-tea-800 font-bold uppercase tracking-wider mb-1">
-                     {b.serviceName || 'Procedimento não identificado'}
-                   </p>
+                   <div className="space-y-2">
+                     <p className="text-[12px] text-tea-800 font-bold uppercase tracking-wider">
+                       {b.serviceName || 'Procedimento não identificado'}
+                     </p>
+                     <div className="flex flex-col gap-1">
+                       <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Corrigir Procedimento:</label>
+                       <select 
+                         value={editingServices[b.id] || b.serviceId}
+                         onChange={e => {
+                           const sId = e.target.value;
+                           const srv = services.find(s => s.id === sId);
+                           setEditingServices({ ...editingServices, [b.id]: sId });
+                           if (srv && editingPrices[b.id] === undefined) {
+                             setEditingPrices({ ...editingPrices, [b.id]: srv.price });
+                           }
+                         }}
+                         className="w-full max-w-[200px] p-2 bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-bold text-tea-900 outline-none focus:ring-1 focus:ring-tea-200 appearance-none"
+                       >
+                         <option value="">Selecione o serviço...</option>
+                         {services.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                       </select>
+                     </div>
+
+                     <div className="flex flex-col gap-1">
+                       <label className="text-[8px] font-bold text-gray-400 uppercase tracking-widest ml-1">Atribuir Profissional:</label>
+                       <select 
+                         value={editingPros[b.id] || b.teamMemberId || ''}
+                         onChange={e => setEditingPros({ ...editingPros, [b.id]: e.target.value })}
+                         className="w-full max-w-[200px] p-2 bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-bold text-tea-900 outline-none focus:ring-1 focus:ring-tea-200 appearance-none"
+                       >
+                         <option value="">Selecione o profissional...</option>
+                         {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                       </select>
+                     </div>
+                   </div>
                    <div className="flex items-center gap-2 mt-1">
                      <span className="text-[9px] font-bold text-gray-400 uppercase">R$</span>
                      <input 

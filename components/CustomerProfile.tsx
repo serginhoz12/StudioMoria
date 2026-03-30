@@ -75,16 +75,43 @@ const CustomerProfile: React.FC<CustomerProfileProps> = ({ customer, transaction
 
       <div className="bg-white rounded-[3.5rem] shadow-xl border border-tea-50 overflow-hidden relative border-t-8 border-t-tea-900">
         <div className="bg-white p-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6 relative">
-          <div className="space-y-2">
-            <span className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.3em]">Membro Gold Moriá</span>
-            <h2 className="text-4xl font-serif font-bold text-tea-950 italic leading-tight">{customer.name}</h2>
-            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Documento: {customer.cpf}</p>
-            {customer.isLoyaltyEnabled !== false && (
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xl">💎</span>
-                <span className="text-sm font-bold text-tea-900">{customer.loyaltyPoints || 0} Pontos de Fidelidade</span>
+          <div className="flex flex-col md:flex-row gap-8 items-center md:items-start">
+            {customer.profilePhoto ? (
+              <img 
+                src={customer.profilePhoto} 
+                alt={customer.name} 
+                referrerPolicy="no-referrer"
+                className="w-32 h-32 rounded-[3rem] object-cover shadow-2xl border-4 border-white"
+              />
+            ) : (
+              <div className="w-32 h-32 bg-tea-900 text-white rounded-[3rem] flex items-center justify-center text-5xl font-serif font-bold shadow-2xl">
+                {customer.name.charAt(0)}
               </div>
             )}
+            <div className="space-y-2 text-center md:text-left">
+              <span className="text-[10px] font-bold text-tea-600 uppercase tracking-[0.3em]">Membro Gold Moriá</span>
+              <h2 className="text-4xl font-serif font-bold text-tea-950 italic leading-tight">{customer.name}</h2>
+              <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-2">
+                <p className="text-gray-400 text-xs font-bold uppercase tracking-widest bg-gray-50 px-3 py-1 rounded-full border border-gray-100">Documento: {customer.cpf}</p>
+                {customer.instagramProfile && (
+                  <a 
+                    href={customer.instagramProfile} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs font-bold text-pink-600 uppercase tracking-widest bg-pink-50 px-3 py-1 rounded-full border border-pink-100 hover:bg-pink-100 transition-colors flex items-center gap-1"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.058-1.69-.072-4.949-.072zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    Instagram
+                  </a>
+                )}
+              </div>
+              {customer.isLoyaltyEnabled !== false && (
+                <div className="flex items-center justify-center md:justify-start gap-2 mt-2">
+                  <span className="text-xl">💎</span>
+                  <span className="text-sm font-bold text-tea-900">{customer.loyaltyPoints || 0} Pontos de Fidelidade</span>
+                </div>
+              )}
+            </div>
           </div>
           <div className="bg-tea-50 px-6 py-3 rounded-2xl border border-tea-100 flex items-center gap-3">
              <div className="w-3 h-3 bg-tea-500 rounded-full animate-pulse"></div>

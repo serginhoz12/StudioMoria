@@ -70,10 +70,10 @@ const AdminFinance: React.FC<AdminFinanceProps> = ({
       const isTestUser = testCustomerId && t.customerId === testCustomerId;
       
       // Filter out transactions linked to cancelled bookings
-      const linkedBooking = t.bookingId ? bookings.find(b => b.id === t.bookingId) : null;
-      const isCancelledBooking = linkedBooking?.status === 'cancelled';
+      // const linkedBooking = t.bookingId ? bookings.find(b => b.id === t.bookingId) : null;
+      // const isCancelledBooking = linkedBooking?.status === 'cancelled';
       
-      return !isTestUser && !isCancelledBooking;
+      return !isTestUser;
     });
   }, [allTransactions, testCustomerId, bookings]);
 

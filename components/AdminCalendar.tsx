@@ -18,8 +18,34 @@ interface AdminCalendarProps {
   onUpdateInventory?: (id: string, data: Partial<InventoryItem>) => void;
 }
 
+const getLocalDateString = (date: Date) => {
+  return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+};
+
+const timeToMinutes = (time: string) => {
+  if (!time) return 0;
+  const [h, m] = time.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+};
+
+const minutesToTime = (minutes: number) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
+const generateTimeSlots = (start: string, end: string) => {
+  const startMin = timeToMinutes(start);
+  const endMin = timeToMinutes(end);
+  const slots = [];
+  for (let t = startMin; t < endMin; t += 30) {
+    slots.push(minutesToTime(t));
+  }
+  return slots;
+};
+
 const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, inventory, settings, onUpdateInventory }) => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateString(new Date()));
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
   const [modal, setModal] = useState<{ open: boolean; hour: string; type: 'free' | 'occupied' | 'opened' }>({ open: false, hour: '', type: 'free' });
   const [customerSearch, setCustomerSearch] = useState('');
@@ -48,7 +74,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [paymentType, setPaymentType] = useState<'sight' | 'installments'>('sight');
   const [installmentsCount, setInstallmentsCount] = useState(1);
   const [installmentValue, setInstallmentValue] = useState(0);
-  const [dueDate, setDueDate] = useState(new Date(new Date().getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return getLocalDateString(d);
+  });
 
   // Auto-calculate installment value
   React.useEffect(() => {
@@ -70,18 +100,6 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setSelectedServiceId('');
     setManualPrice(0);
     setManualTime('');
-  };
-
-  const timeToMinutes = (time: string) => {
-    if (!time) return 0;
-    const [h, m] = time.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
-  };
-
-  const minutesToTime = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
   const monthlyBookings = useMemo(() => {
@@ -414,13 +432,13 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             const parentId = Math.random().toString(36).substr(2, 9);
             for (let i = 0; i < installmentsCount; i++) {
               const dueDateObj = new Date(new Date().setMonth(new Date().getMonth() + i));
-              const dueDateStr = dueDateObj.toISOString().split('T')[0];
+              const dueDateStr = getLocalDateString(dueDateObj);
               
               await addDoc(collection(db, "transactions"), {
                 type: 'receivable',
                 description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName} (${i + 1}/${installmentsCount}) (A Prazo)`,
                 amount: installmentValue,
-                date: new Date().toISOString().split('T')[0],
+                date: getLocalDateString(new Date()),
                 dueDate: dueDateStr,
                 status: 'pending',
                 customerId: selectedBookingForPayment.customerId,
@@ -442,8 +460,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               type: 'receivable',
               description: `Atendimento: ${selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''}${isPrePayment ? ' (Pagamento Antecipado)' : ''}${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
               amount: totalAmount,
-              date: new Date().toISOString().split('T')[0],
-              dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
+              date: getLocalDateString(new Date()),
+              dueDate: paymentMethod === 'store_installments' ? dueDate : getLocalDateString(new Date()),
               status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
               customerId: selectedBookingForPayment.customerId,
               customerName: selectedBookingForPayment.customerName,
@@ -537,54 +555,96 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const handleBulkRelease = async () => {
     if ((db as any)._isMock) return alert("Modo visual: Período liberado simulado.");
     
+    if (!bulkStartDate || !bulkEndDate) {
+      alert("Por favor, selecione as datas de início e fim.");
+      return;
+    }
+
     const start = new Date(bulkStartDate + 'T00:00:00');
     const end = new Date(bulkEndDate + 'T00:00:00');
     
     if (end < start) return alert("A data final deve ser maior ou igual à data inicial.");
     
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    if (diffDays > 60) {
+      alert("O período máximo para liberação em massa é de 60 dias.");
+      return;
+    }
+
+    if (!confirm(`Deseja liberar todos os horários disponíveis de ${start.toLocaleDateString('pt-BR')} até ${end.toLocaleDateString('pt-BR')} para ${selectedPro?.name || 'o profissional selecionado'}?`)) {
+      return;
+    }
+
     setIsProcessing(true);
+    
+    if ((db as any)._isMock) {
+      alert("Modo visual: Liberação em massa simulada.");
+      setIsProcessing(false);
+      setIsBulkModalOpen(false);
+      return;
+    }
+
+    if (!selectedProId) {
+      alert("Por favor, selecione um profissional antes de liberar o período.");
+      setIsProcessing(false);
+      return;
+    }
+
+    console.log(`Iniciando liberação em massa: ${bulkStartDate} até ${bulkEndDate} para ${selectedProId}`);
+
     try {
+      let batch = writeBatch(db);
+      let operationCount = 0;
+      let releasedCount = 0;
+
+      // Otimização: Indexar bookings existentes por dateTime para busca rápida O(1)
+      const existingBookingsMap = new Set(
+        bookings
+          .filter(b => b.teamMemberId === selectedProId && b.status !== 'cancelled')
+          .map(b => b.dateTime)
+      );
+
       let currentDate = new Date(start);
       const pro = teamMembers.find(m => m.id === selectedProId);
       
-      let batch = writeBatch(db);
-      let operationCount = 0;
-
       while (currentDate <= end) {
-        const dateStr = currentDate.toISOString().split('T')[0];
+        const dateStr = getLocalDateString(currentDate);
         const dayOfWeek = currentDate.getDay();
 
         // Pula dias de folga do profissional
-        if (!pro?.offDays?.includes(dayOfWeek)) {
-          // Respeita o horário de funcionamento do salão (timeSlots já é baseado nisso)
-          for (const hour of timeSlots) {
-            const fullDateTime = `${dateStr} ${hour}`;
-            
-            // Verifica se já existe algo nesse horário para evitar duplicatas
-            const exists = bookings.some(b => 
-              b.dateTime === fullDateTime && 
-              b.teamMemberId === selectedProId && 
-              b.status !== 'cancelled'
-            );
-            
-            if (!exists) {
-              const newDocRef = doc(collection(db, "bookings"));
-              batch.set(newDocRef, {
-                dateTime: fullDateTime,
-                status: 'open',
-                teamMemberId: selectedProId,
-                teamMemberName: pro?.name || 'Profissional',
-                customerName: 'LIBERADO PARA CLIENTES',
-                customerId: 'none',
-                createdAt: new Date().toISOString()
-              });
-              operationCount++;
+        if (pro?.offDays?.includes(dayOfWeek)) {
+          currentDate.setDate(currentDate.getDate() + 1);
+          continue;
+        }
 
-              if (operationCount >= 400) {
-                await batch.commit();
-                batch = writeBatch(db);
-                operationCount = 0;
-              }
+        // Determinar horários para este dia específico
+        const daySlots = pro?.businessHours 
+          ? generateTimeSlots(pro.businessHours.start, pro.businessHours.end)
+          : timeSlots;
+
+        for (const hour of daySlots) {
+          const fullDateTime = `${dateStr} ${hour}`;
+          
+          if (!existingBookingsMap.has(fullDateTime)) {
+            const newDocRef = doc(collection(db, "bookings"));
+            batch.set(newDocRef, {
+              dateTime: fullDateTime,
+              status: 'open',
+              teamMemberId: selectedProId,
+              teamMemberName: pro?.name || 'Profissional',
+              customerName: 'LIBERADO PARA CLIENTES',
+              customerId: 'none',
+              createdAt: new Date().toISOString()
+            });
+            operationCount++;
+            releasedCount++;
+
+            if (operationCount >= 450) {
+              await batch.commit();
+              batch = writeBatch(db);
+              operationCount = 0;
             }
           }
         }
@@ -595,10 +655,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         await batch.commit();
       }
       
-      alert("Período liberado com sucesso!");
+      console.log(`Liberação concluída: ${releasedCount} horários liberados.`);
+      alert(`${releasedCount} horários foram liberados com sucesso!`);
       setIsBulkModalOpen(false);
     } catch (e) {
-      console.error(e);
+      console.error("Erro na liberação em massa:", e);
       alert("Erro ao liberar período.");
     } finally {
       setIsProcessing(false);
