@@ -68,7 +68,8 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     try {
       await updateDoc(doc(db, "bookings", id), { 
         status: 'cancelled',
-        cancelledAt: new Date().toISOString()
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: 'customer'
       });
       alert("Agendamento cancelado com sucesso.");
     } catch (e) {
@@ -399,18 +400,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
     <div className="min-h-screen bg-[#FDFDFD] pb-32 animate-fade-in font-sans">
       <header className="bg-gradient-to-b from-tea-900 to-tea-950 pt-16 pb-28 px-8 rounded-b-[5rem] shadow-2xl relative overflow-hidden">
         <div className="max-w-md mx-auto relative z-10 text-center space-y-4">
-           {customer.profilePhoto ? (
-             <img 
-               src={customer.profilePhoto} 
-               alt={customer.name} 
-               referrerPolicy="no-referrer"
-               className="w-24 h-24 rounded-[2.5rem] object-cover mx-auto shadow-2xl border-4 border-white/10"
-             />
-           ) : (
-             <div className="w-24 h-24 bg-white/10 backdrop-blur-md text-white rounded-[2.5rem] flex items-center justify-center text-4xl font-serif font-bold mx-auto shadow-2xl border border-white/20">
-               {customer.name.charAt(0)}
-             </div>
-           )}
            <h1 className="text-3xl font-serif text-white font-bold italic">Olá, {customer.name.split(' ')[0]}</h1>
            <p className="text-tea-100/60 text-xs italic tracking-widest uppercase font-bold">Studio Moriá Estética</p>
         </div>
@@ -591,7 +580,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {activeTab === 'agenda' && (
           <div className="space-y-6 animate-slide-up">
              <h3 className="text-2xl font-serif text-tea-950 italic font-bold text-center">Meus Cuidados</h3>
-             {bookings.filter(b => b.customerId === customer.id).sort((a,b) => b.dateTime.localeCompare(a.dateTime)).map(b => (
+             {bookings.filter(b => b.customerId === customer.id && !(b.status === 'cancelled' && b.cancelledBy === 'admin')).sort((a,b) => b.dateTime.localeCompare(a.dateTime)).map(b => (
                 <div key={b.id} className="p-8 bg-white rounded-[3rem] border border-gray-100 shadow-sm space-y-4 relative overflow-hidden">
                    <div className="flex justify-between items-start">
                       <div>

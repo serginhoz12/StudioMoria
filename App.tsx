@@ -387,7 +387,7 @@ const App: React.FC = () => {
     await updateDoc(doc(db, "bookings", id), { depositStatus });
   };
 
-  const handleBook = async (sid: string, dt: string, mid?: string) => {
+  const handleBook = async (sid: string, dt: string, mid?: string, isPackageSession?: boolean) => {
     if (!currentUser) { setView(View.CUSTOMER_LOGIN); return; }
     if (isMockMode) return;
     const srv = services.find(s => s.id === sid);
@@ -402,9 +402,10 @@ const App: React.FC = () => {
       serviceName: srv.name,
       dateTime: dt,
       duration: srv.duration || 30,
-      originalPrice: srv.price || 0,
+      originalPrice: isPackageSession ? 0 : (srv.price || 0),
       status: 'pending',
-      depositStatus: 'pending',
+      depositStatus: isPackageSession ? 'paid' : 'pending',
+      isPackageSession: !!isPackageSession,
       teamMemberId: mid || '',
       teamMemberName: mid ? settings.teamMembers.find(m => m.id === mid)?.name : '',
       agreedToCancellationPolicy: true,
@@ -1100,7 +1101,7 @@ const App: React.FC = () => {
           onAddToWaitlist={handleAddToWaitlist}
           onPlaceOrder={handlePlaceOrder}
           onAddInterest={handleAddInterest}
-          onQuickRegister={async (name, whatsapp, bookingId, serviceId, isWaitlist) => {
+          onQuickRegister={async (name, whatsapp, bookingId, serviceId, isWaitlist, isPackageSession) => {
             const cleanWhatsapp = whatsapp.replace(/\D/g, '');
             if (isMockMode) {
               const mockUser = { id: 'mock', name, whatsapp: cleanWhatsapp, cpf: '000', password: '000', receivesNotifications: true, agreedToTerms: true, history: [] };
@@ -1146,9 +1147,11 @@ const App: React.FC = () => {
                   customerName: user.name,
                   serviceId: serviceId,
                   serviceName: service?.name || 'Procedimento',
-                  originalPrice: service?.price || 0,
+                  originalPrice: isPackageSession ? 0 : (service?.price || 0),
                   duration: service?.duration || 30,
                   status: 'pending',
+                  depositStatus: isPackageSession ? 'paid' : 'pending',
+                  isPackageSession: !!isPackageSession,
                   bookedAt: new Date().toISOString()
                 });
 

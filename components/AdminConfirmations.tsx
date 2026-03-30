@@ -36,7 +36,8 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     price: 0,
-    customerId: ''
+    customerId: '',
+    isPackageSession: false
   });
 
   const [usedProducts, setUsedProducts] = useState<{ productId: string; quantity: number }[]>([]);
@@ -45,6 +46,27 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
   const [editingPrices, setEditingPrices] = useState<{ [key: string]: number }>({});
   const [editingServices, setEditingServices] = useState<{ [key: string]: string }>({});
   const [editingPros, setEditingPros] = useState<{ [key: string]: string }>({});
+  const [packageSessions, setPackageSessions] = useState<{ [key: string]: boolean }>({});
+
+  // Initialize editing states from bookings
+  React.useEffect(() => {
+    const initialPackageSessions: { [key: string]: boolean } = {};
+    const initialPrices: { [key: string]: number } = {};
+    bookings.forEach(b => {
+      if (b.isPackageSession) {
+        initialPackageSessions[b.id] = true;
+        if (editingPrices[b.id] === undefined) {
+          initialPrices[b.id] = 0;
+        }
+      }
+    });
+    if (Object.keys(initialPackageSessions).length > 0) {
+      setPackageSessions(prev => ({ ...initialPackageSessions, ...prev }));
+    }
+    if (Object.keys(initialPrices).length > 0) {
+      setEditingPrices(prev => ({ ...initialPrices, ...prev }));
+    }
+  }, [bookings]);
 
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -92,6 +114,7 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
         // 1. Update booking
         const updateData: any = {
           status: 'scheduled',
+          isPackageSession: packageSessions[selectedBookingForPayment.id] || false,
           depositStatus: paymentMethod === 'store_installments' ? 'pending' : 'paid',
           paymentReceived: totalAmount,
           paymentDate: new Date().toISOString(),
@@ -118,25 +141,27 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
 
         await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), updateData);
 
-        // 2. Create transaction
-        await addDoc(collection(db, "transactions"), {
-          type: 'receivable',
-          description: `Atendimento: ${selectedService?.name || selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
-          amount: totalAmount,
-          date: new Date().toISOString().split('T')[0],
-          dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
-          status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
-          customerId: selectedBookingForPayment.customerId,
-          customerName: selectedBookingForPayment.customerName,
-          bookingId: selectedBookingForPayment.id,
-          serviceName: selectedService?.name || selectedBookingForPayment.serviceName,
-          procedureDate: selectedBookingForPayment.dateTime,
-          paymentMethod: paymentMethod,
-          paymentType: paymentType,
-          installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
-          paidAt: paymentMethod === 'store_installments' ? null : new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        });
+        // 2. Create transaction if not a package session
+        if (!packageSessions[selectedBookingForPayment.id]) {
+          await addDoc(collection(db, "transactions"), {
+            type: 'receivable',
+            description: `Atendimento: ${selectedService?.name || selectedBookingForPayment.serviceName} - ${selectedBookingForPayment.customerName}${paymentType === 'installments' ? ` (${installmentsCount}x)` : ''} (Pagamento Antecipado)${paymentMethod === 'store_installments' ? ' (A Prazo)' : ''}`,
+            amount: totalAmount,
+            date: new Date().toISOString().split('T')[0],
+            dueDate: paymentMethod === 'store_installments' ? dueDate : new Date().toISOString().split('T')[0],
+            status: paymentMethod === 'store_installments' ? 'pending' : 'paid',
+            customerId: selectedBookingForPayment.customerId,
+            customerName: selectedBookingForPayment.customerName,
+            bookingId: selectedBookingForPayment.id,
+            serviceName: selectedService?.name || selectedBookingForPayment.serviceName,
+            procedureDate: selectedBookingForPayment.dateTime,
+            paymentMethod: paymentMethod,
+            paymentType: paymentType,
+            installmentsCount: paymentType === 'installments' ? installmentsCount : 1,
+            paidAt: paymentMethod === 'store_installments' ? null : new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          });
+        }
       }
 
       if (onUpdateStatus) {
@@ -189,28 +214,31 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           originalPrice: performanceData.price,
           status: 'completed',
           depositStatus: 'paid',
-          paymentReceived: performanceData.price,
+          paymentReceived: performanceData.isPackageSession ? 0 : performanceData.price,
           paymentDate: new Date().toISOString(),
           agreedToCancellationPolicy: true,
           policyAgreedAt: new Date().toISOString(),
-          usedProducts: usedProducts
+          usedProducts: usedProducts,
+          isPackageSession: performanceData.isPackageSession
         });
 
         // 2. Create transaction
-        await addDoc(collection(db, "transactions"), {
-          type: 'receivable',
-          description: `Atendimento: ${service?.name || performingService.serviceName} - ${performingService.customerName}`,
-          amount: performanceData.price,
-          date: performanceData.date,
-          status: 'paid',
-          customerId: finalCustomerId,
-          customerName: performingService.customerName,
-          bookingId: bookingRef.id,
-          serviceName: service?.name || performingService.serviceName,
-          procedureDate: `${performanceData.date} ${performanceData.time}`,
-          paidAt: new Date().toISOString(),
-          createdAt: new Date().toISOString()
-        });
+        if (!performanceData.isPackageSession) {
+          await addDoc(collection(db, "transactions"), {
+            type: 'receivable',
+            description: `Atendimento: ${service?.name || performingService.serviceName} - ${performingService.customerName}`,
+            amount: performanceData.price,
+            date: performanceData.date,
+            status: 'paid',
+            customerId: finalCustomerId,
+            customerName: performingService.customerName,
+            bookingId: bookingRef.id,
+            serviceName: service?.name || performingService.serviceName,
+            procedureDate: `${performanceData.date} ${performanceData.time}`,
+            paidAt: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          });
+        }
 
         // 3. Update Inventory
         if (onUpdateInventory) {
@@ -320,6 +348,11 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
         };
         
         if (status === 'scheduled') {
+          if (packageSessions[id]) {
+            updateData.isPackageSession = true;
+            updateData.depositStatus = 'paid'; // Mark as paid if it's a package session
+          }
+
           if (editingPrices[id] !== undefined) {
             updateData.originalPrice = editingPrices[id];
           }
@@ -449,6 +482,28 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                    </div>
                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">🗓️ {b.dateTime}</p>
                    {b.teamMemberName && <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest mt-1">👤 Profissional: {b.teamMemberName}</p>}
+                   
+                    <div className={`mt-3 flex items-center gap-2 p-2 rounded-xl transition-all ${packageSessions[b.id] ? 'bg-blue-50 border border-blue-100' : ''}`}>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer"
+                          checked={packageSessions[b.id] || false}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            setPackageSessions({ ...packageSessions, [b.id]: isChecked });
+                            if (isChecked) {
+                              setEditingPrices({ ...editingPrices, [b.id]: 0 });
+                            } else {
+                              const srv = services.find(s => s.id === (editingServices[b.id] || b.serviceId));
+                              setEditingPrices({ ...editingPrices, [b.id]: srv?.price || b.originalPrice || 0 });
+                            }
+                          }}
+                        />
+                        <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span className="ml-2 text-[10px] font-bold text-blue-600 uppercase tracking-tighter">Sessão de Pacote / Etapa de Tratamento</span>
+                      </label>
+                    </div>
                 </div>
               </div>
               <div className="flex flex-wrap gap-4 w-full md:w-auto">
@@ -661,6 +716,19 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
                         onChange={e => setPerformanceData({...performanceData, price: parseFloat(e.target.value)})} 
                         className="w-full p-4 bg-gray-50 rounded-2xl outline-none font-bold text-lg text-tea-900 shadow-inner" 
                       />
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-2xl">
+                      <input 
+                        type="checkbox" 
+                        id="isPackageSessionPerf"
+                        checked={performanceData.isPackageSession}
+                        onChange={e => setPerformanceData({...performanceData, isPackageSession: e.target.checked})}
+                        className="w-5 h-5 accent-tea-900 rounded-lg cursor-pointer"
+                      />
+                      <label htmlFor="isPackageSessionPerf" className="text-[10px] font-bold text-gray-600 uppercase tracking-widest cursor-pointer select-none">
+                        Sessão de Pacote / Etapa de Tratamento (Não cobrar)
+                      </label>
                     </div>
                     
                     <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">

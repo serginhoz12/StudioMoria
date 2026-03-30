@@ -281,7 +281,11 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     if (b?.status === 'open') {
       await deleteDoc(doc(db, "bookings", bookingId));
     } else {
-      await updateDoc(doc(db, "bookings", bookingId), { status: 'cancelled', cancelledAt: new Date().toISOString() });
+      await updateDoc(doc(db, "bookings", bookingId), { 
+        status: 'cancelled', 
+        cancelledAt: new Date().toISOString(),
+        cancelledBy: 'admin'
+      });
     }
     setModal({ open: false, hour: '', type: 'free' });
   };
@@ -376,7 +380,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
   const handleCompleteBooking = async (booking: Booking, prePayment: boolean = false) => {
     if (booking.isPackageSession && !prePayment && booking.status !== 'completed') {
-      if (confirm("Este é um atendimento de pacote. Deseja concluir sem gerar lançamento no caixa?")) {
+      if (confirm("Este é um atendimento de pacote / etapa de tratamento. Deseja concluir sem gerar lançamento no caixa?")) {
         try {
           setIsProcessing(true);
           await updateDoc(doc(db, "bookings", booking.id), {
@@ -385,7 +389,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
             depositStatus: 'paid',
             updatedAt: new Date().toISOString()
           });
-          alert("Atendimento de pacote concluído!");
+          alert("Atendimento de pacote / etapa de tratamento concluído!");
           setModal({ open: false, hour: '', type: 'free' });
           return;
         } catch (e) {
@@ -800,7 +804,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                 <span className="text-xl font-serif font-bold italic">{hour}</span>
                 <span className="text-[8px] font-bold uppercase tracking-widest mt-1 text-center line-clamp-2">{label}</span>
                 {data.type === 'occupied' && (data as any).bookings?.some((b: Booking) => b.isPackageSession) && (
-                  <span className="text-[7px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter mt-1">Pacote</span>
+                  <span className="text-[7px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter mt-1">Etapa Tratamento</span>
                 )}
               </button>
             );
@@ -1022,18 +1026,26 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3 p-4 bg-white border border-gray-100 rounded-2xl">
-                    <input 
-                      type="checkbox" 
-                      id="isPackageSession"
-                      checked={isPackageSession}
-                      onChange={e => setIsPackageSession(e.target.checked)}
-                      className="w-5 h-5 accent-tea-900 rounded-lg cursor-pointer"
-                    />
-                    <label htmlFor="isPackageSession" className="text-[10px] font-bold text-gray-600 uppercase tracking-widest cursor-pointer select-none">
-                      Sessão de Pacote (Não cobrar)
-                    </label>
-                  </div>
+                    <div className={`flex items-center gap-3 p-4 border rounded-2xl transition-all ${isPackageSession ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
+                      <input 
+                        type="checkbox" 
+                        id="isPackageSession"
+                        checked={isPackageSession}
+                        onChange={e => {
+                          const isChecked = e.target.checked;
+                          setIsPackageSession(isChecked);
+                          if (isChecked) setManualPrice(0);
+                          else {
+                            const srv = services.find(s => s.id === selectedServiceId);
+                            setManualPrice(srv?.price || 0);
+                          }
+                        }}
+                        className="w-5 h-5 accent-blue-600 rounded-lg cursor-pointer"
+                      />
+                      <label htmlFor="isPackageSession" className={`text-[10px] font-bold uppercase tracking-widest cursor-pointer select-none ${isPackageSession ? 'text-blue-700' : 'text-gray-600'}`}>
+                        Sessão de Pacote / Etapa de Tratamento (Não cobrar)
+                      </label>
+                    </div>
 
                   <button 
                     onClick={() => handleManualBooking()} 
@@ -1329,7 +1341,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         className="w-5 h-5 accent-tea-900 rounded-lg cursor-pointer"
                       />
                       <label htmlFor="isPackageSessionOccupied" className="text-[10px] font-bold text-gray-600 uppercase tracking-widest cursor-pointer select-none">
-                        Sessão de Pacote (Não cobrar)
+                        Sessão de Pacote / Etapa de Tratamento (Não cobrar)
                       </label>
                     </div>
 

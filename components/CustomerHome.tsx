@@ -47,6 +47,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showProductDetailModal, setShowProductDetailModal] = useState(false);
   const [interestData, setInterestData] = useState({ name: '', whatsapp: '' });
+  const [isPackageSession, setIsPackageSession] = useState(false);
   const [checkoutData, setCheckoutData] = useState({ 
     paymentMethod: 'pix' as any, 
     deliveryOption: 'pickup' as any,
@@ -577,12 +578,8 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                             onClick={() => {
                               setSelectedSlot(slot);
                               setIsWaitlistMode(false);
-                              if (currentUser) {
-                                onAuthClick(); 
-                                closeServiceModal();
-                              } else {
-                                setShowQuickAuth(true);
-                              }
+                              setIsPackageSession(false);
+                              setShowQuickAuth(true);
                             }}
                             className="p-4 bg-tea-900 text-white rounded-2xl font-bold text-[10px] shadow-lg hover:bg-black transition-all active:scale-95 flex flex-col items-center"
                           >
@@ -681,39 +678,63 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-4">Seu Nome Completo</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: Maria Silva"
-                  className="w-full p-6 bg-gray-50 rounded-3xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-bold shadow-inner"
-                  value={quickData.name}
-                  onChange={e => setQuickData({...quickData, name: e.target.value})}
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[9px] font-bold text-gray-400 uppercase ml-4">WhatsApp (com DDD)</label>
-                <input 
-                  type="tel" 
-                  placeholder="Ex: 13997724238"
-                  className="w-full p-6 bg-gray-50 rounded-3xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-bold shadow-inner"
-                  value={quickData.whatsapp}
-                  onChange={e => setQuickData({...quickData, whatsapp: e.target.value})}
-                />
-              </div>
+              {!currentUser && (
+                <>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-4">Seu Nome Completo</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Maria Silva"
+                      className="w-full p-6 bg-gray-50 rounded-3xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-bold shadow-inner"
+                      value={quickData.name}
+                      onChange={e => setQuickData({...quickData, name: e.target.value})}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-gray-400 uppercase ml-4">WhatsApp (com DDD)</label>
+                    <input 
+                      type="tel" 
+                      placeholder="Ex: 13997724238"
+                      className="w-full p-6 bg-gray-50 rounded-3xl border-none focus:ring-2 focus:ring-tea-100 outline-none font-bold shadow-inner"
+                      value={quickData.whatsapp}
+                      onChange={e => setQuickData({...quickData, whatsapp: e.target.value})}
+                    />
+                  </div>
+                </>
+              )}
+
+              {!isWaitlistMode && (
+                <div 
+                  className={`p-4 rounded-3xl border-2 transition-all cursor-pointer flex items-center gap-3 ${isPackageSession ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-transparent'}`}
+                  onClick={() => setIsPackageSession(!isPackageSession)}
+                >
+                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all ${isPackageSession ? 'bg-blue-600 text-white' : 'bg-white border-2 border-gray-200'}`}>
+                    {isPackageSession && <span className="text-xs">✓</span>}
+                  </div>
+                  <div className="flex-1">
+                    <p className={`text-[10px] font-bold uppercase tracking-widest ${isPackageSession ? 'text-blue-700' : 'text-gray-500'}`}>
+                      Sessão de Pacote
+                    </p>
+                    <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tighter">
+                      Etapa de tratamento já contratado
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button 
-              disabled={isProcessing || !quickData.name || !quickData.whatsapp}
+              disabled={isProcessing || (!currentUser && (!quickData.name || !quickData.whatsapp))}
               onClick={async () => {
                 setIsProcessing(true);
                 try {
                   const result = await onQuickRegister(
-                    quickData.name, 
-                    quickData.whatsapp, 
+                    currentUser?.name || quickData.name, 
+                    currentUser?.whatsapp || quickData.whatsapp, 
                     selectedSlot?.id, 
                     selectedServiceDetail?.id,
-                    isWaitlistMode
+                    isWaitlistMode,
+                    isPackageSession
                   );
                   if (result.isNew && result.password) {
                     setGeneratedPassword(result.password);

@@ -11,7 +11,7 @@ interface CustomerHistoryContentProps {
 }
 
 const CustomerHistoryContent: React.FC<CustomerHistoryContentProps> = ({ customer, bookings, transactions, waitlist, onUpdatePrice }) => {
-  const myBookings = bookings.filter(b => b.customerId === customer.id).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime());
+  const myBookings = bookings.filter(b => b.customerId === customer.id && !(b.status === 'cancelled' && b.cancelledBy === 'admin')).sort((a,b) => new Date(b.dateTime.replace(' ', 'T')).getTime() - new Date(a.dateTime.replace(' ', 'T')).getTime());
   const myTransactions = transactions
     .filter(t => t.customerId === customer.id && t.category !== 'Abatimento' && !t.parentTransactionId)
     .sort((a,b) => new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime());

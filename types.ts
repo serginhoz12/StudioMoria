@@ -80,6 +80,7 @@ export interface Booking {
   policyAgreedAt: string;
   policyAgreedText: string; 
   cancelledAt?: string;
+  cancelledBy?: 'admin' | 'customer';
   promotionId?: string;
   promotionTitle?: string;
   originalPrice?: number;
