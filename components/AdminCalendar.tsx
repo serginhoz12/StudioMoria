@@ -1002,12 +1002,14 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
 
                   <select 
                     value={selectedServiceId} 
-                    onChange={e => {
-                      const sid = e.target.value;
-                      setSelectedServiceId(sid);
-                      const s = services.find(item => item.id === sid);
-                      if (s) setManualPrice(s.price);
-                    }} 
+                      onChange={e => {
+                        const sid = e.target.value;
+                        setSelectedServiceId(sid);
+                        const s = services.find(item => item.id === sid);
+                        if (s) {
+                          setManualPrice(isPackageSession ? 0 : s.price);
+                        }
+                      }} 
                     className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                   >
                     <option value="">Selecione o serviço...</option>
@@ -1120,7 +1122,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         const sid = e.target.value;
                         setSelectedServiceId(sid);
                         const s = services.find(item => item.id === sid);
-                        if (s) setManualPrice(s.price);
+                        if (s) {
+                          setManualPrice(isPackageSession ? 0 : s.price);
+                        }
                       }} 
                       className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                     >
@@ -1139,6 +1143,27 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         />
                       </div>
                     )}
+
+                    <div className={`flex items-center gap-3 p-4 border rounded-2xl transition-all ${isPackageSession ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
+                      <input 
+                        type="checkbox" 
+                        id="isPackageSessionOpened"
+                        checked={isPackageSession}
+                        onChange={e => {
+                          const isChecked = e.target.checked;
+                          setIsPackageSession(isChecked);
+                          if (isChecked) setManualPrice(0);
+                          else {
+                            const srv = services.find(s => s.id === selectedServiceId);
+                            setManualPrice(srv?.price || 0);
+                          }
+                        }}
+                        className="w-5 h-5 accent-blue-600 rounded-lg cursor-pointer"
+                      />
+                      <label htmlFor="isPackageSessionOpened" className={`text-[10px] font-bold uppercase tracking-widest cursor-pointer select-none ${isPackageSession ? 'text-blue-700' : 'text-gray-600'}`}>
+                        Sessão de Pacote / Etapa de Tratamento (Não cobrar)
+                      </label>
+                    </div>
 
                     <button 
                       onClick={() => handleManualBooking()} 
@@ -1312,7 +1337,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         const sid = e.target.value;
                         setSelectedServiceId(sid);
                         const s = services.find(item => item.id === sid);
-                        if (s) setManualPrice(s.price);
+                        if (s) {
+                          setManualPrice(isPackageSession ? 0 : s.price);
+                        }
                       }} 
                       className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-xs outline-none font-bold appearance-none"
                     >
@@ -1332,15 +1359,23 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       </div>
                     )}
 
-                    <div className="flex items-center gap-3 p-4 bg-white border border-gray-100 rounded-2xl">
+                    <div className={`flex items-center gap-3 p-4 border rounded-2xl transition-all ${isPackageSession ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100'}`}>
                       <input 
                         type="checkbox" 
                         id="isPackageSessionOccupied"
                         checked={isPackageSession}
-                        onChange={e => setIsPackageSession(e.target.checked)}
-                        className="w-5 h-5 accent-tea-900 rounded-lg cursor-pointer"
+                        onChange={e => {
+                          const isChecked = e.target.checked;
+                          setIsPackageSession(isChecked);
+                          if (isChecked) setManualPrice(0);
+                          else {
+                            const srv = services.find(s => s.id === selectedServiceId);
+                            setManualPrice(srv?.price || 0);
+                          }
+                        }}
+                        className="w-5 h-5 accent-blue-600 rounded-lg cursor-pointer"
                       />
-                      <label htmlFor="isPackageSessionOccupied" className="text-[10px] font-bold text-gray-600 uppercase tracking-widest cursor-pointer select-none">
+                      <label htmlFor="isPackageSessionOccupied" className={`text-[10px] font-bold uppercase tracking-widest cursor-pointer select-none ${isPackageSession ? 'text-blue-700' : 'text-gray-600'}`}>
                         Sessão de Pacote / Etapa de Tratamento (Não cobrar)
                       </label>
                     </div>
