@@ -70,7 +70,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
   // Estados específicos para Avisos IA
   const [noticeTone, setNoticeTone] = useState<'professional' | 'friendly' | 'urgent' | 'creative'>('professional');
-  const [noticePlatform, setNoticePlatform] = useState<'whatsapp' | 'instagram'>('whatsapp');
+  const [noticePlatform, setNoticePlatform] = useState<'whatsapp'>('whatsapp');
   const [noticePrompt, setNoticePrompt] = useState('');
   const [noticeColor, setNoticeColor] = useState('#1e3d28'); // Cor padrão (Verde Chá Escuro)
   const [noticeFontFamily, setNoticeFontFamily] = useState('font-serif');
@@ -353,9 +353,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const model = "gemini-3-flash-preview";
       
-      const platformContext = noticePlatform === 'whatsapp' 
-        ? "status do WhatsApp (curto, direto, com emojis)" 
-        : "Stories do Instagram (visual, impactante, focado em engajamento)";
+      const platformContext = "status do WhatsApp (curto, direto, com emojis)";
 
       const prompt = `Você é um especialista em marketing para salões de beleza e estética. 
       Crie um aviso para o ${platformContext} do salão "${settings.name}".
@@ -783,7 +781,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                       className="w-full p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none"
                     >
                       <option value="whatsapp">WhatsApp Status</option>
-                      <option value="instagram">Instagram Stories</option>
                     </select>
                   </div>
                   <div className="space-y-2">

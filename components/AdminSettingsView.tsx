@@ -1,12 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { SalonSettings, Service, TeamMember } from '../types.ts';
 import { db } from '../firebase.ts';
 import { doc, setDoc, deleteDoc, updateDoc, getDoc, getDocFromServer } from "firebase/firestore";
 import { auth, db as firebaseDb } from '../firebase.ts';
 import { signInAnonymously } from "firebase/auth";
 import firebaseConfig from '../firebase-applet-config.json';
-import { Instagram } from 'lucide-react';
 
 interface AdminSettingsViewProps {
   settings: SalonSettings;
@@ -31,45 +30,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newService, setNewService] = useState<Partial<Service>>({ name: '', price: 0, duration: 30, description: '', category: 'Olhar', isVisible: true, isHighlighted: false, returnPeriodDays: 0, usedProducts: [] });
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
-  const [newMemberPhone, setNewMemberPhone] = useState('');
-  const [newMemberInstagram, setNewMemberInstagram] = useState('');
-  const [newMemberPhoto, setNewMemberPhoto] = useState('');
-  const [isInstagramLoading, setIsInstagramLoading] = useState(false);
   const [newTransactionCategory, setNewTransactionCategory] = useState('');
   const [showDebug, setShowDebug] = useState(false);
 
   const defaultTransactionCategories = ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros'];
   const currentTransactionCategories = settings.transactionCategories || defaultTransactionCategories;
-
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'INSTAGRAM_AUTH_SUCCESS') {
-        const data = event.data.data;
-        setNewMemberName(data.username || '');
-        setNewMemberInstagram(data.profileUrl || '');
-        // Note: Basic Display API doesn't provide profile photo easily, 
-        // but we can set a placeholder or use a service if available.
-        alert(`Instagram conectado: @${data.username}`);
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  const handleInstagramLogin = async () => {
-    setIsInstagramLoading(true);
-    try {
-      const response = await fetch('/api/auth/instagram/url');
-      if (!response.ok) throw new Error('Falha ao obter URL');
-      const { url } = await response.json();
-      window.open(url, 'instagram_auth', 'width=600,height=700');
-    } catch (error) {
-      console.error('Erro Instagram:', error);
-      alert('Erro ao conectar com Instagram.');
-    } finally {
-      setIsInstagramLoading(false);
-    }
-  };
 
   const calculateServiceCost = (service: Partial<Service>) => {
     if (!service.usedProducts) return 0;
@@ -104,9 +69,6 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       const newMember: TeamMember = {
         id: Math.random().toString(36).substr(2, 9),
         name: newMemberName.trim(),
-        phone: newMemberPhone.trim(),
-        instagramProfile: newMemberInstagram.trim(),
-        profilePhoto: newMemberPhoto.trim() || `https://ui-avatars.com/api/?name=${encodeURIComponent(newMemberName)}&background=random`,
         assignedServiceIds: [],
         businessHours: { start: settings.businessHours.start, end: settings.businessHours.end },
         offDays: [0] 
@@ -114,9 +76,6 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
       const updated = { ...settings, teamMembers: [...settings.teamMembers, newMember] };
       updateGlobalSettings(updated);
       setNewMemberName('');
-      setNewMemberPhone('');
-      setNewMemberInstagram('');
-      setNewMemberPhoto('');
     }
   };
 
@@ -595,14 +554,6 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Instagram (Link completo)</label>
-              <input 
-                className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
-                value={settings.socialLinks.instagram} 
-                onChange={e => updateGlobalSettings({...settings, socialLinks: {...settings.socialLinks, instagram: e.target.value}})} 
-              />
-           </div>
-           <div className="space-y-2">
               <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">WhatsApp (Apenas números com DDD)</label>
               <input 
                 className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
@@ -617,24 +568,9 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
            <span className="text-3xl">👥</span> Gestão da Equipe & Folgas
         </h3>
-        <div className="space-y-4 mb-10">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <input placeholder="Nome da colaboradora..." className="p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
-            <input placeholder="WhatsApp (ex: 11999999999)" className="p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberPhone} onChange={e => setNewMemberPhone(e.target.value)} />
-            <input placeholder="Instagram (Link completo)" className="p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberInstagram} onChange={e => setNewMemberInstagram(e.target.value)} />
-            <input placeholder="URL da Foto de Perfil" className="p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberPhoto} onChange={e => setNewMemberPhoto(e.target.value)} />
-          </div>
-          <div className="flex flex-col md:flex-row gap-4">
-            <button 
-              onClick={handleInstagramLogin} 
-              disabled={isInstagramLoading}
-              className="flex-1 bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white py-5 rounded-2xl font-bold hover:opacity-90 transition-all shadow-lg uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {isInstagramLoading ? <span className="animate-spin">⌛</span> : <Instagram size={16} />}
-              Conectar Instagram
-            </button>
-            <button onClick={addTeamMember} className="flex-1 bg-tea-800 text-white py-5 rounded-2xl font-bold hover:bg-tea-950 transition-colors shadow-lg uppercase text-[10px] tracking-widest">Adicionar Equipe</button>
-          </div>
+        <div className="flex gap-4 mb-10">
+          <input placeholder="Nome da nova colaboradora..." className="flex-grow p-5 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" value={newMemberName} onChange={e => setNewMemberName(e.target.value)} />
+          <button onClick={addTeamMember} className="bg-tea-800 text-white px-10 py-5 rounded-2xl font-bold hover:bg-tea-950 transition-colors shadow-lg uppercase text-[10px] tracking-widest">Adicionar Equipe</button>
         </div>
         
         <div className="space-y-12">
@@ -642,53 +578,14 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             <div key={member.id} className="p-8 border-2 border-gray-50 rounded-[2.5rem] bg-white shadow-sm hover:border-tea-100 transition-all space-y-10 relative overflow-hidden">
               <div className="flex justify-between items-center border-b border-gray-50 pb-6">
                 <div className="flex items-center gap-4">
-                  {member.profilePhoto ? (
-                    <img src={member.profilePhoto} alt={member.name} className="w-14 h-14 rounded-2xl object-cover border border-gray-100" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-14 h-14 bg-tea-900 text-white rounded-2xl flex items-center justify-center font-serif text-xl font-bold">{member.name.charAt(0)}</div>
-                  )}
-                  <div>
-                    <span className="font-serif font-bold text-2xl text-tea-950 italic block">{member.name}</span>
-                    <div className="flex gap-2 mt-1">
-                      {member.phone && <span className="text-[9px] font-bold text-tea-600 uppercase tracking-widest bg-tea-50 px-2 py-0.5 rounded-full">{member.phone}</span>}
-                      {member.instagramProfile && (
-                        <a href={member.instagramProfile} target="_blank" rel="noopener noreferrer" className="text-[9px] font-bold text-pink-600 uppercase tracking-widest bg-pink-50 px-2 py-0.5 rounded-full hover:bg-pink-100 transition-colors">Instagram</a>
-                      )}
-                    </div>
-                  </div>
+                  <div className="w-14 h-14 bg-tea-900 text-white rounded-2xl flex items-center justify-center font-serif text-xl font-bold">{member.name.charAt(0)}</div>
+                  <span className="font-serif font-bold text-2xl text-tea-950 italic">{member.name}</span>
                 </div>
                 <button onClick={() => removeTeamMember(member.id)} className="text-red-400 text-[10px] font-bold uppercase tracking-widest hover:text-red-600 p-3 bg-red-50 rounded-xl transition-colors">Remover da Unidade</button>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Editar Foto (URL)</label>
-                      <input 
-                        className="w-full p-4 bg-gray-50 rounded-xl border-none font-bold text-xs shadow-inner" 
-                        value={member.profilePhoto || ''} 
-                        onChange={e => updateMemberField(member.id, 'profilePhoto', e.target.value)} 
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Editar WhatsApp</label>
-                      <input 
-                        className="w-full p-4 bg-gray-50 rounded-xl border-none font-bold text-xs shadow-inner" 
-                        value={member.phone || ''} 
-                        onChange={e => updateMemberField(member.id, 'phone', e.target.value)} 
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-gray-400 uppercase ml-2">Editar Instagram (Link)</label>
-                      <input 
-                        className="w-full p-4 bg-gray-50 rounded-xl border-none font-bold text-xs shadow-inner" 
-                        value={member.instagramProfile || ''} 
-                        onChange={e => updateMemberField(member.id, 'instagramProfile', e.target.value)} 
-                      />
-                    </div>
-                  </div>
-
                   <div>
                     <h4 className="text-[11px] font-bold text-tea-800 uppercase tracking-widest mb-6 flex items-center gap-2">
                        <span className="text-lg">⏰</span> Turno de Atendimento

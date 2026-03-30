@@ -79,7 +79,6 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   servicesSectionTitle: "Especialidades",
   servicesSectionSubtitle: "Nossos Procedimentos",
   socialLinks: {
-    instagram: "https://www.instagram.com/studio_moria_estetica",
     facebook: "https://facebook.com/studiomoria",
     whatsapp: "+5513997724238",
   },

@@ -347,6 +347,11 @@ const AdminConfirmations: React.FC<AdminConfirmationsProps> = ({ bookings, custo
           updatedAt: new Date().toISOString()
         };
         
+        if (status === 'cancelled') {
+          updateData.cancelledAt = new Date().toISOString();
+          updateData.cancelledBy = 'admin';
+        }
+        
         if (status === 'scheduled') {
           if (packageSessions[id]) {
             updateData.isPackageSession = true;

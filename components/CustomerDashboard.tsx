@@ -580,7 +580,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         {activeTab === 'agenda' && (
           <div className="space-y-6 animate-slide-up">
              <h3 className="text-2xl font-serif text-tea-950 italic font-bold text-center">Meus Cuidados</h3>
-             {bookings.filter(b => b.customerId === customer.id && !(b.status === 'cancelled' && b.cancelledBy === 'admin')).sort((a,b) => b.dateTime.localeCompare(a.dateTime)).map(b => (
+             {bookings.filter(b => b.customerId === customer.id && (b.status !== 'cancelled' || b.cancelledBy === 'customer')).sort((a,b) => b.dateTime.localeCompare(a.dateTime)).map(b => (
                 <div key={b.id} className="p-8 bg-white rounded-[3rem] border border-gray-100 shadow-sm space-y-4 relative overflow-hidden">
                    <div className="flex justify-between items-start">
                       <div>
@@ -869,7 +869,6 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
                   Sempre buscando a sua melhor versão através da estética avançada e cuidados personalizados.
                 </p>
                 <div className="pt-4 flex justify-center gap-6">
-                   <a href={settings.socialLinks.instagram} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-tea-900 transition-colors">Instagram</a>
                    <a href={`https://wa.me/${settings.socialLinks.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-tea-900 transition-colors">WhatsApp</a>
                 </div>
              </div>

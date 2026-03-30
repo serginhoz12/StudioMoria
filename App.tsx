@@ -373,11 +373,14 @@ const App: React.FC = () => {
     }
   }, [isLoading, isMockMode, settings.address]);
 
-  const handleUpdateStatus = async (id: string, status: any) => {
+  const handleUpdateStatus = async (id: string, status: any, cancelledBy: 'admin' | 'customer' = 'admin') => {
     // FIX: Using isMockMode for check
     if (isMockMode) return;
     const updateData: any = { status };
-    if (status === 'cancelled') updateData.cancelledAt = new Date().toISOString();
+    if (status === 'cancelled') {
+      updateData.cancelledAt = new Date().toISOString();
+      updateData.cancelledBy = cancelledBy;
+    }
     await updateDoc(doc(db, "bookings", id), updateData);
   };
 
@@ -947,7 +950,7 @@ const App: React.FC = () => {
             inventory={inventory}
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
-            onCancelBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
+            onCancelBooking={(id) => handleUpdateStatus(id, 'cancelled', 'customer')}
             onGoToProfile={() => setView(View.CUSTOMER_PROFILE)}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))}

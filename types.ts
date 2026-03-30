@@ -165,7 +165,6 @@ export interface SalonSettings {
   servicesSectionTitle?: string;
   servicesSectionSubtitle?: string;
   socialLinks: {
-    instagram?: string;
     facebook?: string;
     whatsapp: string;
   };
