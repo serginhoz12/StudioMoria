@@ -20,6 +20,9 @@ interface AdminSettingsViewProps {
 const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({ 
   settings, 
   services = [],
+  customers = [],
+  bookings = [],
+  transactions = [],
   inventory = [],
   isMockMode
 }) => {
@@ -295,6 +298,37 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     }
   };
 
+  const forceSyncTransactions = async () => {
+    setTestResult("Sincronizando transações...");
+    try {
+      const { collection, getDocsFromServer } = await import("firebase/firestore");
+      const snap = await getDocsFromServer(collection(db, "transactions"));
+      setTestResult(`Sincronizado! ${snap.docs.length} transações encontradas no servidor.`);
+      alert(`${snap.docs.length} transações carregadas do servidor. Por favor, recarregue a página.`);
+      window.location.reload();
+    } catch (err: any) {
+      setTestResult(`Erro: ${err.message}`);
+    }
+  };
+
+  const forceSyncAll = async () => {
+    setTestResult("Sincronizando tudo...");
+    try {
+      const { collection, getDocsFromServer } = await import("firebase/firestore");
+      const collections = ["settings", "services", "customers", "bookings", "transactions", "inventory", "waitlist", "promotions", "productInterests", "productOrders"];
+      let total = 0;
+      for (const col of collections) {
+        const snap = await getDocsFromServer(collection(db, col));
+        total += snap.docs.length;
+      }
+      setTestResult(`Sincronizado! ${total} documentos encontrados no total.`);
+      alert(`Sincronização completa. ${total} documentos carregados. Por favor, recarregue a página.`);
+      window.location.reload();
+    } catch (err: any) {
+      setTestResult(`Erro: ${err.message}`);
+    }
+  };
+
   return (
     <div className="space-y-12 pb-32 animate-fade-in">
       <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl relative overflow-hidden">
@@ -326,6 +360,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           <p>Settings Doc Path: settings/main</p>
           <p>Last Settings Sync: {new Date(settings.lastUpdated || 0).toLocaleString()}</p>
           <p>Visit Count: {settings.visitCount}</p>
+          <p>Transactions in State: {transactions.length}</p>
           <div className="pt-4 flex flex-wrap items-center gap-4">
             <button 
               onClick={testFirebaseConnection}
@@ -337,7 +372,19 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               onClick={forceSyncSettings}
               className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors"
             >
-              Forçar Sincronização
+              Sincronizar Configs
+            </button>
+            <button 
+              onClick={forceSyncTransactions}
+              className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-700 transition-colors"
+            >
+              Sincronizar Caixa
+            </button>
+            <button 
+              onClick={forceSyncAll}
+              className="bg-orange-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-700 transition-colors"
+            >
+              Sincronizar Tudo
             </button>
             <button 
               onClick={() => window.location.reload()}

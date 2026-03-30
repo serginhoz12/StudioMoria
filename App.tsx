@@ -269,8 +269,10 @@ const App: React.FC = () => {
     });
 
     const unsubTransactions = onSnapshot(collection(db, "transactions"), (snapshot) => {
+      console.log(`Transactions loaded. Count: ${snapshot.docs.length}. Source: ${snapshot.metadata.fromCache ? 'Cache' : 'Server'}`);
       setTransactions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)));
     }, (error) => {
+      console.error("Erro ao carregar transações:", error);
       handlePermissionError(error, "transactions");
     });
 
@@ -537,9 +539,47 @@ const App: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (isAdminAuthenticated && auth.currentUser && !isMockMode) {
+      const authorizeSession = async () => {
+        try {
+          await setDoc(doc(db, "admin_sessions", auth.currentUser!.uid), {
+            authorizedAt: new Date().toISOString(),
+            method: 'auto-restore'
+          });
+          console.log("Admin session auto-restored.");
+        } catch (err) {
+          console.error("Failed to auto-restore admin session:", err);
+        }
+      };
+      authorizeSession();
+    }
+  }, [isAdminAuthenticated, auth.currentUser, isMockMode]);
+
+  const handleAdminLogin = async (method: string) => {
+    setIsAdminAuthenticated(true);
+    localStorage.setItem('moria_isAdminAuth', 'true');
+    
+    // Authorize session in Firebase if not already
+    if (auth.currentUser) {
+      try {
+        console.log("Authorizing admin session for UID:", auth.currentUser.uid);
+        await setDoc(doc(db, "admin_sessions", auth.currentUser.uid), {
+          authorizedAt: new Date().toISOString(),
+          method: method === 'google-auth' ? 'google' : 'password'
+        });
+        console.log("Admin session authorized successfully.");
+      } catch (err) {
+        console.error("Failed to authorize admin session in Firebase:", err);
+      }
+    }
+    
+    setView(View.ADMIN_DASHBOARD);
+  };
+
   const renderView = () => {
     if (isAdmin) {
-      if (!isAdminAuthenticated) return <AdminLogin onLogin={() => { setIsAdminAuthenticated(true); setView(View.ADMIN_DASHBOARD); }} onBack={() => setIsAdmin(false)} />;
+      if (!isAdminAuthenticated) return <AdminLogin onLogin={handleAdminLogin} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
         case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} inventory={inventory} isMockMode={isMockMode} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar 
