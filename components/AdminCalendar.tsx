@@ -22,28 +22,6 @@ const getLocalDateString = (date: Date) => {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-const timeToMinutes = (time: string) => {
-  if (!time) return 0;
-  const [h, m] = time.split(':').map(Number);
-  return (h || 0) * 60 + (m || 0);
-};
-
-const minutesToTime = (minutes: number) => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-};
-
-const generateTimeSlots = (start: string, end: string) => {
-  const startMin = timeToMinutes(start);
-  const endMin = timeToMinutes(end);
-  const slots = [];
-  for (let t = startMin; t < endMin; t += 30) {
-    slots.push(minutesToTime(t));
-  }
-  return slots;
-};
-
 const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, customers, transactions, waitlist, teamMembers, inventory, settings, onUpdateInventory }) => {
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateString(new Date()));
   const [selectedProId, setSelectedProId] = useState(teamMembers[0]?.id || '');
@@ -57,6 +35,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const [viewMode, setViewMode] = useState<'daily' | 'monthly'>('daily');
 
   const [manualTime, setManualTime] = useState('');
+  const [isPackageSession, setIsPackageSession] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkStartDate, setBulkStartDate] = useState(selectedDate);
   const [bulkEndDate, setBulkEndDate] = useState(selectedDate);
@@ -100,6 +79,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     setSelectedServiceId('');
     setManualPrice(0);
     setManualTime('');
+    setIsPackageSession(false);
+  };
+
+  const timeToMinutes = (time: string) => {
+    if (!time) return 0;
+    const [h, m] = time.split(':').map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  const minutesToTime = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
   const monthlyBookings = useMemo(() => {
@@ -344,6 +336,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
           originalPrice: manualPrice || service.price,
           status: 'scheduled',
           isManual: true,
+          isPackageSession: isPackageSession,
           depositStatus: 'pending',
           agreedToCancellationPolicy: true,
           policyAgreedAt: new Date().toISOString()
@@ -381,7 +374,29 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
     }
   };
 
-  const handleCompleteBooking = (booking: Booking, prePayment: boolean = false) => {
+  const handleCompleteBooking = async (booking: Booking, prePayment: boolean = false) => {
+    if (booking.isPackageSession && !prePayment && booking.status !== 'completed') {
+      if (confirm("Este é um atendimento de pacote. Deseja concluir sem gerar lançamento no caixa?")) {
+        try {
+          setIsProcessing(true);
+          await updateDoc(doc(db, "bookings", booking.id), {
+            status: 'completed',
+            paymentDate: new Date().toISOString(),
+            depositStatus: 'paid',
+            updatedAt: new Date().toISOString()
+          });
+          alert("Atendimento de pacote concluído!");
+          setModal({ open: false, hour: '', type: 'free' });
+          return;
+        } catch (e) {
+          console.error("Erro ao concluir pacote:", e);
+          alert("Erro ao concluir pacote.");
+        } finally {
+          setIsProcessing(false);
+        }
+      }
+    }
+    
     setSelectedBookingForPayment(booking);
     setIsPrePayment(prePayment);
     setInstallmentValue(booking.originalPrice || services.find(s => s.id === booking.serviceId)?.price || 0);
@@ -555,96 +570,54 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   const handleBulkRelease = async () => {
     if ((db as any)._isMock) return alert("Modo visual: Período liberado simulado.");
     
-    if (!bulkStartDate || !bulkEndDate) {
-      alert("Por favor, selecione as datas de início e fim.");
-      return;
-    }
-
     const start = new Date(bulkStartDate + 'T00:00:00');
     const end = new Date(bulkEndDate + 'T00:00:00');
     
     if (end < start) return alert("A data final deve ser maior ou igual à data inicial.");
     
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-    if (diffDays > 60) {
-      alert("O período máximo para liberação em massa é de 60 dias.");
-      return;
-    }
-
-    if (!confirm(`Deseja liberar todos os horários disponíveis de ${start.toLocaleDateString('pt-BR')} até ${end.toLocaleDateString('pt-BR')} para ${selectedPro?.name || 'o profissional selecionado'}?`)) {
-      return;
-    }
-
     setIsProcessing(true);
-    
-    if ((db as any)._isMock) {
-      alert("Modo visual: Liberação em massa simulada.");
-      setIsProcessing(false);
-      setIsBulkModalOpen(false);
-      return;
-    }
-
-    if (!selectedProId) {
-      alert("Por favor, selecione um profissional antes de liberar o período.");
-      setIsProcessing(false);
-      return;
-    }
-
-    console.log(`Iniciando liberação em massa: ${bulkStartDate} até ${bulkEndDate} para ${selectedProId}`);
-
     try {
-      let batch = writeBatch(db);
-      let operationCount = 0;
-      let releasedCount = 0;
-
-      // Otimização: Indexar bookings existentes por dateTime para busca rápida O(1)
-      const existingBookingsMap = new Set(
-        bookings
-          .filter(b => b.teamMemberId === selectedProId && b.status !== 'cancelled')
-          .map(b => b.dateTime)
-      );
-
       let currentDate = new Date(start);
       const pro = teamMembers.find(m => m.id === selectedProId);
       
+      let batch = writeBatch(db);
+      let operationCount = 0;
+
       while (currentDate <= end) {
         const dateStr = getLocalDateString(currentDate);
         const dayOfWeek = currentDate.getDay();
 
         // Pula dias de folga do profissional
-        if (pro?.offDays?.includes(dayOfWeek)) {
-          currentDate.setDate(currentDate.getDate() + 1);
-          continue;
-        }
+        if (!pro?.offDays?.includes(dayOfWeek)) {
+          // Respeita o horário de funcionamento do salão (timeSlots já é baseado nisso)
+          for (const hour of timeSlots) {
+            const fullDateTime = `${dateStr} ${hour}`;
+            
+            // Verifica se já existe algo nesse horário para evitar duplicatas
+            const exists = bookings.some(b => 
+              b.dateTime === fullDateTime && 
+              b.teamMemberId === selectedProId && 
+              b.status !== 'cancelled'
+            );
+            
+            if (!exists) {
+              const newDocRef = doc(collection(db, "bookings"));
+              batch.set(newDocRef, {
+                dateTime: fullDateTime,
+                status: 'open',
+                teamMemberId: selectedProId,
+                teamMemberName: pro?.name || 'Profissional',
+                customerName: 'LIBERADO PARA CLIENTES',
+                customerId: 'none',
+                createdAt: new Date().toISOString()
+              });
+              operationCount++;
 
-        // Determinar horários para este dia específico
-        const daySlots = pro?.businessHours 
-          ? generateTimeSlots(pro.businessHours.start, pro.businessHours.end)
-          : timeSlots;
-
-        for (const hour of daySlots) {
-          const fullDateTime = `${dateStr} ${hour}`;
-          
-          if (!existingBookingsMap.has(fullDateTime)) {
-            const newDocRef = doc(collection(db, "bookings"));
-            batch.set(newDocRef, {
-              dateTime: fullDateTime,
-              status: 'open',
-              teamMemberId: selectedProId,
-              teamMemberName: pro?.name || 'Profissional',
-              customerName: 'LIBERADO PARA CLIENTES',
-              customerId: 'none',
-              createdAt: new Date().toISOString()
-            });
-            operationCount++;
-            releasedCount++;
-
-            if (operationCount >= 450) {
-              await batch.commit();
-              batch = writeBatch(db);
-              operationCount = 0;
+              if (operationCount >= 400) {
+                await batch.commit();
+                batch = writeBatch(db);
+                operationCount = 0;
+              }
             }
           }
         }
@@ -655,11 +628,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         await batch.commit();
       }
       
-      console.log(`Liberação concluída: ${releasedCount} horários liberados.`);
-      alert(`${releasedCount} horários foram liberados com sucesso!`);
+      alert("Período liberado com sucesso!");
       setIsBulkModalOpen(false);
     } catch (e) {
-      console.error("Erro na liberação em massa:", e);
+      console.error(e);
       alert("Erro ao liberar período.");
     } finally {
       setIsProcessing(false);
@@ -827,6 +799,9 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
               >
                 <span className="text-xl font-serif font-bold italic">{hour}</span>
                 <span className="text-[8px] font-bold uppercase tracking-widest mt-1 text-center line-clamp-2">{label}</span>
+                {data.type === 'occupied' && (data as any).bookings?.some((b: Booking) => b.isPackageSession) && (
+                  <span className="text-[7px] bg-white/20 text-white px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter mt-1">Pacote</span>
+                )}
               </button>
             );
           })}
@@ -878,6 +853,7 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                       <div className="text-xs font-medium text-tea-800 flex items-center gap-2">
                         {b.serviceName}
                         {b.isManual && <span className="text-[7px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">Manual</span>}
+                        {b.isPackageSession && <span className="text-[7px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-bold uppercase tracking-tighter">Pacote</span>}
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="text-[9px] text-gray-400 uppercase tracking-tighter">R$ {b.originalPrice?.toFixed(2) || '0,00'}</div>
@@ -1046,6 +1022,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                     </div>
                   )}
 
+                  <div className="flex items-center gap-3 p-4 bg-white border border-gray-100 rounded-2xl">
+                    <input 
+                      type="checkbox" 
+                      id="isPackageSession"
+                      checked={isPackageSession}
+                      onChange={e => setIsPackageSession(e.target.checked)}
+                      className="w-5 h-5 accent-tea-900 rounded-lg cursor-pointer"
+                    />
+                    <label htmlFor="isPackageSession" className="text-[10px] font-bold text-gray-600 uppercase tracking-widest cursor-pointer select-none">
+                      Sessão de Pacote (Não cobrar)
+                    </label>
+                  </div>
+
                   <button 
                     onClick={() => handleManualBooking()} 
                     className="w-full py-5 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl hover:bg-black transition-all"
@@ -1187,6 +1176,26 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                               ✓ Finalizado
                             </span>
                           )}
+                          <div className="flex items-center justify-center gap-2 mt-2">
+                            <input 
+                              type="checkbox" 
+                              id={`pkg-${booking.id}`}
+                              checked={booking.isPackageSession || false}
+                              onChange={async (e) => {
+                                try {
+                                  await updateDoc(doc(db, "bookings", booking.id), {
+                                    isPackageSession: e.target.checked
+                                  });
+                                } catch (err) {
+                                  console.error("Erro ao atualizar status de pacote:", err);
+                                }
+                              }}
+                              className="w-3 h-3 accent-tea-300 rounded cursor-pointer"
+                            />
+                            <label htmlFor={`pkg-${booking.id}`} className="text-[8px] font-bold uppercase tracking-widest text-tea-200 cursor-pointer select-none">
+                              Sessão de Pacote
+                            </label>
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
@@ -1310,6 +1319,19 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
                         />
                       </div>
                     )}
+
+                    <div className="flex items-center gap-3 p-4 bg-white border border-gray-100 rounded-2xl">
+                      <input 
+                        type="checkbox" 
+                        id="isPackageSessionOccupied"
+                        checked={isPackageSession}
+                        onChange={e => setIsPackageSession(e.target.checked)}
+                        className="w-5 h-5 accent-tea-900 rounded-lg cursor-pointer"
+                      />
+                      <label htmlFor="isPackageSessionOccupied" className="text-[10px] font-bold text-gray-600 uppercase tracking-widest cursor-pointer select-none">
+                        Sessão de Pacote (Não cobrar)
+                      </label>
+                    </div>
 
                     <button 
                       onClick={() => handleManualBooking()} 

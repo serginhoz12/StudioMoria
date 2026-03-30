@@ -24,8 +24,6 @@ export interface Customer {
   cpf: string;
   password?: string;
   profilePhoto?: string;
-  instagramProfile?: string; // Link to Instagram profile
-  instagramId?: string; // Unique Instagram ID
   receivesNotifications: boolean;
   agreedToTerms: boolean;
   history: Booking[];
@@ -60,9 +58,6 @@ export interface BusinessHours {
 export interface TeamMember {
   id: string;
   name: string;
-  phone?: string;
-  profilePhoto?: string;
-  instagramProfile?: string;
   assignedServiceIds: string[];
   businessHours?: BusinessHours;
   offDays?: number[]; 
@@ -95,6 +90,7 @@ export interface Booking {
   paymentMethod?: PaymentMethod;
   paymentType?: 'sight' | 'installments';
   installmentsCount?: number;
+  isPackageSession?: boolean;
 }
 
 export type PaymentMethod = 'pix' | 'debit' | 'credit' | 'store_installments' | 'cash';

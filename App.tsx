@@ -52,15 +52,6 @@ const getLocalDateString = (date: Date) => {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
 const handleFirestoreError = (error: any, operation: OperationType, path: string) => {
   const errInfo = {
     error: error instanceof Error ? error.message : String(error),
