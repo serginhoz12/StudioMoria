@@ -16,6 +16,7 @@ interface NavbarProps {
   isAdminAuthenticated: boolean;
   pendingBookingsCount?: number;
   isMockMode?: boolean;
+  isFirebaseConnected?: boolean;
   lastUpdated?: number;
 }
 
@@ -32,6 +33,7 @@ const Navbar: React.FC<NavbarProps> = ({
   isAdminAuthenticated,
   pendingBookingsCount = 0,
   isMockMode = false,
+  isFirebaseConnected = false,
   lastUpdated
 }) => {
   const adminTabs = [
@@ -79,6 +81,11 @@ const Navbar: React.FC<NavbarProps> = ({
               {isMockMode && (
                 <span className="text-[6px] font-bold text-orange-500 uppercase tracking-widest mt-0.5 animate-pulse">
                   ● Modo de Demonstração
+                </span>
+              )}
+              {!isMockMode && (
+                <span className={`text-[6px] font-bold uppercase tracking-widest mt-0.5 ${isFirebaseConnected ? 'text-green-500' : 'text-red-500 animate-pulse'}`}>
+                  ● {isFirebaseConnected ? 'Conectado ao Servidor' : 'Desconectado do Servidor'}
                 </span>
               )}
               <span className="text-[6px] font-bold text-tea-600 uppercase tracking-widest mt-0.5">

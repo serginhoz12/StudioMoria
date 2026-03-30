@@ -2,9 +2,10 @@
 import React, { useState } from 'react';
 import { SalonSettings, Service, TeamMember } from '../types.ts';
 import { db } from '../firebase.ts';
-import { doc, setDoc, deleteDoc, updateDoc, getDoc } from "firebase/firestore";
-import { auth } from '../firebase.ts';
+import { doc, setDoc, deleteDoc, updateDoc, getDoc, getDocFromServer } from "firebase/firestore";
+import { auth, db as firebaseDb } from '../firebase.ts';
 import { signInAnonymously } from "firebase/auth";
+import firebaseConfig from '../firebase-applet-config.json';
 
 interface AdminSettingsViewProps {
   settings: SalonSettings;
@@ -27,6 +28,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [editingService, setEditingService] = useState<Service | null>(null);
   const [newMemberName, setNewMemberName] = useState('');
   const [newTransactionCategory, setNewTransactionCategory] = useState('');
+  const [showDebug, setShowDebug] = useState(false);
 
   const defaultTransactionCategories = ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros'];
   const currentTransactionCategories = settings.transactionCategories || defaultTransactionCategories;
@@ -257,6 +259,42 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     { n: 6, label: 'Sáb' },
   ];
 
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const testFirebaseConnection = async () => {
+    setTestResult("Testando...");
+    try {
+      const snap = await getDocFromServer(doc(db, "settings", "main"));
+      if (snap.exists()) {
+        setTestResult(`Sucesso! Documento existe. Última atualização: ${new Date(snap.data().lastUpdated).toLocaleString()}`);
+      } else {
+        setTestResult("Sucesso! Mas o documento 'settings/main' não existe no servidor.");
+      }
+    } catch (err: any) {
+      console.error("Erro no teste manual:", err);
+      setTestResult(`Falha: ${err.message || err.code}`);
+    }
+  };
+
+  const forceSyncSettings = async () => {
+    setTestResult("Sincronizando...");
+    try {
+      const snap = await getDocFromServer(doc(db, "settings", "main"));
+      if (snap.exists()) {
+        const remoteData = snap.data() as SalonSettings;
+        // This will trigger the state update in App.tsx if we had a callback, 
+        // but for now we'll just alert and the user can refresh or we can try to update local state if passed as prop
+        setTestResult("Sincronizado! Recarregue a página para ver as mudanças.");
+        alert("Dados carregados do servidor. Por favor, recarregue a página.");
+        window.location.reload();
+      } else {
+        setTestResult("Documento não encontrado no servidor.");
+      }
+    } catch (err: any) {
+      setTestResult(`Erro: ${err.message}`);
+    }
+  };
+
   return (
     <div className="space-y-12 pb-32 animate-fade-in">
       <div className="bg-tea-900 text-white p-10 rounded-[3rem] shadow-xl relative overflow-hidden">
@@ -265,9 +303,52 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             Modo de Demonstração Ativo
           </div>
         )}
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button 
+            onClick={() => setShowDebug(!showDebug)}
+            className="text-[8px] font-bold uppercase tracking-widest opacity-30 hover:opacity-100 transition-opacity"
+          >
+            {showDebug ? 'Ocultar Debug' : 'Debug'}
+          </button>
+        </div>
         <h2 className="text-3xl font-serif font-bold mb-2 italic">Configurações Studio Moriá</h2>
         <p className="text-tea-100 font-light text-sm italic">Gestão de profissionais, catálogo e controle de agenda.</p>
       </div>
+
+      {showDebug && (
+        <div className="bg-gray-900 text-green-400 p-8 rounded-[2rem] font-mono text-[10px] space-y-2 animate-fade-in">
+          <p className="font-bold text-white mb-2 uppercase tracking-widest">Diagnóstico de Conexão Firebase</p>
+          <p>Project ID: {firebaseConfig.projectId}</p>
+          <p>Auth Domain: {firebaseConfig.authDomain}</p>
+          <p>Database ID: {(firebaseDb as any)._databaseId || '(default)'}</p>
+          <p>User UID: {auth.currentUser?.uid || 'Não autenticado'}</p>
+          <p>User Email: {auth.currentUser?.email || 'N/A'}</p>
+          <p>Settings Doc Path: settings/main</p>
+          <p>Last Settings Sync: {new Date(settings.lastUpdated || 0).toLocaleString()}</p>
+          <p>Visit Count: {settings.visitCount}</p>
+          <div className="pt-4 flex flex-wrap items-center gap-4">
+            <button 
+              onClick={testFirebaseConnection}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-green-700 transition-colors"
+            >
+              Testar Conexão
+            </button>
+            <button 
+              onClick={forceSyncSettings}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 transition-colors"
+            >
+              Forçar Sincronização
+            </button>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-700 transition-colors"
+            >
+              Recarregar App
+            </button>
+            {testResult && <span className="text-white block w-full mt-2">{testResult}</span>}
+          </div>
+        </div>
+      )}
 
       <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
         <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, InventoryItem, ProductInterest, ProductOrder } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS, INITIAL_INVENTORY } from './constants.ts';
 import { db, auth } from './firebase.ts';
+import firebaseConfig from './firebase-applet-config.json';
 import { signInAnonymously } from "firebase/auth";
 import { 
   collection, 
@@ -16,7 +17,8 @@ import {
   getDocs,
   query,
   where,
-  getDoc
+  getDoc,
+  getDocFromServer
 } from "firebase/firestore";
 
 import Navbar from './components/Navbar.tsx';
@@ -63,6 +65,8 @@ const App: React.FC = () => {
     return localStorage.getItem('moria_isAdminAuth') === 'true';
   });
   const [isLoading, setIsLoading] = useState(true);
+  
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState(false);
   
   const [settings, setSettings] = useState<SalonSettings>(DEFAULT_SETTINGS);
   const [services, setServices] = useState<Service[]>([]);
@@ -144,18 +148,60 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const handleGlobalPermissionError = () => {
-      if (!isMockMode) {
-        console.warn("Global permission error detected. Entering Demo Mode.");
-        setIsMockMode(true);
-        (db as any)._isMock = true;
-      }
+      console.warn("Global permission error detected.");
     };
     window.addEventListener('moria_permission_denied', handleGlobalPermissionError);
     return () => window.removeEventListener('moria_permission_denied', handleGlobalPermissionError);
   }, [isMockMode]);
 
   useEffect(() => {
-    // FIX: Using (db as any) to check _isMock property which is not part of standard Firestore type
+    if (isMockMode) return;
+
+    const testConnection = async () => {
+      try {
+        console.log("Testando conexão direta com o servidor Firestore...");
+        const config = {
+          projectId: (firebaseConfig as any).projectId,
+          databaseId: (db as any)._databaseId || '(default)',
+          apiKey: (firebaseConfig as any).apiKey ? 'Presente' : 'Ausente'
+        };
+        console.log("Configuração sendo usada:", config);
+        
+        // Força uma leitura do servidor para validar a configuração e conectividade
+        const snap = await getDocFromServer(doc(db, "settings", "main"));
+        console.log("Conexão com servidor Firestore OK. Documento existe:", snap.exists());
+        setIsFirebaseConnected(true);
+        
+        if (!snap.exists() && isAdminAuthenticated) {
+          console.warn("Documento de configurações não existe no servidor. Criando inicial...");
+          await setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS);
+        } else if (snap.exists()) {
+          const remoteData = snap.data() as SalonSettings;
+          console.log("Dados remotos carregados via getDocFromServer. Última atualização:", new Date(remoteData.lastUpdated).toLocaleString());
+        }
+      } catch (err: any) {
+        console.error("Falha crítica na conexão com Firestore:", err);
+        setIsFirebaseConnected(false);
+        if (err.message?.includes('offline') || err.code === 'unavailable') {
+          console.error("O cliente parece estar offline ou o servidor está inacessível.");
+        } else if (err.code === 'permission-denied') {
+          console.error("Erro de permissão ao testar conexão. Verifique as regras do Firestore.");
+        }
+      }
+    };
+
+    testConnection();
+  }, [isMockMode]);
+
+  useEffect(() => {
+    console.log("Firebase Config:", {
+      projectId: (firebaseConfig as any).projectId,
+      authDomain: (firebaseConfig as any).authDomain,
+      databaseId: (db as any)._databaseId || '(default)'
+    });
+    console.log("Mock Mode Status:", isMockMode);
+    console.log("Firestore Instance is Mock:", (db as any)._isMock);
+
     if (isMockMode) {
       console.log("Modo Visual: Firestore Mock Ativo.");
       setServices(INITIAL_SERVICES);
@@ -166,30 +212,37 @@ const App: React.FC = () => {
     }
 
     const handlePermissionError = (error: any, collectionName: string) => {
+      console.error(`Error fetching ${collectionName}:`, error);
       if (error.code === 'permission-denied') {
-        if (!isMockMode) {
-          console.warn(`Firebase permissions restricted on ${collectionName}. Entering Demo Mode.`);
-          setIsMockMode(true);
-          (db as any)._isMock = true;
-        }
-      } else {
-        console.error(`Error fetching ${collectionName}:`, error);
+        console.warn(`Firebase permissions restricted on ${collectionName}. Please check your Firestore rules.`);
       }
     };
 
     const unsubSettings = onSnapshot(doc(db, "settings", "main"), (snap) => {
       if (snap.exists()) {
+        console.log(`Settings loaded from Firebase. Source: ${snap.metadata.fromCache ? 'Cache' : 'Server'}. Last updated:`, new Date(snap.data().lastUpdated).toLocaleString());
         const remoteData = snap.data() as SalonSettings;
-        // Merge DEFAULT_SETTINGS with remote data to ensure all fields exist
-        // but remote data takes precedence for existing values like visitCount
         setSettings({ ...DEFAULT_SETTINGS, ...remoteData });
+        setIsFirebaseConnected(true);
         setIsLoading(false);
       } else {
-        setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).then(() => setIsLoading(false));
+        console.warn("Settings document not found in Firebase (onSnapshot).");
+        setSettings(DEFAULT_SETTINGS);
+        setIsFirebaseConnected(true); // We are connected, even if doc is missing
+        setIsLoading(false);
+        
+        // Only try to create if we are admin
+        if (isAdminAuthenticated) {
+          console.log("Creating default settings as Admin (onSnapshot fallback)...");
+          setDoc(doc(db, "settings", "main"), DEFAULT_SETTINGS).catch(err => {
+            console.error("Failed to create default settings:", err);
+          });
+        }
       }
     }, (error) => {
       handlePermissionError(error, "settings");
       setSettings(DEFAULT_SETTINGS);
+      setIsFirebaseConnected(false);
       setIsLoading(false);
     });
 
@@ -265,10 +318,12 @@ const App: React.FC = () => {
     if (!isLoading && !isMockMode && currentView === View.CUSTOMER_HOME) {
       const incrementVisit = async () => {
         try {
-          await updateDoc(doc(db, "settings", "main"), {
+          // Use setDoc with merge to ensure document exists
+          await setDoc(doc(db, "settings", "main"), {
             visitCount: increment(1),
             lastUpdated: Date.now()
-          });
+          }, { merge: true });
+          console.log("Visita contabilizada com sucesso.");
         } catch (err) {
           console.error("Error incrementing visit count:", err);
         }
@@ -1076,6 +1131,7 @@ const App: React.FC = () => {
         <Navbar 
           view={currentView} setView={setView} isAdmin={isAdmin} 
           isMockMode={isMockMode}
+          isFirebaseConnected={isFirebaseConnected}
           onToggleAdmin={() => { setIsAdmin(!isAdmin); if(!isAdminAuthenticated) setView(View.ADMIN_LOGIN); else setView(isAdmin ? View.CUSTOMER_HOME : View.ADMIN_DASHBOARD); }} 
           salonName={settings.name} logo={settings.logo} currentUser={currentUser} 
           onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }} 

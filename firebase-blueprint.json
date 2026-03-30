@@ -1,0 +1,223 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer",
+      "description": "A client of the salon",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "cpf": { "type": "string" },
+        "password": { "type": "string" },
+        "profilePhoto": { "type": "string" },
+        "receivesNotifications": { "type": "boolean" },
+        "agreedToTerms": { "type": "boolean" },
+        "loyaltyPoints": { "type": "number" },
+        "isLoyaltyEnabled": { "type": "boolean" },
+        "birthday": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string", "enum": ["client", "admin"] },
+        "registrationDate": { "type": "string" },
+        "dateCreated": { "type": "string" }
+      },
+      "required": ["name", "whatsapp"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "A service offered by the salon",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "price": { "type": "number" },
+        "duration": { "type": "number" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "isVisible": { "type": "boolean" },
+        "isHighlighted": { "type": "boolean" },
+        "returnPeriodDays": { "type": "number" }
+      },
+      "required": ["name", "price", "duration"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "An appointment booking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "teamMemberId": { "type": "string" },
+        "teamMemberName": { "type": "string" },
+        "dateTime": { "type": "string" },
+        "duration": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "scheduled", "completed", "cancelled", "blocked", "open"] },
+        "depositStatus": { "type": "string", "enum": ["pending", "paid"] },
+        "originalPrice": { "type": "number" },
+        "agreedToCancellationPolicy": { "type": "boolean" },
+        "policyAgreedAt": { "type": "string" }
+      },
+      "required": ["customerId", "serviceId", "dateTime", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["payable", "receivable"] },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "paid"] },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "category": { "type": "string" },
+        "paymentMethod": { "type": "string" }
+      },
+      "required": ["type", "description", "amount", "date", "status"]
+    },
+    "WaitlistEntry": {
+      "title": "WaitlistEntry",
+      "description": "An entry in the waitlist",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerWhatsapp": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceName": { "type": "string" },
+        "preferredDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "cancelled", "notified"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerId", "serviceId", "status"]
+    },
+    "Promotion": {
+      "title": "Promotion",
+      "description": "A marketing promotion or tip",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["promotion", "tip"] },
+        "discountPercentage": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" }
+      },
+      "required": ["title", "content", "type", "isActive"]
+    },
+    "SalonSettings": {
+      "title": "SalonSettings",
+      "description": "General settings for the salon",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "primaryColor": { "type": "string" },
+        "logo": { "type": "string" },
+        "address": { "type": "string" },
+        "visitCount": { "type": "number" },
+        "lastUpdated": { "type": "number" },
+        "businessHours": { "type": "object" },
+        "teamMembers": { "type": "array" },
+        "announcementBanner": { "type": "object" }
+      },
+      "required": ["name", "lastUpdated"]
+    },
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "An item in the salon's inventory",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "quantity": { "type": "number" },
+        "minQuantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "purchasePrice": { "type": "number" },
+        "showOnSite": { "type": "boolean" }
+      },
+      "required": ["name", "quantity", "minQuantity", "unit"]
+    },
+    "ProductInterest": {
+      "title": "ProductInterest",
+      "description": "Customer interest in a product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerWhatsapp": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "contacted", "resolved"] }
+      },
+      "required": ["productId", "customerName", "customerWhatsapp", "status"]
+    },
+    "ProductOrder": {
+      "title": "ProductOrder",
+      "description": "An order for a product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "paid", "delivered", "cancelled"] }
+      },
+      "required": ["customerName", "productId", "quantity", "totalPrice", "status"]
+    }
+  },
+  "firestore": {
+    "/settings/main": {
+      "schema": "SalonSettings",
+      "description": "Main salon settings"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Salon services"
+    },
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Salon customers"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Appointment bookings"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial transactions"
+    },
+    "/waitlist/{waitlistId}": {
+      "schema": "WaitlistEntry",
+      "description": "Waitlist entries"
+    },
+    "/promotions/{promotionId}": {
+      "schema": "Promotion",
+      "description": "Marketing promotions"
+    },
+    "/inventory/{itemId}": {
+      "schema": "InventoryItem",
+      "description": "Inventory items"
+    },
+    "/productInterests/{interestId}": {
+      "schema": "ProductInterest",
+      "description": "Product interests"
+    },
+    "/productOrders/{orderId}": {
+      "schema": "ProductOrder",
+      "description": "Product orders"
+    }
+  }
+}

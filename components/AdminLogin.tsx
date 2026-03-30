@@ -1,5 +1,7 @@
 
 import React, { useState } from 'react';
+import { auth } from '../firebase';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
 interface AdminLoginProps {
   onLogin: (password: string) => void;
@@ -9,6 +11,7 @@ interface AdminLoginProps {
 const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBack }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,6 +21,28 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBack }) => {
     } else {
       setError(true);
       setTimeout(() => setError(false), 2000);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // Check if user is the admin email
+      if (user.email === 'Serginhoz12@gmail.com') {
+        onLogin('google-auth');
+      } else {
+        alert("Este e-mail não tem permissão de administrador.");
+        await auth.signOut();
+      }
+    } catch (err) {
+      console.error("Erro no login Google:", err);
+      alert("Erro ao realizar login com Google.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -33,7 +58,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBack }) => {
         <h2 className="text-3xl font-serif text-tea-900 mb-2">Acesso Restrito</h2>
         <p className="text-gray-500 mb-10 font-light">Área exclusiva para funcionários do Studio Moriá.</p>
         
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6 mb-6">
           <div className="relative">
             <input 
               type="password" 
@@ -52,6 +77,21 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBack }) => {
             Entrar no Painel
           </button>
         </form>
+
+        <div className="relative flex items-center justify-center mb-6">
+          <div className="border-t border-gray-200 w-full"></div>
+          <span className="bg-white px-4 text-gray-400 text-sm">OU</span>
+          <div className="border-t border-gray-200 w-full"></div>
+        </div>
+
+        <button 
+          onClick={handleGoogleLogin}
+          disabled={isLoggingIn}
+          className="w-full flex items-center justify-center gap-3 bg-white border-2 border-gray-100 text-gray-700 py-4 rounded-2xl font-bold text-lg hover:bg-gray-50 transition-all shadow-sm"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-6 h-6" />
+          {isLoggingIn ? "Entrando..." : "Entrar com Google"}
+        </button>
         
         <button 
           onClick={onBack}
