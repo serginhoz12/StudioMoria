@@ -79,8 +79,9 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const [noticeFontSize, setNoticeFontSize] = useState(36);
   const [noticeLogoPos, setNoticeLogoPos] = useState({ x: 0, y: 0 });
   const [noticeTextPos, setNoticeTextPos] = useState({ x: 0, y: 0 });
+  const [noticeContactPos, setNoticeContactPos] = useState({ x: 0, y: 0 });
   const [noticeBgImage, setNoticeBgImage] = useState<string | null>(null);
-  const [draggingElement, setDraggingElement] = useState<'logo' | 'text' | null>(null);
+  const [draggingElement, setDraggingElement] = useState<'logo' | 'text' | 'contact' | null>(null);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Estados específicos para Lembretes
@@ -567,7 +568,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setReminderType(null);
   };
 
-  const handleMouseDown = (e: React.MouseEvent, element: 'logo' | 'text') => {
+  const handleMouseDown = (e: React.MouseEvent, element: 'logo' | 'text' | 'contact') => {
     setDraggingElement(element);
     setDragStart({ x: e.clientX, y: e.clientY });
   };
@@ -580,8 +581,10 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
     if (draggingElement === 'logo') {
       setNoticeLogoPos(prev => ({ x: prev.x + dx, y: prev.y + dy }));
-    } else {
+    } else if (draggingElement === 'text') {
       setNoticeTextPos(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    } else if (draggingElement === 'contact') {
+      setNoticeContactPos(prev => ({ x: prev.x + dx, y: prev.y + dy }));
     }
 
     setDragStart({ x: e.clientX, y: e.clientY });
@@ -925,15 +928,49 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                       <input type="range" min="-300" max="300" value={noticeTextPos.y} onChange={e => setNoticeTextPos(p => ({ ...p, y: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
                     </div>
                   </div>
+
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Posição do Contato</label>
+                    <button onClick={() => setNoticeContactPos({ x: 0, y: 0 })} className="text-[8px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Resetar</button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                      <span className="text-[10px] font-bold text-gray-400">X</span>
+                      <input type="range" min="-200" max="200" value={noticeContactPos.x} onChange={e => setNoticeContactPos(p => ({ ...p, x: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                    </div>
+                    <div className="flex items-center gap-2 bg-gray-50 rounded-2xl p-3">
+                      <span className="text-[10px] font-bold text-gray-400">Y</span>
+                      <input type="range" min="-300" max="300" value={noticeContactPos.y} onChange={e => setNoticeContactPos(p => ({ ...p, y: Number(e.target.value) }))} className="flex-1 accent-tea-900" />
+                    </div>
+                  </div>
                 </div>
 
-                <button 
-                  onClick={generateAINotice}
-                  disabled={isGenerating}
-                  className={`w-full py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {isGenerating ? 'Gerando...' : 'Gerar com IA 🤖'}
-                </button>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Texto do Aviso (Editável)</label>
+                  <textarea 
+                    value={generatedMessage}
+                    onChange={(e) => setGeneratedMessage(e.target.value)}
+                    placeholder="O texto gerado pela IA aparecerá aqui, você pode editá-lo..."
+                    className="w-full p-4 bg-white border border-gray-100 rounded-2xl text-sm outline-none h-32 focus:border-tea-200 transition-all shadow-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={generateAINotice}
+                    disabled={isGenerating}
+                    className={`py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {isGenerating ? 'Gerando...' : 'Gerar com IA 🤖'}
+                  </button>
+                  <button 
+                    onClick={() => generateImage(generatedMessage || noticePrompt)}
+                    disabled={isGenerating || (!generatedMessage && !noticePrompt)}
+                    className="py-4 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all hover:bg-tea-200 shadow-md"
+                  >
+                    Capturar 📸
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -948,13 +985,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   >
                     {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
                     {noticeBgImage ? 'Atualizar Fundo' : 'Gerar Fundo (IA)'}
-                  </button>
-                  <button 
-                    onClick={() => generateImage(generatedMessage)}
-                    disabled={isGenerating || !generatedMessage}
-                    className="py-4 bg-tea-100 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-md hover:bg-tea-200 disabled:opacity-50"
-                  >
-                    Capturar Imagem 📸
                   </button>
                   <button 
                     onClick={downloadImage}
@@ -1033,21 +1063,22 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                     </h1>
                   )}
 
-                  <div className="w-32 h-1.5 bg-white/30 rounded-full pointer-events-none" />
-
                   <div 
                     onMouseDown={(e) => handleMouseDown(e, 'text')}
                     className={`space-y-8 max-w-[360px] transition-transform duration-75 cursor-move ${draggingElement === 'text' ? 'scale-105' : ''}`} 
                     style={{ transform: `translate(${noticeTextPos.x}px, ${noticeTextPos.y}px)` }}
                   >
                     <p className={`leading-tight drop-shadow-sm ${noticeFontFamily} pointer-events-none`} style={{ color: noticeFontColor, fontSize: `${noticeFontSize}px` }}>
-                      {generatedMessage || "Sua mensagem gerada por IA aparecerá aqui..."}
+                      {generatedMessage || noticePrompt || "Sua mensagem gerada por IA aparecerá aqui..."}
                     </p>
                   </div>
                 </div>
 
-                <div className="w-full pb-10 z-10">
-                  <div className="w-16 h-1 bg-white/20 mx-auto mb-4 rounded-full" />
+                <div 
+                  onMouseDown={(e) => handleMouseDown(e, 'contact')}
+                  className={`w-full pb-10 z-10 transition-transform duration-75 cursor-move ${draggingElement === 'contact' ? 'scale-105' : ''}`}
+                  style={{ transform: `translate(${noticeContactPos.x}px, ${noticeContactPos.y}px)` }}
+                >
                   <div className="flex flex-col items-center space-y-2">
                     {settings.socialLinks?.whatsapp && (
                       <div className="text-[11px] font-bold tracking-wider flex items-center gap-2" style={{ color: noticeFontColor + 'cc' }}>
@@ -1059,7 +1090,12 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                         <span>📸</span> @{settings.socialLinks.instagram.split('/').filter(Boolean).pop() || 'studio.moria'}
                       </div>
                     )}
-                    {settings.usefulLinks?.[0]?.url && (
+                    {settings.socialLinks?.website && (
+                      <div className="text-[10px] font-bold tracking-widest flex items-center gap-2" style={{ color: noticeFontColor + 'cc' }}>
+                        <span>🌐</span> {settings.socialLinks.website.replace(/https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
+                      </div>
+                    )}
+                    {settings.usefulLinks?.[0]?.url && !settings.socialLinks?.website && (
                       <div className="text-[10px] font-bold tracking-widest flex items-center gap-2" style={{ color: noticeFontColor + '99' }}>
                         <span>🌐</span> {settings.usefulLinks[0].url.replace(/https?:\/\/(www\.)?/, '').replace(/\/$/, '')}
                       </div>

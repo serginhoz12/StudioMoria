@@ -570,6 +570,15 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
                 onChange={e => updateGlobalSettings({...settings, socialLinks: {...settings.socialLinks, instagram: e.target.value}})} 
               />
            </div>
+           <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Site Oficial</label>
+              <input 
+                className="w-full p-4 bg-gray-50 rounded-2xl font-bold outline-none shadow-inner" 
+                placeholder="https://seusite.com"
+                value={settings.socialLinks.website || ''} 
+                onChange={e => updateGlobalSettings({...settings, socialLinks: {...settings.socialLinks, website: e.target.value}})} 
+              />
+           </div>
         </div>
       </section>
 
