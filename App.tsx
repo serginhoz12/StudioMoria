@@ -52,7 +52,7 @@ const getLocalDateString = (date: Date) => {
   return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
 };
 
-const handleFirestoreError = (error: any, operation: OperationType, path: string) => {
+const handleFirestoreError = (error: any, operation: OperationType, path: string | null) => {
   const errInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -72,6 +72,7 @@ const handleFirestoreError = (error: any, operation: OperationType, path: string
     path
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
 };
 
 const App: React.FC = () => {
@@ -116,6 +117,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('moria_user');
     return saved ? JSON.parse(saved) : null;
   });
+  const [pendingPasswordChangeUser, setPendingPasswordChangeUser] = useState<Customer | null>(null);
 
   // Firebase Auth Initialization
   useEffect(() => {
@@ -188,6 +190,7 @@ const App: React.FC = () => {
     if (isMockMode) return;
 
     const testConnection = async () => {
+      if (!isAuthReady) return;
       try {
         console.log("Testando conexão direta com o servidor Firestore...");
         const config = {
@@ -210,18 +213,17 @@ const App: React.FC = () => {
           console.log("Dados remotos carregados via getDocFromServer. Última atualização:", new Date(remoteData.lastUpdated).toLocaleString());
         }
       } catch (err: any) {
-        console.error("Falha crítica na conexão com Firestore:", err);
         setIsFirebaseConnected(false);
-        if (err.message?.includes('offline') || err.code === 'unavailable') {
-          console.error("O cliente parece estar offline ou o servidor está inacessível.");
-        } else if (err.code === 'permission-denied') {
-          console.error("Erro de permissão ao testar conexão. Verifique as regras do Firestore.");
+        try {
+          handleFirestoreError(err, OperationType.GET, "settings/main");
+        } catch (e) {
+          // Error is already logged and thrown
         }
       }
     };
 
     testConnection();
-  }, [isMockMode]);
+  }, [isMockMode, isAuthReady]);
 
   useEffect(() => {
     console.log("Firebase Config:", {
@@ -241,10 +243,13 @@ const App: React.FC = () => {
       return;
     }
 
-    const handlePermissionError = (error: any, collectionName: string) => {
-      console.error(`Error fetching ${collectionName}:`, error);
-      if (error.code === 'permission-denied') {
-        console.warn(`Firebase permissions restricted on ${collectionName}. Please check your Firestore rules.`);
+    if (!isAuthReady) return;
+
+    const handlePermissionError = (error: any, collectionName: string, operation: OperationType = OperationType.LIST) => {
+      try {
+        handleFirestoreError(error, operation, collectionName);
+      } catch (e) {
+        // Error is already logged and thrown
       }
     };
 
@@ -343,7 +348,7 @@ const App: React.FC = () => {
       unsubBookings(); unsubTransactions(); unsubWaitlist(); unsubPromotions();
       unsubInventory(); unsubInterests(); unsubOrders();
     };
-  }, [isMockMode]);
+  }, [isMockMode, isAuthReady]);
 
   // Increment visit count when on Customer Home
   useEffect(() => {
@@ -373,14 +378,11 @@ const App: React.FC = () => {
     }
   }, [isLoading, isMockMode, settings.address]);
 
-  const handleUpdateStatus = async (id: string, status: any, cancelledBy: 'admin' | 'customer' = 'admin') => {
+  const handleUpdateStatus = async (id: string, status: any) => {
     // FIX: Using isMockMode for check
     if (isMockMode) return;
     const updateData: any = { status };
-    if (status === 'cancelled') {
-      updateData.cancelledAt = new Date().toISOString();
-      updateData.cancelledBy = cancelledBy;
-    }
+    if (status === 'cancelled') updateData.cancelledAt = new Date().toISOString();
     await updateDoc(doc(db, "bookings", id), updateData);
   };
 
@@ -950,7 +952,7 @@ const App: React.FC = () => {
             inventory={inventory}
             onUpdateProfile={(upd) => !isMockMode && updateDoc(doc(db, "customers", currentUser.id), upd)}
             onLogout={() => { setCurrentUser(null); setView(View.CUSTOMER_HOME); localStorage.removeItem('moria_user'); }}
-            onCancelBooking={(id) => handleUpdateStatus(id, 'cancelled', 'customer')}
+            onCancelBooking={(id) => !isMockMode && updateDoc(doc(db, "bookings", id), {status: 'cancelled'})}
             onGoToProfile={() => setView(View.CUSTOMER_PROFILE)}
             waitlist={waitlist.filter(w => w.customerId === currentUser.id && w.status !== 'cancelled')}
             onRemoveWaitlist={(id) => !isMockMode && deleteDoc(doc(db, "waitlist", id))}
@@ -1040,6 +1042,26 @@ const App: React.FC = () => {
       );
       case View.CUSTOMER_LOGIN: return (
         <CustomerLoginView 
+          pendingUser={pendingPasswordChangeUser}
+          onPasswordChange={async (newPass) => {
+            if (pendingPasswordChangeUser) {
+              try {
+                await updateDoc(doc(db, "customers", pendingPasswordChangeUser.id), {
+                  password: newPass,
+                  mustChangePassword: false
+                });
+                const updatedUser = { ...pendingPasswordChangeUser, password: newPass, mustChangePassword: false };
+                setCurrentUser(updatedUser);
+                setPendingPasswordChangeUser(null);
+                setCustomerInitialTab('home');
+                setView(View.CUSTOMER_DASHBOARD);
+                alert("Senha alterada com sucesso! Bem-vinda.");
+              } catch (err) {
+                console.error("Erro ao alterar senha:", err);
+                alert("Erro ao alterar senha. Tente novamente.");
+              }
+            }
+          }}
           onLogin={async (identifier, pass) => {
             const cleanInput = identifier.replace(/\D/g, '');
             
@@ -1080,14 +1102,19 @@ const App: React.FC = () => {
             }
 
             if (user) { 
+              if (user.mustChangePassword) {
+                setPendingPasswordChangeUser(user);
+                setView(View.CUSTOMER_LOGIN); // Keep in login view but we'll show the change form
+                return;
+              }
               setCurrentUser(user); 
               setCustomerInitialTab('home');
               setView(View.CUSTOMER_DASHBOARD); 
             }
             else alert("Acesso inválido ou senha incorreta.");
           }} 
-          onRegisterClick={() => setView(View.CUSTOMER_REGISTER)} 
-          onBack={() => setView(View.CUSTOMER_HOME)} 
+          onRegisterClick={() => { setPendingPasswordChangeUser(null); setView(View.CUSTOMER_REGISTER); }} 
+          onBack={() => { setPendingPasswordChangeUser(null); setView(View.CUSTOMER_HOME); }} 
         />
       );
       default: return (

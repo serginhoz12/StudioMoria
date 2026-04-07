@@ -441,8 +441,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
         await updateDoc(doc(db, "bookings", selectedBookingForPayment.id), updateData);
 
         // 2. Create transaction
-        const shouldCreateTransaction = selectedBookingForPayment.depositStatus !== 'paid' || 
-                                       (selectedBookingForPayment.status === 'completed' && confirm("Este atendimento já consta como pago. Deseja gerar um NOVO lançamento no caixa mesmo assim?"));
+        const shouldCreateTransaction = !selectedBookingForPayment.isPackageSession && (selectedBookingForPayment.depositStatus !== 'paid' || 
+                                       (selectedBookingForPayment.status === 'completed' && confirm("Este atendimento já consta como pago. Deseja gerar um NOVO lançamento no caixa mesmo assim?")));
 
         if (shouldCreateTransaction) {
           const isInstallment = paymentMethod === 'store_installments' && paymentType === 'installments' && installmentsCount > 1;
@@ -572,11 +572,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
   };
 
   const handleBulkRelease = async () => {
-    if ((db as any)._isMock) return alert("Modo visual: Período liberado simulado.");
+    const start = new Date(bulkStartDate + 'T12:00:00');
+    const end = new Date(bulkEndDate + 'T12:00:00');
     
-    const start = new Date(bulkStartDate + 'T00:00:00');
-    const end = new Date(bulkEndDate + 'T00:00:00');
-    
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return alert("Datas inválidas.");
     if (end < start) return alert("A data final deve ser maior ou igual à data inicial.");
     
     setIsProcessing(true);
@@ -588,7 +587,10 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       let operationCount = 0;
 
       while (currentDate <= end) {
-        const dateStr = getLocalDateString(currentDate);
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
         const dayOfWeek = currentDate.getDay();
 
         // Pula dias de folga do profissional
@@ -635,8 +637,8 @@ const AdminCalendar: React.FC<AdminCalendarProps> = ({ bookings, services, custo
       alert("Período liberado com sucesso!");
       setIsBulkModalOpen(false);
     } catch (e) {
-      console.error(e);
-      alert("Erro ao liberar período.");
+      console.error("Erro ao liberar período em massa:", e);
+      alert("Erro ao liberar período. Tente novamente.");
     } finally {
       setIsProcessing(false);
     }

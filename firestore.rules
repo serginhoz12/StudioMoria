@@ -7,7 +7,7 @@ service cloud.firestore {
     //
     // Collection: settings
     // Document ID: main
-    // Fields: name, visitCount, teamMembers, businessHours, etc.
+    // Fields: name, visitCount, teamMembers, businessHours, lastUpdated, etc.
     //
     // Collection: services
     // Fields: name, price, duration, category, isVisible, etc.
@@ -21,6 +21,10 @@ service cloud.firestore {
     // Collection: transactions
     // Fields: type, amount, date, status, etc.
     //
+    // Collection: admin_sessions
+    // Document ID: {userId}
+    // Fields: authorizedAt, method
+    //
     // ===============================================================
 
     // ===============================================================
@@ -29,6 +33,10 @@ service cloud.firestore {
     
     function isAuthenticated() {
       return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
     function isAdmin() {
@@ -41,8 +49,26 @@ service cloud.firestore {
         );
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Validator for settings update (visit count only)
+    function isValidSettingsUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visitCount', 'lastUpdated']) &&
+             request.resource.data.visitCount == resource.data.visitCount + 1;
+    }
+
+    // Validator for customer data
+    function isValidCustomer(data) {
+      return data.keys().hasAll(['name', 'whatsapp']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.whatsapp is string && data.whatsapp.size() > 0 && data.whatsapp.size() < 30;
+    }
+
+    // Validator for bookings
+    function isValidBooking(data) {
+      return data.keys().hasAll(['customerId', 'serviceId', 'dateTime', 'status']) &&
+             data.customerId is string &&
+             data.serviceId is string &&
+             data.dateTime is string &&
+             data.status in ['pending', 'scheduled', 'completed', 'cancelled', 'blocked', 'open'];
     }
 
     // ===============================================================
@@ -50,15 +76,14 @@ service cloud.firestore {
     // ===============================================================
 
     match /admin_sessions/{sessionId} {
-      allow read: if true;
-      allow create, update: if isAuthenticated() && request.auth.uid == sessionId;
-      allow delete: if isAuthenticated() && request.auth.uid == sessionId;
+      allow read: if isAdmin() || isOwner(sessionId);
+      allow create, update: if isOwner(sessionId);
+      allow delete: if isAdmin() || isOwner(sessionId);
     }
 
     match /settings/main {
-      allow read: if true;
-      // Allow everyone to increment visitCount
-      allow update: if true; 
+      allow read: if true; // Publicly readable for the site to work
+      allow update: if isAdmin() || (isAuthenticated() && isValidSettingsUpdate());
       allow create, delete: if isAdmin();
     }
 
@@ -68,27 +93,27 @@ service cloud.firestore {
     }
 
     match /customers/{customerId} {
-      // Allow read for admin or the customer document itself (if we had a way to link them)
-      // Since it's anonymous, we'll allow read if they know the ID for now, 
-      // but ideally we'd restrict this.
-      allow read: if true; 
-      allow write: if true; // Allow registration
+      allow read: if isAdmin() || isOwner(customerId);
+      allow create: if isAuthenticated() && isValidCustomer(request.resource.data);
+      allow update: if isAdmin() || (isOwner(customerId) && isValidCustomer(request.resource.data));
+      allow delete: if isAdmin();
     }
 
     match /bookings/{bookingId} {
-      allow read: if true;
-      allow write: if true; // Allow booking
+      allow read: if isAdmin() || (isAuthenticated() && (resource == null || resource.data.customerId == request.auth.uid));
+      allow create: if isAuthenticated() && isValidBooking(request.resource.data) && request.resource.data.customerId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.customerId == request.auth.uid && isValidBooking(request.resource.data));
+      allow delete: if isAdmin();
     }
 
     match /transactions/{transactionId} {
-      // Allow read if authenticated to help recover "lost" data for anonymous admins
-      allow read: if isAuthenticated();
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
 
     match /waitlist/{waitlistId} {
       allow read: if isAdmin();
-      allow create: if true;
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
 
@@ -104,20 +129,19 @@ service cloud.firestore {
 
     match /productInterests/{interestId} {
       allow read: if isAdmin();
-      allow create: if true;
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
 
     match /productOrders/{orderId} {
-      allow read: if isAdmin();
-      allow create: if true;
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.customerId == request.auth.uid);
+      allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
     
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && 
-        (request.resource.data.role == 'client' || isAdmin());
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow update: if isAdmin();
     }
   }

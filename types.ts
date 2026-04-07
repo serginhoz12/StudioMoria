@@ -35,6 +35,7 @@ export interface Customer {
   createdBy?: 'client' | 'admin';
   registrationDate?: any;
   dateCreated?: any;
+  mustChangePassword?: boolean;
 }
 
 export interface Service {

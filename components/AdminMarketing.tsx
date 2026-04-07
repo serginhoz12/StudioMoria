@@ -70,7 +70,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
   // Estados específicos para Avisos IA
   const [noticeTone, setNoticeTone] = useState<'professional' | 'friendly' | 'urgent' | 'creative'>('professional');
-  const [noticePlatform, setNoticePlatform] = useState<'whatsapp'>('whatsapp');
+  const [noticePlatform, setNoticePlatform] = useState<'whatsapp' | 'social'>('whatsapp');
   const [noticePrompt, setNoticePrompt] = useState('');
   const [noticeColor, setNoticeColor] = useState('#1e3d28'); // Cor padrão (Verde Chá Escuro)
   const [noticeFontFamily, setNoticeFontFamily] = useState('font-serif');
@@ -353,7 +353,9 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       const model = "gemini-3-flash-preview";
       
-      const platformContext = "status do WhatsApp (curto, direto, com emojis)";
+      const platformContext = noticePlatform === 'whatsapp' 
+        ? "status do WhatsApp (curto, direto, com emojis)" 
+        : "Redes Sociais (visual, impactante, focado em engajamento)";
 
       const prompt = `Você é um especialista em marketing para salões de beleza e estética. 
       Crie um aviso para o ${platformContext} do salão "${settings.name}".
@@ -373,10 +375,13 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
         contents: prompt,
       });
 
-      const text = result.text;
+      const text = result.text?.trim();
       if (text) {
         setGeneratedMessage(text);
+        // Aguarda a atualização do estado e gera a imagem
         await generateImage(text);
+      } else {
+        throw new Error("A IA não retornou nenhum texto.");
       }
     } catch (error) {
       console.error("Erro ao gerar aviso com IA:", error);
@@ -452,7 +457,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
       const text = result.text;
       if (text) {
-        setGeneratedMessage(text);
         await generateImage(text);
       }
     } catch (error) {
@@ -463,60 +467,63 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       else if (type === 'promotion') fallbackMsg = `Promoção: ${data.title}! ✨`;
       else fallbackMsg = `Olá! ✨ Hora de renovar seu procedimento de ${data.service.name}. Vamos agendar? 🌸`;
       
-      setGeneratedMessage(fallbackMsg);
       await generateImage(fallbackMsg);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  const generateImage = async (message: string) => {
-    setIsGenerating(true);
-    setGeneratedMessage(message);
-    setGeneratedImageUrl(null);
-    
-    // Pequeno delay para garantir que o DOM atualizou com a nova mensagem
-    setTimeout(async () => {
-      if (cardRef.current) {
-        try {
-          let dataUrl;
+  const generateImage = (message: string): Promise<void> => {
+    return new Promise((resolve) => {
+      setIsGenerating(true);
+      setGeneratedMessage(message);
+      setGeneratedImageUrl(null);
+      
+      // Pequeno delay para garantir que o DOM atualizou com a nova mensagem
+      setTimeout(async () => {
+        if (cardRef.current) {
           try {
-            dataUrl = await toPng(cardRef.current, {
-              cacheBust: true,
-              width: 1080,
-              height: 1920,
-              filter: (node: any) => {
-                if (node.tagName === 'LINK' && node.rel === 'stylesheet' && !node.href.includes(window.location.origin)) {
-                  return false;
+            let dataUrl;
+            try {
+              dataUrl = await toPng(cardRef.current, {
+                cacheBust: true,
+                width: 1080,
+                height: 1920,
+                filter: (node: any) => {
+                  if (node.tagName === 'LINK' && node.rel === 'stylesheet' && !node.href.includes(window.location.origin)) {
+                    return false;
+                  }
+                  return true;
+                },
+                style: {
+                  transform: 'scale(2.7)',
+                  transformOrigin: 'top left'
                 }
-                return true;
-              },
-              style: {
-                transform: 'scale(2.7)',
-                transformOrigin: 'top left'
-              }
-            });
-          } catch (firstErr) {
-            console.warn('Tentativa inicial de gerar imagem falhou (provavelmente erro de CORS nas fontes). Tentando sem embutir fontes...', firstErr);
-            // Segunda tentativa: desabilita o processamento de fontes externas que causa o erro de 'cssRules'
-            dataUrl = await toPng(cardRef.current, {
-              cacheBust: true,
-              width: 1080,
-              height: 1920,
-              fontEmbedCSS: '', // Pula a busca por fontes em stylesheets externos
-              style: {
-                transform: 'scale(2.7)',
-                transformOrigin: 'top left'
-              }
-            });
+              });
+            } catch (firstErr) {
+              console.warn('Tentativa inicial de gerar imagem falhou (provavelmente erro de CORS nas fontes). Tentando sem embutir fontes...', firstErr);
+              // Segunda tentativa: desabilita o processamento de fontes externas que causa o erro de 'cssRules'
+              dataUrl = await toPng(cardRef.current, {
+                cacheBust: true,
+                width: 1080,
+                height: 1920,
+                fontEmbedCSS: '', // Pula a busca por fontes em stylesheets externos
+                style: {
+                  transform: 'scale(2.7)',
+                  transformOrigin: 'top left'
+                }
+              });
+            }
+            setGeneratedImageUrl(dataUrl);
+          } catch (err) {
+            console.error('Erro ao gerar imagem em todas as tentativas:', err);
+            alert("Erro ao capturar imagem. Você ainda pode copiar o texto.");
           }
-          setGeneratedImageUrl(dataUrl);
-        } catch (err) {
-          console.error('Erro ao gerar imagem em todas as tentativas:', err);
         }
-      }
-      setIsGenerating(false);
-    }, 100);
+        setIsGenerating(false);
+        resolve();
+      }, 500);
+    });
   };
 
   const handleSelectBilling = (transaction: any) => {
@@ -781,6 +788,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                       className="w-full p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none"
                     >
                       <option value="whatsapp">WhatsApp Status</option>
+                      <option value="social">Redes Sociais</option>
                     </select>
                   </div>
                   <div className="space-y-2">
@@ -1043,11 +1051,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                     {settings.socialLinks?.whatsapp && (
                       <div className="text-[11px] font-bold tracking-wider flex items-center gap-2" style={{ color: noticeFontColor + 'cc' }}>
                         <span>📱</span> {settings.socialLinks.whatsapp}
-                      </div>
-                    )}
-                    {settings.socialLinks?.instagram && (
-                      <div className="text-[11px] font-bold tracking-wider flex items-center gap-2" style={{ color: noticeFontColor + 'cc' }}>
-                        <span>📸</span> @{settings.socialLinks.instagram.replace(/https?:\/\/(www\.)?instagram\.com\//, '').replace(/\/$/, '')}
                       </div>
                     )}
                     {settings.usefulLinks?.[0]?.url && (
