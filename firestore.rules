@@ -39,14 +39,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    function isAdmin() {
+    function isBaseAdmin() {
       return isAuthenticated() &&
         (
-          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin') ||
           (request.auth.token.email == "Serginhoz12@gmail.com" && request.auth.token.email_verified == true) ||
-          exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid))
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
         );
+    }
+
+    function isAdmin() {
+      return isBaseAdmin() || 
+             (isAuthenticated() && exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)));
     }
 
     // Validator for settings update (visit count only)
@@ -76,9 +80,9 @@ service cloud.firestore {
     // ===============================================================
 
     match /admin_sessions/{sessionId} {
-      allow read: if isAdmin() || isOwner(sessionId);
+      allow read: if isOwner(sessionId) || isBaseAdmin();
       allow create, update: if isOwner(sessionId);
-      allow delete: if isAdmin() || isOwner(sessionId);
+      allow delete: if isOwner(sessionId) || isBaseAdmin();
     }
 
     match /settings/main {
