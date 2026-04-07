@@ -372,14 +372,15 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
       const result = await ai.models.generateContent({
         model,
-        contents: prompt,
+        contents: [{ parts: [{ text: prompt }] }],
       });
 
-      const text = result.text?.trim();
+      const text = result.text;
       if (text) {
-        setGeneratedMessage(text);
+        const cleanText = text.trim();
+        setGeneratedMessage(cleanText);
         // Aguarda a atualização do estado e gera a imagem
-        await generateImage(text);
+        await generateImage(cleanText);
       } else {
         throw new Error("A IA não retornou nenhum texto.");
       }
@@ -1045,12 +1046,17 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                   </div>
                 </div>
 
-                <div className="w-full pb-16 z-10">
-                  <div className="w-16 h-1 bg-white/20 mx-auto mb-6 rounded-full" />
+                <div className="w-full pb-10 z-10">
+                  <div className="w-16 h-1 bg-white/20 mx-auto mb-4 rounded-full" />
                   <div className="flex flex-col items-center space-y-2">
                     {settings.socialLinks?.whatsapp && (
                       <div className="text-[11px] font-bold tracking-wider flex items-center gap-2" style={{ color: noticeFontColor + 'cc' }}>
                         <span>📱</span> {settings.socialLinks.whatsapp}
+                      </div>
+                    )}
+                    {settings.socialLinks?.instagram && (
+                      <div className="text-[10px] font-bold tracking-widest flex items-center gap-2" style={{ color: noticeFontColor + 'cc' }}>
+                        <span>📸</span> @{settings.socialLinks.instagram.split('/').filter(Boolean).pop() || 'studio.moria'}
                       </div>
                     )}
                     {settings.usefulLinks?.[0]?.url && (

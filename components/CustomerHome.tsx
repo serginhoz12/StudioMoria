@@ -247,6 +247,16 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
               {activeTab === 'services' ? (
                 <>
                   <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
+                  {settings.socialLinks.instagram && (
+                    <a 
+                      href={settings.socialLinks.instagram} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="w-full bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:opacity-90 transition-all shadow-xl text-center flex items-center justify-center gap-2"
+                    >
+                      <span>📸</span> Instagram do Studio
+                    </a>
+                  )}
                   <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
                 </>
               ) : (

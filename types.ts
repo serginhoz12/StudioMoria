@@ -168,6 +168,7 @@ export interface SalonSettings {
   socialLinks: {
     facebook?: string;
     whatsapp: string;
+    instagram?: string;
   };
   usefulLinks?: { label: string; url: string; }[];
   comments?: { author: string; text: string; }[];

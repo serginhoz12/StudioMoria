@@ -402,6 +402,18 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({
         <div className="max-w-md mx-auto relative z-10 text-center space-y-4">
            <h1 className="text-3xl font-serif text-white font-bold italic">Olá, {customer.name.split(' ')[0]}</h1>
            <p className="text-tea-100/60 text-xs italic tracking-widest uppercase font-bold">Studio Moriá Estética</p>
+           {settings.socialLinks.instagram && (
+             <div className="flex justify-center pt-2">
+               <a 
+                 href={settings.socialLinks.instagram} 
+                 target="_blank" 
+                 rel="noreferrer" 
+                 className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all backdrop-blur-sm border border-white/10"
+               >
+                 <span>📸</span> Instagram
+               </a>
+             </div>
+           )}
         </div>
       </header>
 
