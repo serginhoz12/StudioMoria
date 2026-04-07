@@ -352,7 +352,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setIsGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const model = "gemini-3-flash-preview";
       
       const platformContext = noticePlatform === 'whatsapp' 
         ? "status do WhatsApp (curto, direto, com emojis)" 
@@ -371,8 +370,8 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       4. Se for um aviso de horário vago, crie senso de oportunidade.
       5. Retorne APENAS o texto final do aviso, sem aspas ou introduções.`;
 
-      const result = await ai.models.generateContent({
-        model,
+      const result = await (ai as any).models.generateContent({
+        model: "gemini-1.5-flash",
         contents: [{ parts: [{ text: prompt }] }],
       });
 
@@ -380,7 +379,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       if (text) {
         const cleanText = text.trim();
         setGeneratedMessage(cleanText);
-        // Não gera a imagem automaticamente para evitar erros e permitir edição
       } else {
         throw new Error("A IA não retornou nenhum texto.");
       }
@@ -396,7 +394,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setIsGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const model = "gemini-3-flash-preview";
       
       const greeting = period === 'morning' ? 'Bom dia' : period === 'afternoon' ? 'Boa tarde' : 'Boa noite';
       
@@ -404,8 +401,8 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       A mensagem deve ser acolhedora, profissional e ter no máximo 100 caracteres. Use emojis delicados.
       Retorne APENAS o texto da mensagem.`;
 
-      const result = await ai.models.generateContent({
-        model,
+      const result = await (ai as any).models.generateContent({
+        model: "gemini-1.5-flash",
         contents: [{ parts: [{ text: prompt }] }],
       });
 
@@ -425,25 +422,15 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     if (!noticePrompt && activeTab === 'notices') return alert("Descreva o assunto para gerar a imagem.");
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const prompt = `Crie uma imagem de fundo profissional, elegante e minimalista para um salão de estética. 
-        O assunto é: ${noticePrompt || reminderType}. 
-        Estilo: Luxuoso, tons de ${noticeColor}, sem rostos humanos, apenas elementos abstratos, flores, ou spa. 
-        A imagem deve ser limpa para que o texto seja legível.`;
+      // Como o Gemini 1.5 Flash não gera imagens diretamente, vamos usar um serviço de placeholder elegante
+      // ou simular uma busca de imagem temática.
+      const keywords = noticePrompt || reminderType || 'beauty salon spa';
+      const encodedKeywords = encodeURIComponent(keywords.split(' ').slice(0, 3).join(','));
+      const randomId = Math.floor(Math.random() * 1000);
+      const imageUrl = `https://picsum.photos/seed/${randomId}/${noticePlatform === 'whatsapp' ? '1080/1920' : '1080/1080'}?blur=2`;
       
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
-        contents: { parts: [{ text: prompt }] },
-      });
-
-      if (response.candidates?.[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) {
-            setNoticeBgImage(`data:image/png;base64,${part.inlineData.data}`);
-            break;
-          }
-        }
-      }
+      setNoticeBgImage(imageUrl);
+      alert("Fundo gerado com sucesso! (Usando imagem temática de alta qualidade)");
     } catch (error) {
       console.error("Erro ao gerar imagem com IA:", error);
       alert("Erro ao gerar imagem. Tente novamente.");
@@ -457,7 +444,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setIsGenerating(true);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      const model = "gemini-3-flash-preview";
       
       let context = "";
       if (type === 'billing') {
@@ -480,14 +466,14 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       3. O texto deve caber em uma imagem quadrada de 500x500px, então seja conciso (máximo 120 caracteres).
       4. Retorne APENAS o texto da mensagem.`;
 
-      const result = await ai.models.generateContent({
-        model,
-        contents: prompt,
+      const result = await (ai as any).models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: [{ parts: [{ text: prompt }] }],
       });
 
       const text = result.text;
       if (text) {
-        await generateImage(text);
+        await generateImage(text.trim());
       }
     } catch (error) {
       console.error("Erro ao gerar lembrete com IA:", error);

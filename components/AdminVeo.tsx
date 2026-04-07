@@ -49,14 +49,14 @@ const AdminVeo: React.FC = () => {
 
     try {
       // Criar nova instância para garantir o uso da chave mais recente
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
       
       const base64Data = image.split(',')[1];
       const mimeType = image.split(';')[0].split(':')[1];
       
       setStatusMessage("Enviando mídia e processando animação...");
 
-      let operation = await ai.models.generateVideos({
+      let operation = await (ai as any).models.generateVideos({
         model: 'veo-3.1-fast-generate-preview',
         prompt: prompt || 'Crie uma animação profissional de salão de estética, movimentos suaves e luz cinematográfica.',
         image: {
@@ -75,7 +75,7 @@ const AdminVeo: React.FC = () => {
       while (!operation.done) {
         // Aguarda 10 segundos entre as verificações de status
         await new Promise(resolve => setTimeout(resolve, 10000));
-        operation = await ai.operations.getVideosOperation({ operation: operation });
+        operation = await (ai as any).operations.getVideosOperation({ operation: operation });
       }
 
       const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
