@@ -380,14 +380,42 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       if (text) {
         const cleanText = text.trim();
         setGeneratedMessage(cleanText);
-        // Aguarda a atualização do estado e gera a imagem
-        await generateImage(cleanText);
+        // Não gera a imagem automaticamente para evitar erros e permitir edição
       } else {
         throw new Error("A IA não retornou nenhum texto.");
       }
     } catch (error) {
       console.error("Erro ao gerar aviso com IA:", error);
       alert("Erro ao gerar aviso. Verifique sua conexão ou tente novamente mais tarde.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const generateGreeting = async (period: 'morning' | 'afternoon' | 'evening') => {
+    setIsGenerating(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const model = "gemini-3-flash-preview";
+      
+      const greeting = period === 'morning' ? 'Bom dia' : period === 'afternoon' ? 'Boa tarde' : 'Boa noite';
+      
+      const prompt = `Crie uma mensagem curta e elegante de ${greeting} para as clientes do salão "${settings.name}".
+      A mensagem deve ser acolhedora, profissional e ter no máximo 100 caracteres. Use emojis delicados.
+      Retorne APENAS o texto da mensagem.`;
+
+      const result = await ai.models.generateContent({
+        model,
+        contents: [{ parts: [{ text: prompt }] }],
+      });
+
+      const text = result.text;
+      if (text) {
+        setGeneratedMessage(text.trim());
+      }
+    } catch (error) {
+      console.error(`Erro ao gerar saudação (${period}):`, error);
+      alert("Erro ao gerar saudação.");
     } finally {
       setIsGenerating(false);
     }
@@ -900,6 +928,33 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 
                 <div className="space-y-4 pt-4 border-t border-gray-100">
                   <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Saudações Rápidas</label>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button 
+                      onClick={() => generateGreeting('morning')}
+                      disabled={isGenerating}
+                      className="py-2 bg-tea-50 text-tea-900 rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-tea-100 transition-all"
+                    >
+                      Bom Dia ☀️
+                    </button>
+                    <button 
+                      onClick={() => generateGreeting('afternoon')}
+                      disabled={isGenerating}
+                      className="py-2 bg-tea-50 text-tea-900 rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-tea-100 transition-all"
+                    >
+                      Boa Tarde 🌤️
+                    </button>
+                    <button 
+                      onClick={() => generateGreeting('evening')}
+                      disabled={isGenerating}
+                      className="py-2 bg-tea-50 text-tea-900 rounded-xl font-bold text-[9px] uppercase tracking-widest hover:bg-tea-100 transition-all"
+                    >
+                      Boa Noite 🌙
+                    </button>
+                  </div>
+
+                  <div className="flex justify-between items-center">
                     <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-2">Posição do Logo</label>
                     <button onClick={() => setNoticeLogoPos({ x: 0, y: 0 })} className="text-[8px] font-bold text-tea-600 uppercase tracking-widest hover:underline">Resetar</button>
                   </div>
@@ -961,16 +1016,25 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                     disabled={isGenerating}
                     className={`py-4 bg-tea-900 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest shadow-xl transition-all hover:scale-[1.02] active:scale-[0.98] ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {isGenerating ? 'Gerando...' : 'Gerar com IA 🤖'}
+                    {isGenerating ? 'Gerando...' : 'Gerar Texto (IA) 🤖'}
                   </button>
                   <button 
-                    onClick={() => generateImage(generatedMessage || noticePrompt)}
-                    disabled={isGenerating || (!generatedMessage && !noticePrompt)}
-                    className="py-4 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all hover:bg-tea-200 shadow-md"
+                    onClick={generateAIBgImage}
+                    disabled={isGenerating}
+                    className="py-4 bg-tea-100 text-tea-900 rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all hover:bg-tea-200 shadow-md flex items-center justify-center gap-2"
                   >
-                    Capturar 📸
+                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                    {noticeBgImage ? 'Trocar Fundo' : 'Gerar Fundo (IA)'}
                   </button>
                 </div>
+
+                <button 
+                  onClick={() => generateImage(generatedMessage || noticePrompt)}
+                  disabled={isGenerating || (!generatedMessage && !noticePrompt)}
+                  className="w-full py-4 bg-tea-950 text-white rounded-2xl font-bold uppercase text-[10px] tracking-widest transition-all hover:bg-black shadow-lg"
+                >
+                  Capturar Imagem 📸
+                </button>
               </div>
             </div>
 
@@ -978,14 +1042,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
               <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-4">
                 <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Ações</h4>
                 <div className="grid grid-cols-2 gap-3">
-                  <button 
-                    onClick={generateAIBgImage}
-                    disabled={isGenerating}
-                    className="py-4 bg-tea-100 text-tea-900 rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-md hover:bg-tea-200 disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    {isGenerating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                    {noticeBgImage ? 'Atualizar Fundo' : 'Gerar Fundo (IA)'}
-                  </button>
                   <button 
                     onClick={downloadImage}
                     className="py-4 bg-tea-950 text-white rounded-xl font-bold uppercase text-[9px] tracking-widest transition-all shadow-lg"

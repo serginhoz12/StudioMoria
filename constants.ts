@@ -81,6 +81,8 @@ export const DEFAULT_SETTINGS: SalonSettings = {
   socialLinks: {
     facebook: "https://facebook.com/studiomoria",
     whatsapp: "+5513997724238",
+    instagram: "https://instagram.com/studio.moria",
+    website: "https://studiomoria.com.br"
   },
   usefulLinks: [
     { label: "Nossos Produtos", url: "#" },
