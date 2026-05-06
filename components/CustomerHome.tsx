@@ -190,6 +190,17 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
     setSelectedDay(null);
   };
 
+  const getActivePromotionForService = (serviceId: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    return promotions.find(p => 
+      p.isActive && 
+      p.type === 'promotion' &&
+      p.applicableServiceIds?.includes(serviceId) &&
+      (!p.startDate || today >= p.startDate) &&
+      (!p.endDate || today <= p.endDate)
+    );
+  };
+
   return (
     <div className="animate-fade-in bg-white text-gray-900">
       {/* Botão Flutuante WhatsApp */}
@@ -227,44 +238,33 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
           
           <div className="w-full max-w-md mx-auto space-y-6 px-6">
             <div className="flex flex-col gap-3">
-              <div className="flex gap-2 mb-4">
-                <button 
-                  onClick={() => setActiveTab('services')}
-                  className={`flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all ${activeTab === 'services' ? 'bg-white text-tea-900 shadow-xl' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
-                >
-                  Procedimentos
-                </button>
-                {(settings.isStorePublic !== false || currentUser) && (
-                  <button 
-                    onClick={() => setActiveTab('store')}
-                    className={`flex-1 py-4 rounded-2xl font-bold uppercase tracking-widest text-[10px] transition-all ${activeTab === 'store' ? 'bg-white text-tea-900 shadow-xl' : 'bg-white/10 text-white/60 hover:bg-white/20'}`}
-                  >
-                    Loja Moriá
-                  </button>
-                )}
-              </div>
+              <button 
+                onClick={() => scrollToId('procedimentos')}
+                className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95"
+              >
+                Ver Nossos Serviços
+              </button>
               
-              {activeTab === 'services' ? (
-                <>
-                  <button onClick={() => scrollToId('procedimentos')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Nossos Serviços</button>
-                  {settings.socialLinks.instagram && (
-                    <a 
-                      href={settings.socialLinks.instagram} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="w-full bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:opacity-90 transition-all shadow-xl text-center flex items-center justify-center gap-2"
-                    >
-                      <span>📸</span> Instagram do Studio
-                    </a>
-                  )}
-                  <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => scrollToId('loja')} className="w-full bg-white text-tea-900 py-5 rounded-3xl font-bold shadow-2xl uppercase tracking-[0.2em] text-[10px] hover:bg-tea-50 transition-all transform active:scale-95">Ver Produtos</button>
-                  <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Dúvidas sobre Produtos</button>
-                </>
+              {(settings.isStorePublic !== false || currentUser) && (
+                <button 
+                  onClick={() => scrollToId('loja')}
+                  className="w-full bg-white/10 text-white border border-white/20 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-white/20 transition-all shadow-xl"
+                >
+                  Loja Studio Moriá
+                </button>
               )}
+
+              {settings.socialLinks.instagram && (
+                <a 
+                  href={settings.socialLinks.instagram} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="w-full bg-gradient-to-tr from-[#f9ce34] via-[#ee2a7b] to-[#6228d7] text-white py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:opacity-90 transition-all shadow-xl text-center flex items-center justify-center gap-2"
+                >
+                  <span>📸</span> Instagram do Studio
+                </a>
+              )}
+              <button onClick={() => scrollToId('contato')} className="w-full bg-tea-800 text-white border border-white/10 py-5 rounded-3xl font-bold uppercase tracking-[0.2em] text-[10px] hover:bg-tea-950 transition-all shadow-xl">Fale com a Moriá</button>
               <button onClick={onAuthClick} className="w-full bg-transparent text-white/40 py-2 font-bold uppercase tracking-[0.2em] text-[9px] hover:text-white transition-all">Acessar Minha Conta</button>
             </div>
             
@@ -280,21 +280,28 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
         </div>
       </section>
 
-      {/* Catálogo Geral ou Loja */}
-      {activeTab === 'services' ? (
-        <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
-          <div className="text-center mb-16">
-            <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Estética Studio Moriá</p>
-            <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">{settings.servicesSectionTitle}</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {regularServices.map(service => (
+      {/* Catálogo de Procedimentos */}
+      <section id="procedimentos" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
+        <div className="text-center mb-16">
+          <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Estética Studio Moriá</p>
+          <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">{settings.servicesSectionTitle}</h2>
+        </div>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+          {regularServices.map(service => {
+            const activePromo = getActivePromotionForService(service.id);
+            return (
               <div 
                 key={service.id} 
                 onClick={() => setSelectedServiceDetail(service)}
                 className="group bg-white p-10 rounded-[4rem] border border-gray-100 hover:border-tea-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.05)] flex flex-col h-full relative cursor-pointer"
               >
+                {activePromo && (
+                  <div className="absolute top-6 right-6 bg-red-600 text-white px-4 py-1.5 rounded-full text-[8px] font-bold uppercase tracking-widest shadow-lg animate-pulse z-10 flex items-center gap-1">
+                    <span>🔥</span>
+                    PROMOÇÃO -{activePromo.discountPercentage}%
+                  </div>
+                )}
                 <div className="mb-8">
                   <h3 className="text-2xl font-serif font-bold text-tea-950 mb-3 group-hover:text-tea-800 transition-colors">{service.name}</h3>
                   <p className="text-gray-400 text-sm leading-relaxed line-clamp-3 italic">
@@ -305,16 +312,26 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                 <div className="mt-auto pt-6 border-t border-gray-50 flex justify-between items-center">
                   <div className="text-left">
                     <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-1">Valor do Cuidado</p>
-                    <p className="text-lg font-serif font-bold text-tea-900 italic">A partir de R$ {service.price.toFixed(0)}</p>
+                    {activePromo ? (
+                      <div className="flex flex-col">
+                        <p className="text-[10px] text-gray-400 line-through">R$ {service.price.toFixed(0)}</p>
+                        <p className="text-lg font-serif font-bold text-tea-900 italic">R$ {(service.price * (1 - activePromo.discountPercentage / 100)).toFixed(0)}</p>
+                      </div>
+                    ) : (
+                      <p className="text-lg font-serif font-bold text-tea-900 italic">A partir de R$ {service.price.toFixed(0)}</p>
+                    )}
                   </div>
                   <div className="w-12 h-12 bg-tea-50 text-tea-900 rounded-2xl flex items-center justify-center text-xl group-hover:bg-tea-900 group-hover:text-white transition-all shadow-sm">✨</div>
                 </div>
               </div>
-            ))}
-          </div>
-        </section>
-      ) : (settings.isStorePublic !== false || currentUser) ? (
-        <section id="loja" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Loja */}
+      {(settings.isStorePublic !== false || currentUser) && (
+        <section id="loja" className="max-w-7xl mx-auto px-6 py-24 md:py-32 bg-tea-50/30 rounded-[5rem] my-12">
           <div className="text-center mb-16">
             <p className="text-tea-600 font-bold text-[10px] uppercase tracking-[0.5em] mb-3">Mini Loja Studio Moriá</p>
             <h2 className="text-4xl md:text-5xl font-serif text-tea-950 italic">Nossos Produtos</h2>
@@ -394,7 +411,7 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
             })}
           </div>
         </section>
-      ) : null}
+      )}
 
       {/* Dicas e Avisos */}
       {promotions.filter(p => p.type === 'tip' && p.isActive).length > 0 && (
@@ -647,8 +664,15 @@ const CustomerHome: React.FC<CustomerHomeProps> = ({
                  </div>
                  <div className="p-6 bg-tea-50 rounded-3xl border border-tea-100">
                     <p className="text-[9px] font-bold text-tea-700 uppercase tracking-widest mb-1">Investimento</p>
-                    <p className="text-xl font-serif text-tea-900 font-bold italic">A partir de R$ {selectedServiceDetail.price.toFixed(0)}</p>
-                 </div>
+                    {selectedServiceDetail && getActivePromotionForService(selectedServiceDetail.id) ? (
+                      <div className="flex flex-col">
+                        <p className="text-[10px] text-gray-400 line-through">R$ {selectedServiceDetail.price.toFixed(0)}</p>
+                        <p className="text-xl font-serif text-tea-900 font-bold italic">R$ {(selectedServiceDetail.price * (1 - getActivePromotionForService(selectedServiceDetail.id)!.discountPercentage / 100)).toFixed(0)}</p>
+                      </div>
+                    ) : (
+                      <p className="text-xl font-serif text-tea-900 font-bold italic">A partir de R$ {selectedServiceDetail.price.toFixed(0)}</p>
+                    )}
+                  </div>
                  <div className="p-6 bg-tea-900 rounded-3xl text-white flex items-center justify-center">
                     <p className="text-sm font-bold uppercase tracking-widest">Studio Moriá</p>
                  </div>
