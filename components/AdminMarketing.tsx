@@ -1,11 +1,11 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { Customer, Promotion, Service, Booking, SalonSettings, Transaction } from '../types';
-import { db } from '../firebase.ts';
+import { db, auth } from '../firebase.ts';
 import { collection, addDoc, doc, updateDoc } from "firebase/firestore";
 import { toPng } from 'html-to-image';
+import { generateAIContent } from '../lib/gemini.ts';
 
-import { GoogleGenAI } from "@google/genai";
 import { 
   Download, 
   Share2, 
@@ -351,8 +351,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     if (!noticePrompt) return alert("Descreva o que você deseja anunciar.");
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      
       const platformContext = noticePlatform === 'whatsapp' 
         ? "status do WhatsApp (curto, direto, com emojis)" 
         : "Redes Sociais (visual, impactante, focado em engajamento)";
@@ -370,12 +368,8 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       4. Se for um aviso de horário vago, crie senso de oportunidade.
       5. Retorne APENAS o texto final do aviso, sem aspas ou introduções.`;
 
-      const result = await (ai as any).models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: [{ parts: [{ text: prompt }] }],
-      });
+      const text = await generateAIContent(prompt);
 
-      const text = result.text;
       if (text) {
         const cleanText = text.trim();
         setGeneratedMessage(cleanText);
@@ -393,20 +387,14 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const generateGreeting = async (period: 'morning' | 'afternoon' | 'evening') => {
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      
       const greeting = period === 'morning' ? 'Bom dia' : period === 'afternoon' ? 'Boa tarde' : 'Boa noite';
       
       const prompt = `Crie uma mensagem curta e elegante de ${greeting} para as clientes do salão "${settings.name}".
       A mensagem deve ser acolhedora, profissional e ter no máximo 100 caracteres. Use emojis delicados.
       Retorne APENAS o texto da mensagem.`;
 
-      const result = await (ai as any).models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: [{ parts: [{ text: prompt }] }],
-      });
+      const text = await generateAIContent(prompt);
 
-      const text = result.text;
       if (text) {
         setGeneratedMessage(text.trim());
       }
@@ -443,8 +431,6 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     if (!selectedCustomer) return;
     setIsGenerating(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-      
       let context = "";
       if (type === 'billing') {
         const description = data.serviceName || data.description;
@@ -466,12 +452,8 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       3. O texto deve caber em uma imagem quadrada de 500x500px, então seja conciso (máximo 120 caracteres).
       4. Retorne APENAS o texto da mensagem.`;
 
-      const result = await (ai as any).models.generateContent({
-        model: "gemini-1.5-flash",
-        contents: [{ parts: [{ text: prompt }] }],
-      });
+      const text = await generateAIContent(prompt);
 
-      const text = result.text;
       if (text) {
         await generateImage(text.trim());
       }
@@ -1587,7 +1569,15 @@ const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[],
 
   const handleSave = async () => {
     if (!title || !content || (type === 'promotion' && (!endDate || !startDate))) return alert("Preencha todos os campos");
+    
+    // Safety check for auth before writing
+    if (!auth.currentUser) {
+      alert("Aguardando autenticação... Tente novamente em instantes.");
+      return;
+    }
+
     try {
+      console.log(`Saving ${type} to Firestore...`, { uid: auth.currentUser?.uid, email: auth.currentUser?.email });
       const promotionData = {
         title,
         content,
@@ -1602,10 +1592,12 @@ const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[],
       };
 
       await addDoc(collection(db, "promotions"), promotionData);
+      console.log(`${type} saved successfully.`);
       
       alert(`${type === 'promotion' ? 'Promoção' : 'Dica'} criada com sucesso!`);
       setTitle(''); setContent(''); setDiscount(0); setStartDate(new Date().toISOString().split('T')[0]); setEndDate(''); setSelectedServiceIds([]);
     } catch (e: any) {
+      console.error(`Error saving ${type}:`, e);
       alert(`Erro ao salvar: ${e.message || "Verifique sua conexão e permissões"}`);
     }
   };

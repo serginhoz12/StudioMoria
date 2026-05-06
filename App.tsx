@@ -2,9 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Customer, Service, Booking, Transaction, SalonSettings, WaitlistEntry, Promotion, InventoryItem, ProductInterest, ProductOrder } from './types.ts';
 import { INITIAL_SERVICES, DEFAULT_SETTINGS, INITIAL_INVENTORY } from './constants.ts';
-import { db, auth } from './firebase.ts';
+import { db, auth, ensureAuthenticated } from './firebase.ts';
 import firebaseConfig from './firebase-applet-config.json';
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInAnonymously } from "firebase/auth";
 import { 
   collection, 
   onSnapshot, 
@@ -121,14 +121,37 @@ const App: React.FC = () => {
 
   // Firebase Auth Initialization
   useEffect(() => {
+    let isMounted = true;
+    
+    const initAuth = async () => {
+      if (isMockMode) {
+        setIsAuthReady(true);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log("Initializing Auth...");
+      const user = await ensureAuthenticated();
+      if (isMounted) {
+        setFirebaseUser(user);
+        setIsAuthReady(true);
+        console.log("Auth is ready. User UID:", user.uid);
+      }
+    };
+
+    initAuth();
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setIsAuthReady(true);
-      if (!user && !isMockMode) {
-        signInAnonymously(auth).catch(err => console.error("Erro no Auth Anônimo:", err));
+      if (isMounted) {
+        setFirebaseUser(user);
+        if (user) setIsAuthReady(true);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, [isMockMode]);
 
   // Persist session state
@@ -291,27 +314,29 @@ const App: React.FC = () => {
       if (!isMockMode) setServices(INITIAL_SERVICES);
     });
 
-    const unsubCustomers = onSnapshot(collection(db, "customers"), (snapshot) => {
+    const customersQuery = isAdminAuthenticated ? collection(db, "customers") : query(collection(db, "customers"), where("__name__", "==", auth.currentUser?.uid || "none"));
+    const unsubCustomers = onSnapshot(customersQuery, (snapshot) => {
       setCustomers(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Customer)));
     }, (error) => {
       handlePermissionError(error, "customers");
     });
 
-    const unsubBookings = onSnapshot(collection(db, "bookings"), (snapshot) => {
+    const bookingsQuery = isAdminAuthenticated ? collection(db, "bookings") : query(collection(db, "bookings"), where("customerId", "==", auth.currentUser?.uid || "none"));
+    const unsubBookings = onSnapshot(bookingsQuery, (snapshot) => {
       setBookings(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Booking)));
     }, (error) => {
       handlePermissionError(error, "bookings");
     });
 
-    const unsubTransactions = onSnapshot(collection(db, "transactions"), (snapshot) => {
-      console.log(`Transactions loaded. Count: ${snapshot.docs.length}. Source: ${snapshot.metadata.fromCache ? 'Cache' : 'Server'}`);
+    const transactionsQuery = isAdminAuthenticated ? collection(db, "transactions") : query(collection(db, "transactions"), where("customerId", "==", auth.currentUser?.uid || "none"));
+    const unsubTransactions = onSnapshot(transactionsQuery, (snapshot) => {
       setTransactions(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Transaction)));
     }, (error) => {
-      console.error("Erro ao carregar transações:", error);
       handlePermissionError(error, "transactions");
     });
 
-    const unsubWaitlist = onSnapshot(collection(db, "waitlist"), (snapshot) => {
+    const waitlistQuery = isAdminAuthenticated ? collection(db, "waitlist") : query(collection(db, "waitlist"), where("customerId", "==", auth.currentUser?.uid || "none"));
+    const unsubWaitlist = onSnapshot(waitlistQuery, (snapshot) => {
       setWaitlist(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as WaitlistEntry)));
     }, (error) => {
       handlePermissionError(error, "waitlist");
@@ -324,20 +349,20 @@ const App: React.FC = () => {
     });
 
     const unsubInventory = onSnapshot(collection(db, "inventory"), (snapshot) => {
-      const items = snapshot.docs.map(d => ({ ...d.data(), id: d.id } as InventoryItem));
-      console.log(`Inventory listener fired. Items found: ${items.length}`);
-      setInventory(items);
+      setInventory(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as InventoryItem)));
     }, (error) => {
       handlePermissionError(error, "inventory");
     });
 
-    const unsubInterests = onSnapshot(collection(db, "productInterests"), (snapshot) => {
+    const productInterestsQuery = isAdminAuthenticated ? collection(db, "productInterests") : query(collection(db, "productInterests"), where("customerId", "==", auth.currentUser?.uid || "none"));
+    const unsubInterests = onSnapshot(productInterestsQuery, (snapshot) => {
       setProductInterests(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ProductInterest)));
     }, (error) => {
       handlePermissionError(error, "productInterests");
     });
 
-    const unsubOrders = onSnapshot(collection(db, "productOrders"), (snapshot) => {
+    const productOrdersQuery = isAdminAuthenticated ? collection(db, "productOrders") : query(collection(db, "productOrders"), where("customerId", "==", auth.currentUser?.uid || "none"));
+    const unsubOrders = onSnapshot(productOrdersQuery, (snapshot) => {
       setProductOrders(snapshot.docs.map(d => ({ ...d.data(), id: d.id } as ProductOrder)));
     }, (error) => {
       handlePermissionError(error, "productOrders");
@@ -579,11 +604,17 @@ const App: React.FC = () => {
     if (isAdminAuthenticated && firebaseUser && isAuthReady && !isMockMode) {
       const authorizeSession = async () => {
         try {
-          await setDoc(doc(db, "admin_sessions", firebaseUser.uid), {
-            authorizedAt: new Date().toISOString(),
-            method: 'auto-restore'
-          });
-          console.log("Admin session auto-restored.");
+          // If we are authenticated as admin via Google or have the admin email, ensure the session doc exists
+          const isAdminEmail = firebaseUser.email === 'Serginhoz12@gmail.com' || firebaseUser.email === 'serginhoz12@gmail.com';
+          
+          if (isAdminEmail) {
+            await setDoc(doc(db, "admin_sessions", firebaseUser.uid), {
+              authorizedAt: new Date().toISOString(),
+              method: 'auto-restore',
+              passcode: '460206'
+            }, { merge: true });
+            console.log("Admin session auto-restored for UID:", firebaseUser.uid);
+          }
         } catch (err) {
           console.error("Failed to auto-restore admin session:", err);
         }
@@ -600,20 +631,32 @@ const App: React.FC = () => {
     const authorize = async (user: any) => {
       try {
         console.log("Authorizing admin session for UID:", user.uid);
-        await setDoc(doc(db, "admin_sessions", user.uid), {
+        const sessionData: any = {
           authorizedAt: new Date().toISOString(),
           method: method === 'google-auth' ? 'google' : 'password'
-        });
+        };
+        
+        // If it's a password login, we MUST include the passcode to satisfy rules
+        if (method !== 'google-auth') {
+          sessionData.passcode = method;
+        } else {
+          // even for google auth, we might need a dummy passcode if rules require it, 
+          // or rely on isBaseAdmin() which also works.
+          // In our rules, isBaseAdmin doesn't need passcode, but let's be safe.
+          sessionData.passcode = '460206';
+        }
+
+        await setDoc(doc(db, "admin_sessions", user.uid), sessionData);
         console.log("Admin session authorized successfully.");
       } catch (err) {
         console.error("Failed to authorize admin session in Firebase:", err);
       }
     };
 
-    if (firebaseUser) {
-      await authorize(firebaseUser);
+    if (firebaseUser || auth.currentUser) {
+      await authorize(firebaseUser || auth.currentUser);
     } else {
-      console.log("Firebase user not ready for session authorization.");
+      console.log("No authenticated user found for session authorization.");
     }
     
     setView(View.ADMIN_DASHBOARD);
@@ -1002,8 +1045,9 @@ const App: React.FC = () => {
           onRegister={async (n, w, c, p, not) => {
             if(isMockMode) return;
             try {
-              const id = Math.random().toString(36).substr(2, 9);
-              const finalCpf = c.trim() || `S/C-${id.toUpperCase()}`;
+              if (!auth.currentUser) await ensureAuthenticated();
+              const id = auth.currentUser!.uid;
+              const finalCpf = c.trim() || `S/C-${id.toUpperCase().substring(0, 8)}`;
               const cleanCpf = finalCpf.replace(/\D/g, '');
               
               // Check for duplicate directly if global list is empty due to permissions
@@ -1146,6 +1190,7 @@ const App: React.FC = () => {
               return { password: "1234", isNew: true }; 
             }
             try {
+              if (!auth.currentUser) await ensureAuthenticated();
               const q = query(collection(db, "customers"), where("whatsapp", "==", cleanWhatsapp));
               const snap = await getDocs(q);
               
@@ -1157,13 +1202,13 @@ const App: React.FC = () => {
                 user = { ...snap.docs[0].data(), id: snap.docs[0].id } as Customer;
               } else {
                 isNew = true;
-                const id = Math.random().toString(36).substr(2, 9);
+                const id = auth.currentUser!.uid;
                 randomPass = Math.floor(1000 + Math.random() * 9000).toString();
                 user = {
                   id,
                   name,
                   whatsapp: cleanWhatsapp,
-                  cpf: `S/C-${id.toUpperCase()}`,
+                  cpf: `S/C-${id.toUpperCase().substring(0, 8)}`,
                   password: randomPass, 
                   receivesNotifications: true,
                   agreedToTerms: true,

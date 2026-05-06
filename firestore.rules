@@ -1,31 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Assumed Data Model
-    // ===============================================================
-    //
-    // Collection: settings
-    // Document ID: main
-    // Fields: name, visitCount, teamMembers, businessHours, lastUpdated, etc.
-    //
-    // Collection: services
-    // Fields: name, price, duration, category, isVisible, etc.
-    //
-    // Collection: customers
-    // Fields: name, whatsapp, cpf, password, history, etc.
-    //
-    // Collection: bookings
-    // Fields: customerId, serviceId, dateTime, status, etc.
-    //
-    // Collection: transactions
-    // Fields: type, amount, date, status, etc.
-    //
-    // Collection: admin_sessions
-    // Document ID: {userId}
-    // Fields: authorizedAt, method
-    //
-    // ===============================================================
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
 
     // ===============================================================
     // Helper Functions
@@ -39,15 +18,18 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    // Base admin logic (Hardcoded owners)
     function isBaseAdmin() {
       return isAuthenticated() &&
         (
-          (request.auth.token.email.lower() == "serginhoz12@gmail.com") ||
+          (request.auth.token.email != null && 
+           (request.auth.token.email.lower() == "serginhoz12@gmail.com")) ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
         );
     }
 
+    // Global Admin Check (Session based)
     function isAdmin() {
       return isBaseAdmin() || 
              (isAuthenticated() && exists(/databases/$(database)/documents/admin_sessions/$(request.auth.uid)));
@@ -55,7 +37,8 @@ service cloud.firestore {
 
     // Validator for settings update (visit count only)
     function isValidSettingsUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visitCount', 'lastUpdated']) &&
+      return request.resource.data.keys().hasAll(['visitCount', 'lastUpdated']) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['visitCount', 'lastUpdated']) &&
              request.resource.data.visitCount == resource.data.visitCount + 1;
     }
 
@@ -84,17 +67,20 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Rules
+    // Rules per Collection
     // ===============================================================
 
     match /admin_sessions/{sessionId} {
       allow read: if isOwner(sessionId) || isBaseAdmin();
-      allow create, update: if isOwner(sessionId);
-      allow delete: if isOwner(sessionId) || isBaseAdmin();
+      // Allow creation via secret passcode to authorize any authenticated user as admin
+      allow create: if isOwner(sessionId) && 
+                    request.resource.data.passcode == '460206' &&
+                    request.resource.data.authorizedAt is string;
+      allow update, delete: if isOwner(sessionId) || isBaseAdmin();
     }
 
     match /settings/main {
-      allow read: if true; // Publicly readable for the site to work
+      allow read: if true;
       allow update: if isAdmin() || (isAuthenticated() && isValidSettingsUpdate());
       allow create, delete: if isAdmin();
     }
@@ -105,13 +91,15 @@ service cloud.firestore {
     }
 
     match /customers/{customerId} {
+      // Secure list query enforcement: admins list all, others list only their own
       allow read: if isAdmin() || isOwner(customerId);
-      allow create: if isAuthenticated() && isValidCustomer(request.resource.data);
+      allow create: if isAuthenticated() && isValidCustomer(request.resource.data) && isOwner(customerId);
       allow update: if isAdmin() || (isOwner(customerId) && isValidCustomer(request.resource.data));
       allow delete: if isAdmin();
     }
 
     match /bookings/{bookingId} {
+      // Secure list query enforcement
       allow read: if isAdmin() || (isAuthenticated() && (resource == null || resource.data.customerId == request.auth.uid));
       allow create: if isAuthenticated() && isValidBooking(request.resource.data) && request.resource.data.customerId == request.auth.uid;
       allow update: if isAdmin() || (isAuthenticated() && resource.data.customerId == request.auth.uid && isValidBooking(request.resource.data));
@@ -143,20 +131,26 @@ service cloud.firestore {
 
     match /productInterests/{interestId} {
       allow read: if isAdmin();
+      // Allow customers to see their own if customerId is present (optional enhancement)
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
 
     match /productOrders/{orderId} {
-      allow read: if isAdmin() || (isAuthenticated() && resource.data.customerId == request.auth.uid);
+      allow read: if isAdmin() || (isAuthenticated() && (resource == null || resource.data.customerId == request.auth.uid));
       allow create: if isAuthenticated();
       allow update, delete: if isAdmin();
     }
     
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isAuthenticated() && isOwner(userId);
       allow update: if isAdmin();
+    }
+    
+    // Default catch-all
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

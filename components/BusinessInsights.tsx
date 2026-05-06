@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
 import { Booking, Transaction, Customer, InventoryItem } from '../types';
+import { generateAIContent } from '../lib/gemini.ts';
 
 interface BusinessInsightsProps {
   bookings: Booking[];
@@ -17,8 +17,7 @@ const BusinessInsights: React.FC<BusinessInsightsProps> = ({ bookings, transacti
   useEffect(() => {
     const generateInsight = async () => {
       try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
-        
+        setLoading(true);
         // Prepare a summary of data to send to the model
         const today = new Date().toISOString().split('T')[0];
         const bookingsToday = bookings.filter(b => b.dateTime.startsWith(today)).length;
@@ -67,12 +66,9 @@ const BusinessInsights: React.FC<BusinessInsightsProps> = ({ bookings, transacti
           Gerar apenas 1 insight curto com uma sugestão prática para melhorar o negócio.
         `;
 
-        const result = await (ai as any).models.generateContent({
-          model: "gemini-1.5-flash",
-          contents: [{ parts: [{ text: prompt }] }],
-        });
+        const text = await generateAIContent(prompt);
 
-        setInsight(result.text || 'Continue o excelente trabalho cuidando das suas clientes!');
+        setInsight(text || 'Continue o excelente trabalho cuidando das suas clientes!');
       } catch (error) {
         console.error("Erro ao gerar insight:", error);
         setInsight('Aproveite o dia para fortalecer o relacionamento com suas clientes fiéis.');

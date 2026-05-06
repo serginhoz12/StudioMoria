@@ -33,6 +33,23 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLogin, onBack }) => {
       
       // Check if user is the admin email
       if (user.email === 'Serginhoz12@gmail.com') {
+        // Ensure user document exists with admin role
+        try {
+          const { setDoc, doc, getDoc } = await import('firebase/firestore');
+          const { db } = await import('../firebase');
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (!userDoc.exists() || userDoc.data().role !== 'admin') {
+            await setDoc(doc(db, "users", user.uid), {
+              name: user.displayName || 'Admin',
+              email: user.email,
+              role: 'admin',
+              whatsapp: '',
+              createdAt: new Date().toISOString()
+            }, { merge: true });
+          }
+        } catch (err) {
+          console.error("Error setting admin role:", err);
+        }
         onLogin('google-auth');
       } else {
         alert("Este e-mail não tem permissão de administrador.");
