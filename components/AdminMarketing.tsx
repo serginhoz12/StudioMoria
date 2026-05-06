@@ -669,16 +669,29 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
                     <span className="text-[10px] bg-tea-900 text-white px-2 py-0.5 rounded-lg font-bold">-{p.discountPercentage}%</span>
                   </div>
                   <p className="text-[11px] text-gray-500 line-clamp-3">{p.content}</p>
-                  <div className="pt-2 flex justify-between items-center border-t border-gray-50">
-                    <span className={`text-[8px] font-bold uppercase tracking-widest ${p.isActive ? 'text-green-500' : 'text-red-500'}`}>
-                      {p.isActive ? 'Ativa' : 'Inativa'}
-                    </span>
-                    <button 
-                      onClick={async () => await updateDoc(doc(db, "promotions", p.id), { isActive: !p.isActive })}
-                      className="text-[8px] font-bold text-tea-600 uppercase tracking-widest"
-                    >
-                      Alternar
-                    </button>
+                  <div className="pt-2 flex flex-col gap-2 border-t border-gray-50">
+                    <div className="flex justify-between items-center">
+                      <span className={`text-[8px] font-bold uppercase tracking-widest ${p.isActive ? 'text-green-500' : 'text-red-500'}`}>
+                        {p.isActive ? 'Ativa' : 'Inativa'}
+                      </span>
+                      <button 
+                        onClick={async () => await updateDoc(doc(db, "promotions", p.id), { isActive: !p.isActive })}
+                        className="text-[8px] font-bold text-tea-600 uppercase tracking-widest"
+                      >
+                        Alternar
+                      </button>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-[8px] text-gray-400 font-bold uppercase">Validade: {p.startDate ? new Date(p.startDate).toLocaleDateString() : 'N/A'} - {p.endDate ? new Date(p.endDate).toLocaleDateString() : 'N/A'}</p>
+                      {p.applicableServiceIds && p.applicableServiceIds.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {p.applicableServiceIds.map(sid => {
+                            const s = services.find(srv => srv.id === sid);
+                            return s ? <span key={sid} className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[7px] font-bold uppercase">{s.name}</span> : null;
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -1562,24 +1575,33 @@ const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[],
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState('');
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+
+  const toggleService = (id: string) => {
+    setSelectedServiceIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const handleSave = async () => {
-    if (!title || !content || (type === 'promotion' && !endDate)) return alert("Preencha todos os campos");
+    if (!title || !content || (type === 'promotion' && (!endDate || !startDate))) return alert("Preencha todos os campos");
     try {
       await addDoc(collection(db, "promotions"), {
         title,
         content,
         discountPercentage: discount,
+        startDate: startDate,
         endDate: endDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        startDate: new Date().toISOString().split('T')[0],
+        applicableServiceIds: selectedServiceIds,
         type,
         isActive: true,
         createdAt: new Date().toISOString(),
         targetCustomerIds: []
       });
       alert(`${type === 'promotion' ? 'Promoção' : 'Dica'} criada com sucesso!`);
-      setTitle(''); setContent(''); setDiscount(0); setEndDate('');
+      setTitle(''); setContent(''); setDiscount(0); setStartDate(new Date().toISOString().split('T')[0]); setEndDate(''); setSelectedServiceIds([]);
     } catch (e) {
       alert("Erro ao salvar");
     }
@@ -1588,11 +1610,43 @@ const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[],
   return (
     <div className="bg-white p-8 rounded-[3rem] shadow-sm border border-gray-100 space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
+        <div className="space-y-4">
+          <input type="text" placeholder="Título" value={title} onChange={e => setTitle(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
+          
+          {type === 'promotion' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Início</label>
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Fim</label>
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
+              </div>
+            </div>
+          )}
+        </div>
+
         {type === 'promotion' && (
-          <div className="grid grid-cols-2 gap-2">
-            <input type="number" placeholder="Desc. %" value={discount} onChange={e => setDiscount(Number(e.target.value))} className="p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
-            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
+          <div className="space-y-2">
+            <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest ml-2">Desc. % em Serviços Selecionados</label>
+            <div className="grid grid-cols-1 gap-2">
+              <input type="number" placeholder="Desconto %" value={discount} onChange={e => setDiscount(Number(e.target.value))} className="p-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none" />
+              <div className="bg-gray-50 rounded-2xl p-4 max-h-[150px] overflow-y-auto space-y-2">
+                <label className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Serviços Aplicáveis:</label>
+                <div className="flex flex-wrap gap-2">
+                  {services.map(s => (
+                    <button 
+                      key={s.id}
+                      onClick={() => toggleService(s.id)}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold transition-all ${selectedServiceIds.includes(s.id) ? 'bg-tea-900 text-white' : 'bg-white text-gray-400 border border-gray-100'}`}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
