@@ -1588,32 +1588,24 @@ const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[],
   const handleSave = async () => {
     if (!title || !content || (type === 'promotion' && (!endDate || !startDate))) return alert("Preencha todos os campos");
     try {
-      const promotionData: any = {
-        title: title,
-        content: content,
+      const promotionData = {
+        title,
+        content,
         discountPercentage: Number(discount) || 0,
         startDate: startDate || new Date().toISOString().split('T')[0],
-        endDate: endDate || "",
+        endDate: endDate || (type === 'promotion' ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : ""),
         applicableServiceIds: selectedServiceIds || [],
-        type: type,
+        type,
         isActive: true,
         createdAt: new Date().toISOString(),
         targetCustomerIds: []
       };
 
-      if (type === 'promotion' && !promotionData.endDate) {
-        promotionData.endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      }
-
-      console.log("Saving promotion to Firestore:", promotionData);
-      
-      const docRef = await addDoc(collection(db, "promotions"), promotionData);
-      console.log("Promotion saved with ID:", docRef.id);
+      await addDoc(collection(db, "promotions"), promotionData);
       
       alert(`${type === 'promotion' ? 'Promoção' : 'Dica'} criada com sucesso!`);
       setTitle(''); setContent(''); setDiscount(0); setStartDate(new Date().toISOString().split('T')[0]); setEndDate(''); setSelectedServiceIds([]);
     } catch (e: any) {
-      console.error("Erro detalhado ao salvar promoção:", e);
       alert(`Erro ao salvar: ${e.message || "Verifique sua conexão e permissões"}`);
     }
   };

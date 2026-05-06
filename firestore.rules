@@ -42,7 +42,7 @@ service cloud.firestore {
     function isBaseAdmin() {
       return isAuthenticated() &&
         (
-          (request.auth.token.email == "Serginhoz12@gmail.com") ||
+          (request.auth.token.email.lower() == "serginhoz12@gmail.com") ||
           (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
         );
@@ -73,6 +73,14 @@ service cloud.firestore {
              data.serviceId is string &&
              data.dateTime is string &&
              data.status in ['pending', 'scheduled', 'completed', 'cancelled', 'blocked', 'open'];
+    }
+
+    // Validator for promotions
+    function isValidPromotion(data) {
+      return data.keys().hasAll(['title', 'content', 'type', 'isActive']) &&
+             data.title is string && data.title.size() > 0 &&
+             data.content is string && data.content.size() > 0 &&
+             data.type in ['promotion', 'tip'];
     }
 
     // ===============================================================
@@ -123,7 +131,9 @@ service cloud.firestore {
 
     match /promotions/{promotionId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin() && isValidPromotion(request.resource.data);
+      allow update: if isAdmin() && (resource == null || isValidPromotion(request.resource.data));
+      allow delete: if isAdmin();
     }
 
     match /inventory/{itemId} {
