@@ -596,11 +596,11 @@ const App: React.FC = () => {
     setIsAdminAuthenticated(true);
     localStorage.setItem('moria_isAdminAuth', 'true');
     
-    // Authorize session in Firebase if not already
-    if (firebaseUser) {
+    // Authorize session in Firebase
+    const authorize = async (user: any) => {
       try {
-        console.log("Authorizing admin session for UID:", firebaseUser.uid);
-        await setDoc(doc(db, "admin_sessions", firebaseUser.uid), {
+        console.log("Authorizing admin session for UID:", user.uid);
+        await setDoc(doc(db, "admin_sessions", user.uid), {
           authorizedAt: new Date().toISOString(),
           method: method === 'google-auth' ? 'google' : 'password'
         });
@@ -608,6 +608,12 @@ const App: React.FC = () => {
       } catch (err) {
         console.error("Failed to authorize admin session in Firebase:", err);
       }
+    };
+
+    if (firebaseUser) {
+      await authorize(firebaseUser);
+    } else {
+      console.log("Firebase user not ready for session authorization.");
     }
     
     setView(View.ADMIN_DASHBOARD);

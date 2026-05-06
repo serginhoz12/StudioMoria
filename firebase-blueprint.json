@@ -110,7 +110,10 @@
         "discountPercentage": { "type": "number" },
         "isActive": { "type": "boolean" },
         "startDate": { "type": "string" },
-        "endDate": { "type": "string" }
+        "endDate": { "type": "string" },
+        "applicableServiceIds": { "type": "array", "items": { "type": "string" } },
+        "targetCustomerIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" }
       },
       "required": ["title", "content", "type", "isActive"]
     },
