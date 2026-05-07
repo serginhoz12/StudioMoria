@@ -33,7 +33,7 @@ app.get("/api/health", (req, res) => {
 // Gemini Proxy
 app.post("/api/gemini", async (req, res) => {
   try {
-    const { prompt, model = "gemini-3-flash-preview" } = req.body;
+    const { prompt, model = "gemini-1.5-flash" } = req.body;
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {

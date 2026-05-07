@@ -92,6 +92,7 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
   const [selectedPromotionId, setSelectedPromotionId] = useState<string | null>(null);
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [showPromotionManager, setShowPromotionManager] = useState(false);
+  const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
 
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -389,18 +390,20 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     try {
       const greeting = period === 'morning' ? 'Bom dia' : period === 'afternoon' ? 'Boa tarde' : 'Boa noite';
       
-      const prompt = `Crie uma mensagem curta e elegante de ${greeting} para as clientes do salão "${settings.name}".
-      A mensagem deve ser acolhedora, profissional e ter no máximo 100 caracteres. Use emojis delicados.
-      Retorne APENAS o texto da mensagem.`;
+      const prompt = `Crie uma mensagem curta e elegante de "${greeting}" para as clientes do salão "${settings.name}".
+      A mensagem deve ser acolhedora, profissional e ter no máximo 100 caracteres. Use um ou dois emojis delicados relacionados ao período.
+      Exemplo para bom dia: "Bom dia! Que seu dia seja tão radiante quanto você em nosso Studio. ✨🌸"
+      Retorne APENAS o texto da mensagem final. No máximo 100 caracteres.`;
 
       const text = await generateAIContent(prompt);
 
       if (text) {
-        setGeneratedMessage(text.trim());
+        const cleanText = text.replace(/^"|"$/g, '').trim();
+        setGeneratedMessage(cleanText);
       }
     } catch (error) {
       console.error(`Erro ao gerar saudação (${period}):`, error);
-      alert("Erro ao gerar saudação.");
+      alert("Erro ao gerar saudação. Tente novamente.");
     } finally {
       setIsGenerating(false);
     }
@@ -477,50 +480,62 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
       setGeneratedMessage(message);
       setGeneratedImageUrl(null);
       
-      // Pequeno delay para garantir que o DOM atualizou com a nova mensagem
+      // Pequeno delay para garantir que o DOM atualizou e imagens externas carregaram
       setTimeout(async () => {
         if (cardRef.current) {
           try {
+            // Garantir que as imagens dentro do card estejam carregadas
+            const images = Array.from(cardRef.current.querySelectorAll('img')) as HTMLImageElement[];
+            await Promise.all(images.map(img => {
+              if (img.complete) return Promise.resolve();
+              return new Promise(resolveImg => {
+                img.onload = resolveImg;
+                img.onerror = resolveImg;
+              });
+            }));
+
             let dataUrl;
             try {
               dataUrl = await toPng(cardRef.current, {
                 cacheBust: true,
                 width: 1080,
                 height: 1920,
-                filter: (node: any) => {
-                  if (node.tagName === 'LINK' && node.rel === 'stylesheet' && !node.href.includes(window.location.origin)) {
-                    return false;
-                  }
-                  return true;
-                },
+                pixelRatio: 1, // Fixamos em 1 pois o scale já cuida disso
                 style: {
                   transform: 'scale(2.7)',
-                  transformOrigin: 'top left'
+                  transformOrigin: 'top left',
+                  // Garantir que o texto seja visível forçando cor e opacidade
+                  color: noticeFontColor,
+                  fontWeight: 'bold'
                 }
               });
             } catch (firstErr) {
-              console.warn('Tentativa inicial de gerar imagem falhou (provavelmente erro de CORS nas fontes). Tentando sem embutir fontes...', firstErr);
-              // Segunda tentativa: desabilita o processamento de fontes externas que causa o erro de 'cssRules'
+              console.warn('Tentativa inicial de gerar imagem falhou. Tentando modo de compatibilidade...', firstErr);
               dataUrl = await toPng(cardRef.current, {
                 cacheBust: true,
                 width: 1080,
                 height: 1920,
-                fontEmbedCSS: '', // Pula a busca por fontes em stylesheets externos
+                fontEmbedCSS: '', 
                 style: {
                   transform: 'scale(2.7)',
                   transformOrigin: 'top left'
                 }
               });
             }
-            setGeneratedImageUrl(dataUrl);
+            
+            if (dataUrl && dataUrl.length > 1000) {
+              setGeneratedImageUrl(dataUrl);
+            } else {
+              throw new Error("Imagem gerada está vazia ou corrompida.");
+            }
           } catch (err) {
-            console.error('Erro ao gerar imagem em todas as tentativas:', err);
-            alert("Erro ao capturar imagem. Você ainda pode copiar o texto.");
+            console.error('Erro ao gerar imagem:', err);
+            alert("Erro ao capturar imagem. Tente novamente ou use o texto.");
           }
         }
         setIsGenerating(false);
         resolve();
-      }, 500);
+      }, 1000); // Aumentado para 1s para garantir renderização total
     });
   };
 
@@ -562,6 +577,23 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
     setGeneratedMessage('');
     setGeneratedImageUrl(null);
     setReminderType(null);
+  };
+
+  const handleDeletePromotion = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este item?')) return;
+    try {
+      const { deleteDoc, doc } = await import("firebase/firestore");
+      await deleteDoc(doc(db, "promotions", id));
+      alert("Excluído com sucesso!");
+    } catch (error) {
+      console.error("Erro ao excluir:", error);
+      alert("Erro ao excluir item.");
+    }
+  };
+
+  const handleEditPromotion = (promotion: Promotion) => {
+    setEditingPromotion(promotion);
+    setShowPromotionManager(true);
   };
 
   const handleMouseDown = (e: React.MouseEvent, element: 'logo' | 'text' | 'contact') => {
@@ -634,19 +666,48 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-serif text-tea-950 font-bold italic">Gerenciar Promoções</h3>
             <button 
-              onClick={() => setShowPromotionManager(!showPromotionManager)}
+              onClick={() => {
+                setEditingPromotion(null);
+                setShowPromotionManager(!showPromotionManager);
+              }}
               className="text-[10px] font-bold text-tea-600 uppercase tracking-widest hover:underline"
             >
               {showPromotionManager ? 'Ver Lista' : 'Nova Promoção'}
             </button>
           </div>
           {showPromotionManager ? (
-            <PromotionManager promotions={promotions} services={services} customers={customers} type="promotion" />
+            <PromotionManager 
+              promotions={promotions} 
+              services={services} 
+              customers={customers} 
+              type="promotion" 
+              initialData={editingPromotion}
+              onClose={() => {
+                setShowPromotionManager(false);
+                setEditingPromotion(null);
+              }}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {promotions.filter(p => p.type === 'promotion').map(p => (
-                <div key={p.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-3">
-                  <div className="flex justify-between items-start">
+                <div key={p.id} className="group bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-3 relative overflow-hidden">
+                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => handleEditPromotion(p)}
+                      className="p-2 bg-tea-50 text-tea-600 rounded-full hover:bg-tea-100 transition-colors"
+                      title="Editar"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </button>
+                    <button 
+                       onClick={() => handleDeletePromotion(p.id)}
+                       className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors"
+                       title="Excluir"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <div className="flex justify-between items-start pr-12">
                     <h4 className="font-bold text-tea-950 font-serif italic">{p.title}</h4>
                     <span className="text-[10px] bg-tea-900 text-white px-2 py-0.5 rounded-lg font-bold">-{p.discountPercentage}%</span>
                   </div>
@@ -687,19 +748,48 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-serif text-tea-950 font-bold italic">Dicas de Beleza</h3>
             <button 
-              onClick={() => setShowPromotionManager(!showPromotionManager)}
+              onClick={() => {
+                setEditingPromotion(null);
+                setShowPromotionManager(!showPromotionManager);
+              }}
               className="text-[10px] font-bold text-tea-600 uppercase tracking-widest hover:underline"
             >
               {showPromotionManager ? 'Ver Lista' : 'Nova Dica'}
             </button>
           </div>
           {showPromotionManager ? (
-            <PromotionManager promotions={promotions} services={services} customers={customers} type="tip" />
+            <PromotionManager 
+              promotions={promotions} 
+              services={services} 
+              customers={customers} 
+              type="tip" 
+              initialData={editingPromotion}
+              onClose={() => {
+                setShowPromotionManager(false);
+                setEditingPromotion(null);
+              }}
+            />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {promotions.filter(p => p.type === 'tip').map(p => (
-                <div key={p.id} className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-3">
-                  <h4 className="font-bold text-tea-950 font-serif italic">{p.title}</h4>
+                <div key={p.id} className="group bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100 space-y-3 relative overflow-hidden">
+                  <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={() => handleEditPromotion(p)}
+                      className="p-2 bg-tea-50 text-tea-600 rounded-full hover:bg-tea-100 transition-colors"
+                      title="Editar"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                    </button>
+                    <button 
+                       onClick={() => handleDeletePromotion(p.id)}
+                       className="p-2 bg-red-50 text-red-600 rounded-full hover:bg-red-100 transition-colors"
+                       title="Excluir"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <h4 className="font-bold text-tea-950 font-serif italic pr-12">{p.title}</h4>
                   <p className="text-[11px] text-gray-500 line-clamp-3">{p.content}</p>
                   <div className="pt-2 flex justify-between items-center border-t border-gray-50">
                     <span className={`text-[8px] font-bold uppercase tracking-widest ${p.isActive ? 'text-green-500' : 'text-red-500'}`}>
@@ -1553,13 +1643,20 @@ const AdminMarketing: React.FC<AdminMarketingProps> = ({
 };
 
 
-const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[], customers: Customer[], type: 'promotion' | 'tip' }> = ({ promotions, services, customers, type }) => {
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [discount, setDiscount] = useState(0);
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState('');
-  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+const PromotionManager: React.FC<{ 
+  promotions: Promotion[], 
+  services: Service[], 
+  customers: Customer[], 
+  type: 'promotion' | 'tip',
+  initialData?: Promotion | null,
+  onClose?: () => void
+}> = ({ promotions, services, customers, type, initialData, onClose }) => {
+  const [title, setTitle] = useState(initialData?.title || '');
+  const [content, setContent] = useState(initialData?.content || '');
+  const [discount, setDiscount] = useState(initialData?.discountPercentage || 0);
+  const [startDate, setStartDate] = useState(initialData?.startDate || new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(initialData?.endDate || '');
+  const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>(initialData?.applicableServiceIds || []);
 
   const toggleService = (id: string) => {
     setSelectedServiceIds(prev => 
@@ -1587,15 +1684,30 @@ const PromotionManager: React.FC<{ promotions: Promotion[], services: Service[],
         applicableServiceIds: selectedServiceIds || [],
         type,
         isActive: true,
-        createdAt: new Date().toISOString(),
-        targetCustomerIds: []
+        updatedAt: new Date().toISOString(),
+        targetCustomerIds: initialData?.targetCustomerIds || []
       };
 
-      await addDoc(collection(db, "promotions"), promotionData);
+      if (initialData?.id) {
+        await updateDoc(doc(db, "promotions", initialData.id), promotionData);
+        alert(`${type === 'promotion' ? 'Promoção' : 'Dica'} atualizada com sucesso!`);
+      } else {
+        const createData = {
+          ...promotionData,
+          createdAt: new Date().toISOString(),
+          isActive: true
+        };
+        await addDoc(collection(db, "promotions"), createData);
+        alert(`${type === 'promotion' ? 'Promoção' : 'Dica'} criada com sucesso!`);
+      }
+
       console.log(`${type} saved successfully.`);
       
-      alert(`${type === 'promotion' ? 'Promoção' : 'Dica'} criada com sucesso!`);
-      setTitle(''); setContent(''); setDiscount(0); setStartDate(new Date().toISOString().split('T')[0]); setEndDate(''); setSelectedServiceIds([]);
+      if (onClose) {
+        onClose();
+      } else {
+        setTitle(''); setContent(''); setDiscount(0); setStartDate(new Date().toISOString().split('T')[0]); setEndDate(''); setSelectedServiceIds([]);
+      }
     } catch (e: any) {
       console.error(`Error saving ${type}:`, e);
       alert(`Erro ao salvar: ${e.message || "Verifique sua conexão e permissões"}`);
