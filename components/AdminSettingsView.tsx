@@ -45,15 +45,22 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
   const handleExportCSV = () => {
     try {
-      const start = new Date(exportStartDate);
+      // Use helper to parse date correctly in local time
+      const parseDate = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+
+      const start = parseDate(exportStartDate);
       start.setHours(0, 0, 0, 0);
-      const end = new Date(exportEndDate);
+      const end = parseDate(exportEndDate);
       end.setHours(23, 59, 59, 999);
 
       const exportData: any[] = [];
 
       // 1. Process Bookings (Services)
       bookings.forEach(b => {
+        if (!b.dateTime) return;
         const bDate = new Date(b.dateTime);
         if (bDate >= start && bDate <= end) {
           const customer = customers.find(c => c.id === b.customerId);
@@ -64,10 +71,10 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             customerName: b.customerName || customer?.name || 'Cliente Particular',
             customerPhone: customer?.whatsapp || '',
             loyaltyPoints: customer?.loyaltyPoints || 0,
-            item: b.serviceName,
+            item: b.serviceName || 'Serviço s/ nome',
             value: b.originalPrice || 0,
             professional: b.teamMemberName || '',
-            status: b.status === 'confirmed' ? 'Confirmado' : b.status === 'finished' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : 'Cancelado',
+            status: b.status === 'scheduled' ? 'Agendado' : b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : b.status === 'cancelled' ? 'Cancelado' : b.status === 'open' ? 'Aberto' : b.status === 'blocked' ? 'Bloqueado' : b.status,
             paymentMethod: b.paymentMethod || ''
           });
         }
@@ -75,6 +82,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
 
       // 2. Process Product Orders
       productOrders.forEach(o => {
+        if (!o.createdAt) return;
         const oDate = new Date(o.createdAt);
         if (oDate >= start && oDate <= end) {
           const customer = customers.find(c => c.id === o.customerId);
@@ -85,14 +93,19 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
             customerName: o.customerName || customer?.name || 'Cliente Particular',
             customerPhone: o.customerPhone || customer?.whatsapp || '',
             loyaltyPoints: customer?.loyaltyPoints || 0,
-            item: o.productName,
+            item: o.productName || 'Produto s/ nome',
             value: o.totalPrice || 0,
             professional: '',
-            status: o.status === 'paid' ? 'Pago' : o.status === 'pending' ? 'Pendente' : o.status === 'delivered' ? 'Entregue' : 'Cancelado',
+            status: o.status === 'paid' ? 'Pago' : o.status === 'pending' ? 'Pendente' : o.status === 'delivered' ? 'Entregue' : o.status === 'cancelled' ? 'Cancelado' : o.status,
             paymentMethod: o.paymentMethod || ''
           });
         }
       });
+
+      if (exportData.length === 0) {
+        alert("Não foram encontrados dados para o período selecionado.");
+        return;
+      }
 
       // Sort by date
       exportData.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -105,31 +118,32 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         const line = [
           row.dateStr,
           row.type,
-          row.customerName.replace(/;/g, ','), // Avoid breaking CSV
-          row.customerPhone,
-          row.loyaltyPoints,
-          row.item.replace(/;/g, ','),
-          row.value.toFixed(2).replace('.', ','), // Brazilian decimal format
-          row.professional.replace(/;/g, ','),
-          row.status,
-          row.paymentMethod
+          (row.customerName || '').replace(/;/g, ','),
+          row.customerPhone || '',
+          row.loyaltyPoints || 0,
+          (row.item || '').replace(/;/g, ','),
+          (row.value || 0).toFixed(2).replace('.', ','),
+          (row.professional || '').replace(/;/g, ','),
+          row.status || '',
+          row.paymentMethod || ''
         ];
         csvRows.push(line.join(';'));
       });
 
       const csvString = csvRows.join('\n');
-      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      // Add BOM for Excel compatibility with UTF-8
+      const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.setAttribute('href', url);
-      link.setAttribute('download', `base_dados_moria_${exportStartDate}_a_${exportEndDate}.csv`);
+      link.setAttribute('download', `base_moria_${exportStartDate}_a_${exportEndDate}.csv`);
       link.style.visibility = 'hidden';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     } catch (error) {
       console.error("Erro ao exportar CSV:", error);
-      alert("Erro ao exportar dados.");
+      alert("Erro ao exportar dados. Verifique o console para mais detalhes.");
     }
   };
 
