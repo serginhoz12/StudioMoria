@@ -42,10 +42,35 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     return d.toISOString().split('T')[0];
   });
   const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [filterCustomer, setFilterCustomer] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterProfessional, setFilterProfessional] = useState('');
-  const [filterItem, setFilterItem] = useState('');
+  
+  // Multi-select filters
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [selectedProfessionals, setSelectedProfessionals] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+
+  // Collect unique options for filters
+  const allCustomers = Array.from(new Set([
+    ...customers.map(c => c.name),
+    ...bookings.map(b => b.customerName),
+    ...productOrders.map(o => o.customerName)
+  ].filter(Boolean))).sort();
+
+  const allStatuses = Array.from(new Set([
+    'Agendado', 'Finalizado', 'Pendente', 'Cancelado', 'Aberto', 'Bloqueado', 
+    'Pago', 'Entregue'
+  ])).sort();
+
+  const allProfessionals = Array.from(new Set([
+    ...settings.teamMembers.map(m => m.name),
+    ...bookings.map(b => b.teamMemberName)
+  ].filter(Boolean))).sort();
+
+  const allItems = Array.from(new Set([
+    ...services.map(s => s.name),
+    ...productOrders.map(o => o.productName),
+    ...inventory.map(p => p.name)
+  ].filter(Boolean))).sort();
 
   const handleExportCSV = () => {
     try {
@@ -74,11 +99,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           const statusRaw = b.status;
           const statusLabel = b.status === 'scheduled' ? 'Agendado' : b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : b.status === 'cancelled' ? 'Cancelado' : b.status === 'open' ? 'Aberto' : b.status === 'blocked' ? 'Bloqueado' : b.status;
 
-          // Apply filters
-          if (filterCustomer && !customerName.toLowerCase().includes(filterCustomer.toLowerCase())) return;
-          if (filterStatus && !statusLabel.toLowerCase().includes(filterStatus.toLowerCase())) return;
-          if (filterProfessional && !professional.toLowerCase().includes(filterProfessional.toLowerCase())) return;
-          if (filterItem && !item.toLowerCase().includes(filterItem.toLowerCase())) return;
+          // Apply multi-select filters
+          if (selectedCustomers.length > 0 && !selectedCustomers.includes(customerName)) return;
+          if (selectedStatuses.length > 0 && !selectedStatuses.includes(statusLabel)) return;
+          if (selectedProfessionals.length > 0 && !selectedProfessionals.includes(professional)) return;
+          if (selectedItems.length > 0 && !selectedItems.includes(item)) return;
 
           exportData.push({
             date: bDate,
@@ -106,11 +131,11 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           const item = o.productName || 'Produto s/ nome';
           const statusLabel = o.status === 'paid' ? 'Pago' : o.status === 'pending' ? 'Pendente' : o.status === 'delivered' ? 'Entregue' : o.status === 'cancelled' ? 'Cancelado' : o.status;
 
-          // Apply filters (Professional filter doesn't apply to products but we skip if active and no match)
-          if (filterCustomer && !customerName.toLowerCase().includes(filterCustomer.toLowerCase())) return;
-          if (filterStatus && !statusLabel.toLowerCase().includes(filterStatus.toLowerCase())) return;
-          if (filterProfessional) return; // Skip products if filtering by professional
-          if (filterItem && !item.toLowerCase().includes(filterItem.toLowerCase())) return;
+          // Apply multi-select filters
+          if (selectedCustomers.length > 0 && !selectedCustomers.includes(customerName)) return;
+          if (selectedStatuses.length > 0 && !selectedStatuses.includes(statusLabel)) return;
+          if (selectedProfessionals.length > 0) return; // Products have no professionals
+          if (selectedItems.length > 0 && !selectedItems.includes(item)) return;
 
           exportData.push({
             date: oDate,
@@ -878,46 +903,30 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Cliente</label>
-              <input 
-                type="text" 
-                placeholder="Ex Nome..."
-                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
-                value={filterCustomer}
-                onChange={e => setFilterCustomer(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Status</label>
-              <input 
-                type="text" 
-                placeholder="Ex Finalizado..."
-                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
-                value={filterStatus}
-                onChange={e => setFilterStatus(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Profissional</label>
-              <input 
-                type="text" 
-                placeholder="Ex Moriá..."
-                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
-                value={filterProfessional}
-                onChange={e => setFilterProfessional(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Item (Servço/Prod)</label>
-              <input 
-                type="text" 
-                placeholder="Ex Botox..."
-                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
-                value={filterItem}
-                onChange={e => setFilterItem(e.target.value)}
-              />
-            </div>
+            <MultiSelect 
+              label="Filtrar Clientes" 
+              options={allCustomers} 
+              selected={selectedCustomers} 
+              onChange={setSelectedCustomers} 
+            />
+            <MultiSelect 
+              label="Filtrar Status" 
+              options={allStatuses} 
+              selected={selectedStatuses} 
+              onChange={setSelectedStatuses} 
+            />
+            <MultiSelect 
+              label="Filtrar Profissionais" 
+              options={allProfessionals} 
+              selected={selectedProfessionals} 
+              onChange={setSelectedProfessionals} 
+            />
+            <MultiSelect 
+              label="Filtrar Itens" 
+              options={allItems} 
+              selected={selectedItems} 
+              onChange={setSelectedItems} 
+            />
           </div>
 
           <button 
@@ -1034,5 +1043,75 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
     </div>
   );
 };
+
+const MultiSelect: React.FC<{
+  label: string;
+  options: string[];
+  selected: string[];
+  onChange: (selected: string[]) => void;
+}> = ({ label, options, selected, onChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const toggleOption = (option: string) => {
+    if (selected.includes(option)) {
+      onChange(selected.filter(item => item !== option));
+    } else {
+      onChange([...selected, option]);
+    }
+  };
+
+  const isAllSelected = selected.length === 0;
+
+  return (
+    <div className="space-y-2 relative">
+      <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">{label}</label>
+      <div 
+        className="w-full p-3 bg-white border border-tea-100 rounded-xl text-[10px] font-bold text-tea-900 cursor-pointer flex justify-between items-center group hover:border-tea-400 transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <span className="truncate">
+          {isAllSelected ? 'Todos Selecionados' : `${selected.length} selecionado(s)`}
+        </span>
+        <span className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>▼</span>
+      </div>
+      
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)}></div>
+          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-tea-100 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto p-2 animate-fade-in">
+            <div 
+              className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${isAllSelected ? 'bg-tea-50' : 'hover:bg-gray-50'}`}
+              onClick={() => {
+                onChange([]);
+                setIsOpen(false);
+              }}
+            >
+              <div className={`w-4 h-4 border-2 rounded flex items-center justify-center transition-colors ${isAllSelected ? 'bg-tea-600 border-tea-600' : 'border-gray-200'}`}>
+                {isAllSelected && <span className="text-white text-[10px]">✓</span>}
+              </div>
+              <span className={`text-[10px] font-bold ${isAllSelected ? 'text-tea-900' : 'text-gray-500'}`}>Todos</span>
+            </div>
+            {options.map(opt => {
+              const isSelected = selected.includes(opt);
+              return (
+                <div 
+                  key={opt}
+                  className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors ${isSelected ? 'bg-tea-50' : 'hover:bg-gray-50'}`}
+                  onClick={() => toggleOption(opt)}
+                >
+                  <div className={`w-4 h-4 border-2 rounded flex items-center justify-center transition-colors ${isSelected ? 'bg-tea-600 border-tea-600' : 'border-gray-200'}`}>
+                    {isSelected && <span className="text-white text-[10px]">✓</span>}
+                  </div>
+                  <span className={`text-[10px] font-bold ${isSelected ? 'text-tea-900' : 'text-gray-500'}`}>{opt}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
 
 export default AdminSettingsView;
