@@ -666,7 +666,7 @@ const App: React.FC = () => {
     if (isAdmin) {
       if (!isAdminAuthenticated) return <AdminLogin onLogin={handleAdminLogin} onBack={() => setIsAdmin(false)} />;
       switch (currentView) {
-        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} inventory={inventory} isMockMode={isMockMode} />;
+        case View.ADMIN_SETTINGS: return <AdminSettingsView settings={settings} services={services} customers={customers} bookings={bookings} transactions={transactions} inventory={inventory} productOrders={productOrders} isMockMode={isMockMode} />;
         case View.ADMIN_CALENDAR: return <AdminCalendar 
           bookings={bookings} 
           services={services} 

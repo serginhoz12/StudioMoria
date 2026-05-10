@@ -14,6 +14,7 @@ interface AdminSettingsViewProps {
   bookings: any[];
   transactions: any[];
   inventory: any[];
+  productOrders: any[];
   isMockMode: boolean;
 }
 
@@ -24,6 +25,7 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   bookings = [],
   transactions = [],
   inventory = [],
+  productOrders = [],
   isMockMode
 }) => {
   const categories = ['Olhar', 'Rosto', 'Mãos', 'Unhas', 'Corpo', 'Outros'];
@@ -32,6 +34,104 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newMemberName, setNewMemberName] = useState('');
   const [newTransactionCategory, setNewTransactionCategory] = useState('');
   const [showDebug, setShowDebug] = useState(false);
+  
+  // Date filter state for export
+  const [exportStartDate, setExportStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+  const handleExportCSV = () => {
+    try {
+      const start = new Date(exportStartDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(exportEndDate);
+      end.setHours(23, 59, 59, 999);
+
+      const exportData: any[] = [];
+
+      // 1. Process Bookings (Services)
+      bookings.forEach(b => {
+        const bDate = new Date(b.dateTime);
+        if (bDate >= start && bDate <= end) {
+          const customer = customers.find(c => c.id === b.customerId);
+          exportData.push({
+            date: bDate,
+            dateStr: bDate.toLocaleDateString('pt-BR'),
+            type: 'Serviço',
+            customerName: b.customerName || customer?.name || 'Cliente Particular',
+            customerPhone: customer?.whatsapp || '',
+            loyaltyPoints: customer?.loyaltyPoints || 0,
+            item: b.serviceName,
+            value: b.originalPrice || 0,
+            professional: b.teamMemberName || '',
+            status: b.status === 'confirmed' ? 'Confirmado' : b.status === 'finished' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : 'Cancelado',
+            paymentMethod: b.paymentMethod || ''
+          });
+        }
+      });
+
+      // 2. Process Product Orders
+      productOrders.forEach(o => {
+        const oDate = new Date(o.createdAt);
+        if (oDate >= start && oDate <= end) {
+          const customer = customers.find(c => c.id === o.customerId);
+          exportData.push({
+            date: oDate,
+            dateStr: oDate.toLocaleDateString('pt-BR'),
+            type: 'Produto',
+            customerName: o.customerName || customer?.name || 'Cliente Particular',
+            customerPhone: o.customerPhone || customer?.whatsapp || '',
+            loyaltyPoints: customer?.loyaltyPoints || 0,
+            item: o.productName,
+            value: o.totalPrice || 0,
+            professional: '',
+            status: o.status === 'paid' ? 'Pago' : o.status === 'pending' ? 'Pendente' : o.status === 'delivered' ? 'Entregue' : 'Cancelado',
+            paymentMethod: o.paymentMethod || ''
+          });
+        }
+      });
+
+      // Sort by date
+      exportData.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      // Generate CSV string with semicolon separator
+      const headers = ['Data', 'Tipo', 'Cliente', 'WhatsApp', 'Pontos Fidelidade', 'Item', 'Valor', 'Profissional', 'Status', 'Forma de Pagamento'];
+      const csvRows = [headers.join(';')];
+
+      exportData.forEach(row => {
+        const line = [
+          row.dateStr,
+          row.type,
+          row.customerName.replace(/;/g, ','), // Avoid breaking CSV
+          row.customerPhone,
+          row.loyaltyPoints,
+          row.item.replace(/;/g, ','),
+          row.value.toFixed(2).replace('.', ','), // Brazilian decimal format
+          row.professional.replace(/;/g, ','),
+          row.status,
+          row.paymentMethod
+        ];
+        csvRows.push(line.join(';'));
+      });
+
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `base_dados_moria_${exportStartDate}_a_${exportEndDate}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("Erro ao exportar CSV:", error);
+      alert("Erro ao exportar dados.");
+    }
+  };
 
   const defaultTransactionCategories = ['Água', 'Luz', 'Internet', 'Salário', 'Imposto', 'Aluguel', 'Suprimentos', 'Outros'];
   const currentTransactionCategories = settings.transactionCategories || defaultTransactionCategories;
@@ -706,6 +806,42 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+        <h3 className="text-2xl font-serif text-tea-900 mb-8 italic tracking-tight flex items-center gap-3">
+           <span className="text-3xl">📊</span> Exportação de Dados para Marketing
+        </h3>
+        <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
+          <p className="text-sm text-tea-800 italic">Selecione o período para extrair a base completa de atendimentos e vendas para análise de SEO e Marketing.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Data Inicial</label>
+              <input 
+                type="date" 
+                className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
+                value={exportStartDate}
+                onChange={e => setExportStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Data Final</label>
+              <input 
+                type="date" 
+                className="w-full p-4 bg-white border-2 border-tea-100 rounded-2xl font-bold text-tea-900 outline-none focus:border-tea-400"
+                value={exportEndDate}
+                onChange={e => setExportEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <button 
+            onClick={handleExportCSV}
+            className="w-full bg-tea-900 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-black transition-all shadow-lg flex items-center justify-center gap-2"
+          >
+            <span>📥</span> Baixar Base CSV (Semicólon)
+          </button>
+          <p className="text-[9px] text-gray-400 text-center italic">* O arquivo gerado contém dados de clientes, serviços realizados, produtos vendidos e valores para análise estratégica.</p>
         </div>
       </section>
 
