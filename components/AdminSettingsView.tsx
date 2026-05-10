@@ -35,13 +35,17 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
   const [newTransactionCategory, setNewTransactionCategory] = useState('');
   const [showDebug, setShowDebug] = useState(false);
   
-  // Date filter state for export
+  // Date and content filters for export
   const [exportStartDate, setExportStartDate] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
     return d.toISOString().split('T')[0];
   });
   const [exportEndDate, setExportEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [filterCustomer, setFilterCustomer] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterProfessional, setFilterProfessional] = useState('');
+  const [filterItem, setFilterItem] = useState('');
 
   const handleExportCSV = () => {
     try {
@@ -64,17 +68,29 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         const bDate = new Date(b.dateTime);
         if (bDate >= start && bDate <= end) {
           const customer = customers.find(c => c.id === b.customerId);
+          const customerName = b.customerName || customer?.name || 'Cliente Particular';
+          const professional = b.teamMemberName || '';
+          const item = b.serviceName || 'Serviço s/ nome';
+          const statusRaw = b.status;
+          const statusLabel = b.status === 'scheduled' ? 'Agendado' : b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : b.status === 'cancelled' ? 'Cancelado' : b.status === 'open' ? 'Aberto' : b.status === 'blocked' ? 'Bloqueado' : b.status;
+
+          // Apply filters
+          if (filterCustomer && !customerName.toLowerCase().includes(filterCustomer.toLowerCase())) return;
+          if (filterStatus && !statusLabel.toLowerCase().includes(filterStatus.toLowerCase())) return;
+          if (filterProfessional && !professional.toLowerCase().includes(filterProfessional.toLowerCase())) return;
+          if (filterItem && !item.toLowerCase().includes(filterItem.toLowerCase())) return;
+
           exportData.push({
             date: bDate,
             dateStr: bDate.toLocaleDateString('pt-BR'),
             type: 'Serviço',
-            customerName: b.customerName || customer?.name || 'Cliente Particular',
+            customerName,
             customerPhone: customer?.whatsapp || '',
             loyaltyPoints: customer?.loyaltyPoints || 0,
-            item: b.serviceName || 'Serviço s/ nome',
+            item,
             value: b.originalPrice || 0,
-            professional: b.teamMemberName || '',
-            status: b.status === 'scheduled' ? 'Agendado' : b.status === 'completed' ? 'Finalizado' : b.status === 'pending' ? 'Pendente' : b.status === 'cancelled' ? 'Cancelado' : b.status === 'open' ? 'Aberto' : b.status === 'blocked' ? 'Bloqueado' : b.status,
+            professional,
+            status: statusLabel,
             paymentMethod: b.paymentMethod || ''
           });
         }
@@ -86,17 +102,27 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
         const oDate = new Date(o.createdAt);
         if (oDate >= start && oDate <= end) {
           const customer = customers.find(c => c.id === o.customerId);
+          const customerName = o.customerName || customer?.name || 'Cliente Particular';
+          const item = o.productName || 'Produto s/ nome';
+          const statusLabel = o.status === 'paid' ? 'Pago' : o.status === 'pending' ? 'Pendente' : o.status === 'delivered' ? 'Entregue' : o.status === 'cancelled' ? 'Cancelado' : o.status;
+
+          // Apply filters (Professional filter doesn't apply to products but we skip if active and no match)
+          if (filterCustomer && !customerName.toLowerCase().includes(filterCustomer.toLowerCase())) return;
+          if (filterStatus && !statusLabel.toLowerCase().includes(filterStatus.toLowerCase())) return;
+          if (filterProfessional) return; // Skip products if filtering by professional
+          if (filterItem && !item.toLowerCase().includes(filterItem.toLowerCase())) return;
+
           exportData.push({
             date: oDate,
             dateStr: oDate.toLocaleDateString('pt-BR'),
             type: 'Produto',
-            customerName: o.customerName || customer?.name || 'Cliente Particular',
+            customerName,
             customerPhone: o.customerPhone || customer?.whatsapp || '',
             loyaltyPoints: customer?.loyaltyPoints || 0,
-            item: o.productName || 'Produto s/ nome',
+            item,
             value: o.totalPrice || 0,
             professional: '',
-            status: o.status === 'paid' ? 'Pago' : o.status === 'pending' ? 'Pendente' : o.status === 'delivered' ? 'Entregue' : o.status === 'cancelled' ? 'Cancelado' : o.status,
+            status: statusLabel,
             paymentMethod: o.paymentMethod || ''
           });
         }
@@ -828,7 +854,8 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
            <span className="text-3xl">📊</span> Exportação de Dados para Marketing
         </h3>
         <div className="bg-tea-50/50 p-8 rounded-3xl border border-tea-100 space-y-6">
-          <p className="text-sm text-tea-800 italic">Selecione o período para extrair a base completa de atendimentos e vendas para análise de SEO e Marketing.</p>
+          <p className="text-sm text-tea-800 italic">Selecione os filtros abaixo para extrair a base personalizada de atendimentos e vendas.</p>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Data Inicial</label>
@@ -849,13 +876,57 @@ const AdminSettingsView: React.FC<AdminSettingsViewProps> = ({
               />
             </div>
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Cliente</label>
+              <input 
+                type="text" 
+                placeholder="Ex Nome..."
+                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
+                value={filterCustomer}
+                onChange={e => setFilterCustomer(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Status</label>
+              <input 
+                type="text" 
+                placeholder="Ex Finalizado..."
+                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
+                value={filterStatus}
+                onChange={e => setFilterStatus(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Profissional</label>
+              <input 
+                type="text" 
+                placeholder="Ex Moriá..."
+                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
+                value={filterProfessional}
+                onChange={e => setFilterProfessional(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-tea-700 uppercase tracking-widest ml-1">Filtro Item (Servço/Prod)</label>
+              <input 
+                type="text" 
+                placeholder="Ex Botox..."
+                className="w-full p-3 bg-white border border-tea-100 rounded-xl text-xs font-medium outline-none focus:border-tea-400"
+                value={filterItem}
+                onChange={e => setFilterItem(e.target.value)}
+              />
+            </div>
+          </div>
+
           <button 
             onClick={handleExportCSV}
             className="w-full bg-tea-900 text-white py-5 rounded-2xl font-bold uppercase tracking-widest text-[11px] hover:bg-black transition-all shadow-lg flex items-center justify-center gap-2"
           >
-            <span>📥</span> Baixar Base CSV (Semicólon)
+            <span>📥</span> Baixar Base CSV Filtrada
           </button>
-          <p className="text-[9px] text-gray-400 text-center italic">* O arquivo gerado contém dados de clientes, serviços realizados, produtos vendidos e valores para análise estratégica.</p>
+          <p className="text-[9px] text-gray-400 text-center italic">* Os filtros de texto são opcionais. Se deixados em branco, todos os dados do período serão incluídos.</p>
         </div>
       </section>
 
